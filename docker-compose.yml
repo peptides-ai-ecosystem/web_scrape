@@ -6,5 +6,8 @@ services:
     environment:
       - CHROME_BIN=/usr/bin/chromium
       - CHROMEDRIVER_BIN=/usr/bin/chromedriver
-    # Increase shm_size to prevent Chrome from crashing
+    # Chrome needs a larger shared memory space to avoid renderer crashes
     shm_size: '2gb'
+    # Required for Chromium sandboxing to work inside Docker
+    cap_add:
+      - SYS_ADMIN
