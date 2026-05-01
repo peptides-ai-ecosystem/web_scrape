@@ -19,6 +19,25 @@ class SectionData:
     content: Dict[str, str] = field(default_factory=dict)
 
 @dataclass
+class GraphPoint:
+    x: float
+    y: float
+
+@dataclass
+class AxisLabel:
+    pos: float
+    label: str
+
+@dataclass
+class GraphData:
+    peak: str
+    half_life: str
+    cleared: str
+    points: List[GraphPoint] = field(default_factory=list)
+    x_axis_labels: List[AxisLabel] = field(default_factory=list)
+    y_axis_labels: List[AxisLabel] = field(default_factory=list)
+
+@dataclass
 class PeptideData:
     name: str
     full_name: str
@@ -29,3 +48,4 @@ class PeptideData:
     community_insights: Dict[str, str] = field(default_factory=dict)
     poll_results: Dict[str, str] = field(default_factory=dict)
     sections: List[Dict[str, str]] = field(default_factory=list)
+    graph_data: Dict[str, GraphData] = field(default_factory=dict) # Keyed by time range (24h, 7d, etc.)

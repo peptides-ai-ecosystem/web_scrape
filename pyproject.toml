@@ -13,3 +13,8 @@ dependencies = [
     "streamlit>=1.19.0",
     "webdriver-manager>=4.0.2",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

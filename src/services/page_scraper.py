@@ -5,6 +5,7 @@ from ..extractors.hero import HeroExtractor
 from ..extractors.quick_guide import QuickGuideExtractor
 from ..extractors.community import CommunityExtractor
 from ..extractors.section import SectionExtractor
+from ..extractors.graph import GraphExtractor
 from ..infrastructure.webdriver_factory import WebDriverFactory
 from typing import List, Tuple, Optional
 import time
@@ -15,6 +16,7 @@ class PageScraper(IScraper):
         self.quick_guide_extractor = QuickGuideExtractor()
         self.community_extractor = CommunityExtractor()
         self.section_extractor = SectionExtractor()
+        self.graph_extractor = GraphExtractor()
 
     def scrape(self, url: str) -> Tuple[List[PeptideData], Optional[str]]:
         driver, wait = WebDriverFactory.create_driver()
@@ -35,6 +37,7 @@ class PageScraper(IScraper):
                 quick_guide = self.quick_guide_extractor.extract(driver, wait)
                 community = self.community_extractor.extract(driver, wait)
                 sections = self.section_extractor.extract(driver, wait)
+                graph_data = self.graph_extractor.extract(driver, wait)
 
                 results.append(PeptideData(
                     name=hero_data.name,
@@ -45,7 +48,8 @@ class PageScraper(IScraper):
                     quick_guide=quick_guide,
                     community_insights=community["insights"],
                     poll_results=community["polls"],
-                    sections=sections
+                    sections=sections,
+                    graph_data=graph_data
                 ))
             return results, None
         except Exception as e:

@@ -39,6 +39,14 @@ class CSVStorage(IStorage):
                     if v:
                         row[k] = v.strip()
             
+            # Graph Data
+            import json
+            from dataclasses import asdict
+            if p_data.graph_data:
+                # We store the full graph data as a JSON string in one column for simplicity in CSV
+                # or we could flatten it more if needed.
+                row["graph_data_json"] = json.dumps({k: asdict(v) for k, v in p_data.graph_data.items()})
+            
             rows.append(row)
         
         if rows:

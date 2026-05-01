@@ -3,7 +3,7 @@ from src.infrastructure.csv_storage import CSVStorage
 import pprint
 
 def verify():
-    url = "https://pep-pedia.org/peptides/adalank"
+    url = "https://pep-pedia.org/peptides/bioglutide"
     print(f"[INFO] Verifying refactor with URL: {url}")
     
     scraper = PageScraper()
@@ -20,6 +20,10 @@ def verify():
         print(f"Hero Facts: {len(p_data.hero.facts)}")
         print(f"Quick Guide Keys: {list(p_data.quick_guide.keys())}")
         print(f"Sections: {len(p_data.sections)}")
+        print(f"Graph Data: {len(p_data.graph_data)}")
+        if p_data.graph_data:
+            for time_range, data in p_data.graph_data.items():
+                print(f"  {time_range}: Peak={data.peak}, Half-life={data.half_life}, Cleared={data.cleared}, Points={len(data.points)}")
     
     # Test storage
     print("\n[INFO] Testing storage...")
