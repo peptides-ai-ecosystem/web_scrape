@@ -97,6 +97,19 @@ Future updates will include a comprehensive test suite using `pytest` to validat
 
 ---
 
+## 🗄️ Database Schema & Documentation
+
+The project includes a detailed relational mapping for structured data insertion into PostgreSQL.
+
+- **[structured.md](file:///home/saif/Documents/web_scrape/structured.md)**: Defines the exact insertion order and hierarchy required to preserve referential integrity (Foreign Keys).
+- **[mapper.md](file:///home/saif/Documents/web_scrape/mapper.md)**: Maps the flat scraped data to the relational entities.
+- **[structure_data.md](file:///home/saif/Documents/web_scrape/structure_data.md)**: Provides a technical mapping of CSV columns to the hierarchical JSON payload.
+
+### Insertion Order
+Data must be inserted in specific groups (Lookups -> Peptides -> Protocols -> Dosages) as documented in the files above.
+
+---
+
 ## ⚙️ Configuration
 
 Key settings can be adjusted in `src/config.py`:

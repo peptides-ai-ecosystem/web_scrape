@@ -97,74 +97,65 @@ Based on the rules above and the `mapper.md` hierarchy, the parsing script shoul
   "peptide": {
     "name": "CSV: Peptide_Name",
     "synonyms": "CSV: Full_Name",
-    "overview": "CSV: overview_what_is_[peptide]",
-    "mechanism_of_action": "CSV: overview_mechanism_of_action",
-    "cycle_duration": "CSV: cycle",
-    "storage_temperature": "CSV: storage",
-    "sequence": "CSV: molecular_information_amino_acid_sequence",
-    "stop_signs": "CSV[Array]: side_effects_and_safety_when_to_stop_X",
-    "pharmacokinetics_json": "CSV: graph_data_json",
+    "overview": "CSV: overview_content",
+    "mechanism_of_action": "CSV: mechanism_content",
+    "stop_signs": "CSV[Array]: stop_signs_X",
     
     "benefits": [
-      { "name": "CSV: overview_key_benefits (parsed via comma/period delimiter)" }
+      { "name": "General Benefit 1" }
     ],
     
     "side_effects": [
-      { "name": "CSV: side_effects_and_safety_side_effects_X" }
+      { "name": "General Side Effect 1" }
     ],
     
     "interactions": [
-      {
-        "peptide_name_2": "CSV_ColName: Extracted secondary peptide",
-        "interaction_type": "CSV_ColName: Extracted type enum",
-        "description": "CSV_Cell: Row Value"
-      }
+      { "peptide_name_2": "Peptide X", "interaction_type": "synergistic", "description": "..." }
     ],
 
     "research_indications": [
-      {
-        "indication_title": "CSV_ColName: Extracted indication",
-        "effectiveness_tag": "CSV_ColName: Extracted tag enum",
-        "description": "CSV_Cell: Row Value"
+      { 
+        "indication_title": "Indication Y", 
+        "effectiveness_tag": "most_effective",
+        "studies": [
+          { "study_title": "...", "protocol_id_hint": "Protocol 1" }
+        ]
       }
     ],
 
     "references": [
-      {
-        "reference_type": "study",
-        "title": "CSV_ColName: Extracted title",
-        "abstract": "CSV_Cell: Row Value"
-      }
+      { "reference_type": "study", "title": "...", "url": "..." }
     ],
     
     "protocols": [
       {
         "administration_method": "CSV: Method",
         "name": "Base Protocol",
-        "expectations": "CSV[Array]: what_to_expect_X (converted to JSON array)",
-        
-        "application_places": [ "CSV: route (parsed by delimiter/tags)" ],
         
         "reconstitution_steps": [
-          {
-            "step_number": "Parsed number from row or auto-incremented",
-            "description": "CSV: how_to_reconstitute_others (parsed line by line)"
-          }
+          { "step_number": 1, "description": "..." }
         ],
         
         "quality_indicators": [
-          {
-            "indicator_title": "CSV_ColName: Extracted title",
-            "indicator_description": "CSV_Cell: Row Value"
-          }
+          { "indicator_title": "...", "indicator_description": "..." }
+        ],
+
+        "application_places": [
+          { "name": "Abdomen", "recommendation_level": "high" }
         ],
 
         "dosages": [
           {
-            "name": "CSV: research_protocols_goal_X",
-            "amount": "CSV: research_protocols_dose_X (Number part)",
-            "unit": "CSV: research_protocols_dose_X (Unit part, e.g., mcg)",
-            "schedule": "CSV: research_protocols_frequency_X"
+            "name": "Conservative starting",
+            "amount": "250",
+            "unit": "mcg",
+            "schedule": "1x daily",
+            "dosage_benefits": [
+              { "name": "Specific Benefit for this dose", "potency": "high" }
+            ],
+            "dosage_side_effects": [
+              { "name": "Specific Side Effect for this dose", "likelihood": "common" }
+            ]
           }
         ]
       }
