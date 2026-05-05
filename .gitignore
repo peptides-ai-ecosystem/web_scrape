@@ -7,3 +7,6 @@ output_v3/
 output_v4/
 output_v5/
 output_v6/
+.agents/
+graphify-out/
+peptides_temp/

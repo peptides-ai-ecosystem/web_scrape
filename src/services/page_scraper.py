@@ -69,4 +69,20 @@ class PageScraper(IScraper):
         for b in buttons:
             if b.text.strip() == cat_text:
                 self.hero_extractor.safe_click(driver, wait, b)
+                # Wait until the clicked button reflects an active/selected state
+                # to ensure the method's content (including graph) has re-rendered.
+                try:
+                    wait.until(lambda d: any(
+                        btn.text.strip() == cat_text and (
+                            "active" in (btn.get_attribute("class") or "") or
+                            btn.get_attribute("aria-selected") == "true" or
+                            btn.get_attribute("data-state") == "active"
+                        )
+                        for btn in d.find_elements(
+                            By.CSS_SELECTOR, "div.flex.gap-2.bg-white\\/10 button"
+                        )
+                    ))
+                except Exception:
+                    # Fallback: short sleep if active-state detection fails
+                    self.hero_extractor.wait_for_loading(1.0)
                 break

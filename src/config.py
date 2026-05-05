@@ -10,9 +10,11 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 MASTER_CSV = OUTPUT_DIR / "pep_pedia_master.csv"
 ERROR_LOG = OUTPUT_DIR / "error_log.txt"
 
+TIME_RANGES = ["24h", "7d", "14d", "30d"]
+
 button_skip_list = [
-    "peak", "half-life", "cleared", "hrs", "hr", "day", "24h", "7d", "14d", "30d"
-]
+    "peak", "half-life", "cleared", "hrs", "hr", "day",
+] + TIME_RANGES
 
 def crawl_peptide_urls():
     from .infrastructure.webdriver_factory import WebDriverFactory

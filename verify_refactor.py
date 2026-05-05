@@ -3,7 +3,7 @@ from src.infrastructure.csv_storage import CSVStorage
 import pprint
 
 def verify():
-    url = "https://pep-pedia.org/peptides/bioglutide"
+    url = "https://pep-pedia.org/peptides/bpc-157"
     print(f"[INFO] Verifying refactor with URL: {url}")
     
     scraper = PageScraper()
