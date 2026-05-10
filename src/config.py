@@ -43,6 +43,6 @@ def crawl_peptide_urls():
         print(f"[DEBUG] Found {len(links)} peptide links")
 
         peptide_urls = [link.get_attribute("href") for link in links]
-        return list(set(peptide_urls[:1]))
+        return list(set(peptide_urls[:10]))
     finally:
         driver.quit()

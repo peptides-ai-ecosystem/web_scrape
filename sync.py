@@ -3,6 +3,8 @@ import csv
 import os
 import sys
 from typing import List, Dict, Any
+from dotenv import load_dotenv
+load_dotenv()
 
 # Ensure project root is in path for imports
 project_root = os.path.abspath(os.path.dirname(__file__))
@@ -13,8 +15,7 @@ from src.mappers.db_import_orchestrator import DbImportOrchestrator
 
 def main():
     parser = argparse.ArgumentParser(description="Sync Peptide CSV data to PostgreSQL")
-    parser.add_argument("--url", required=True, help="PostgreSQL connection URL")
-    parser.add_argument("--csv", required=True, help="Path to the CSV file")
+    parser.add_argument("--csv", required=False, help="Path to the CSV file")
     parser.add_argument("--delete", metavar="SLUG", help="Delete a peptide and its related data by slug")
     
     args = parser.parse_args()
@@ -23,7 +24,7 @@ def main():
 
     if args.delete:
         from src.infrastructure.db_manager import DbManager
-        db = DbManager(args.url)
+        db = DbManager(os.getenv("DATABASE_URL"))
         try:
             db.delete_peptide_data(args.delete)
         finally:

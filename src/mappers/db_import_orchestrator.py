@@ -1,163 +1,142 @@
-import json
 from typing import Any, Dict, List
-from src.mappers.base_mapper import BaseMapper
-from src.mappers.peptide_mapper import PeptideMapper
-from src.mappers.related_entity_mappers import (
-    ProtocolMapper, 
-    SideEffectMapper, 
-    ReconstitutionMapper,
+from src.mappers.group_a.lookup_mappers import (
     AdministrationMethodMapper,
     BenefitMapper,
-    ResearchIndicationMapper,
-    PeptideInteractionMapper,
-    QualityIndicatorMapper,
-    ReferenceMapper
+    SideEffectMapper,
+    DosageMapper,
+    ScheduleMapper,
+    ResearchStudyMapper
 )
+from src.mappers.group_b.peptide_mapper import PeptideMapper
+from src.mappers.group_c.relation_mappers import RelationMapper
+from src.mappers.group_d.protocol_mapper import ProtocolMapper
 from src.infrastructure.db_manager import DbManager
 
 class DbImportOrchestrator:
     """
-    Orchestrates the conversion of a raw data row into a fully structured dictionary.
+    Orchestrates the conversion of a raw data row into structured payloads by group.
     """
 
     def __init__(self):
-        self.peptide_mapper = PeptideMapper()
-        self.protocol_mapper = ProtocolMapper()
-        self.side_effect_mapper = SideEffectMapper()
-        self.reconstitution_mapper = ReconstitutionMapper()
+        # Group A
         self.admin_method_mapper = AdministrationMethodMapper()
         self.benefit_mapper = BenefitMapper()
-        self.research_indication_mapper = ResearchIndicationMapper()
-        self.peptide_interaction_mapper = PeptideInteractionMapper()
-        self.quality_indicator_mapper = QualityIndicatorMapper()
-        self.reference_mapper = ReferenceMapper()
+        self.side_effect_mapper = SideEffectMapper()
+        self.dosage_mapper = DosageMapper()
+        self.schedule_mapper = ScheduleMapper()
+        self.study_mapper = ResearchStudyMapper()
+        
+        # Group B
+        self.peptide_mapper = PeptideMapper()
+        
+        # Groups C-F
+        self.relation_mapper = RelationMapper()
+        self.protocol_mapper = ProtocolMapper()
 
     def map_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Maps a single CSV/scraped row into a multi-table insertion payload.
+        Maps a single row into a grouped payload structure.
         """
-        peptides_payload = self.peptide_mapper.map(row)
-        
-        # Build relational payload structure
-        payload = {
-            "peptides": peptides_payload,
-            "related_inserts": {
-                "protocols": self.protocol_mapper.map(row),
-                "side_effects": self.side_effect_mapper.map(row),
-                "reconstitution_steps": self.reconstitution_mapper.map(row),
+        return {
+            "group_a": {
                 "administration_methods": self.admin_method_mapper.map(row),
                 "benefits": self.benefit_mapper.map(row),
-                "research_indications": self.research_indication_mapper.map(row),
-                "peptide_interactions": self.peptide_interaction_mapper.map(row),
-                "quality_indicators": self.quality_indicator_mapper.map(row),
-                "references": self.reference_mapper.map(row)
-            }
+                "side_effects": self.side_effect_mapper.map(row),
+                "dosages": self.dosage_mapper.map(row),
+                "schedules": self.schedule_mapper.map(row),
+                "studies": self.study_mapper.map(row)
+            },
+            "group_b": {
+                "peptide": self.peptide_mapper.map(row)
+            },
+            "relations": self.relation_mapper.map(row),
+            "protocols": self.protocol_mapper.map(row)
         }
-        return payload
-
-    def map_dataset(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Maps an entire dataset. Useful if passing output from scraper_manager.
-        """
-        return [self.map_row(row) for row in rows]
 
     def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]]):
         """
-        Main entry point to sync a list of raw rows to the DB.
+        Main entry point to sync rows using the grouped logic.
         """
         db = DbManager(db_url)
         try:
             for row in rows:
                 payload = self.map_row(row)
-                peptide_id = db.upsert_peptide_fill_nulls(payload['peptides'])
                 
-                # Sync relations
-                self._sync_relations(db, peptide_id, payload['related_inserts'])
+                # 1. Process Group A (Independent Lookups)
+                self._sync_group_a(db, payload["group_a"])
+                
+                # 2. Process Group B (Peptides)
+                peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
+                
+                # 3. Process Relations (Groups C-F)
+                self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"])
         finally:
             db.close()
 
-    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any]):
-        # 1. Administration Methods
-        for am in relations.get("administration_methods", []):
-            db.insert_lookup("administration_methods", am['name'])
+    def _sync_group_a(self, db: DbManager, group_a: Dict[str, Any]):
+        for am in group_a["administration_methods"]:
+            db.insert_lookup("administration_methods", am["name"], description=am.get("description"))
+        for b in group_a["benefits"]:
+            db.insert_lookup("benefits", b["name"], description=b.get("description"))
+        for se in group_a["side_effects"]:
+            db.insert_lookup("side_effects", se["name"], description=se.get("description"))
+        for d in group_a["dosages"]:
+            # Uses amount_str to find/create dosage
+            db._get_or_create_dosage_id(d["amount"])
+        for s in group_a["schedules"]:
+            db.insert_lookup("schedules", s["name"], frequency=s.get("frequency"))
+        for st in group_a["studies"]:
+            if st.get("type") == "study":
+                db.upsert_research_study(st)
+            else:
+                db.upsert_citation(st)
 
-        # 2. Benefits
-        for b in relations.get("benefits", []):
-            b_id = db.insert_lookup("benefits", b['name'])
-            db.link_relation("peptide_benefits", "peptide_id", peptide_id, "benefit_id", b_id)
+    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]]):
+        # Link Benefits (Group C)
+        for b in relations["benefits"]:
+            b_id = db.get_lookup_id("benefits", b["benefit_name"])
+            if b_id:
+                # db.link_relation is a generic helper that should handle (table, fk1, val1, fk2, val2)
+                db.link_relation("peptide_benefits", "peptide_id", peptide_id, "benefit_id", b_id)
 
-        # 3. Side Effects
-        for se in relations.get("side_effects", []):
-            se_id = db.insert_lookup("side_effects", se['name'])
-            db.link_relation("peptide_side_effects", "peptide_id", peptide_id, "side_effect_id", se_id)
+        # Link Side Effects (Group C)
+        for se in relations["side_effects"]:
+            se_id = db.get_lookup_id("side_effects", se["side_effect_name"])
+            if se_id:
+                db.link_relation("peptide_side_effects", "peptide_id", peptide_id, "side_effect_id", se_id)
 
-        # 4. Protocols
-        for p in relations.get("protocols", []):
-            am_name = p.get("route_name", "").split("(")[0].strip() or "General"
-            am_id = db.insert_lookup("administration_methods", am_name)
+        # Link Interactions (Group C)
+        for inter in relations["interactions"]:
+            db.upsert_interaction(peptide_id, inter)
+
+        # Link Indications (Group C/F)
+        for ind in relations["indications"]:
+            db.upsert_indication(peptide_id, ind)
+
+        # Link Research Studies & Citations (Group C)
+        for st in relations["references"]:
+            ref_type = st.get("type", "study")
+            if ref_type == "study":
+                ref_id = db.upsert_research_study(st)
+            else:
+                ref_id = db.upsert_citation(st)
+            db.upsert_peptide_reference(peptide_id, ref_type, ref_id)
+
+        # Handle Protocols (Groups D-F)
+        for p in protocols:
+            am_id = db.get_lookup_id("administration_methods", p["administration_method_name"])
+            # Expectations are already JSON strings from the mapper
+            protocol_id = db.upsert_protocol(peptide_id, am_id, p)
             
-            with db.connect().cursor() as cur:
-                cur.execute(
-                    "SELECT id FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s AND name = %s",
-                    (peptide_id, am_id, p['name'])
-                )
-                row = cur.fetchone()
-                if row:
-                    protocol_id = row['id']
-                else:
-                    cur.execute(
-                        "INSERT INTO peptide_protocols (peptide_id, administration_method_id, name, description) VALUES (%s, %s, %s, %s) RETURNING id",
-                        (peptide_id, am_id, p['name'], p['description'])
-                    )
-                    protocol_id = cur.fetchone()['id']
-                    db.conn.commit()
-
-                if p.get('expectations'):
-                    cur.execute(
-                        "UPDATE peptide_protocols SET expectations = %s WHERE id = %s AND (expectations IS NULL OR expectations = '[]'::jsonb)",
-                        (json.dumps(p['expectations']), protocol_id)
-                    )
-                    db.conn.commit()
-
-        # 5. Interactions
-        for inter in relations.get("peptide_interactions", []):
-            # Check if exists
-            with db.connect().cursor() as cur:
-                cur.execute(
-                    "SELECT 1 FROM peptide_interactions WHERE peptide_id_1 = %s AND peptide_name_2 = %s",
-                    (peptide_id, inter['secondary_peptide_name'])
-                )
-                if not cur.fetchone():
-                    cur.execute(
-                        "INSERT INTO peptide_interactions (peptide_id_1, peptide_name_2, interaction_type, description) VALUES (%s, %s, %s, %s)",
-                        (peptide_id, inter['secondary_peptide_name'], inter['interaction_type'], inter['description'])
-                    )
-                    db.conn.commit()
-
-        # 6. Research Indications
-        for ind in relations.get("research_indications", []):
-            with db.connect().cursor() as cur:
-                cur.execute(
-                    "SELECT id FROM peptide_research_indications WHERE peptide_id = %s AND indication_title = %s",
-                    (peptide_id, ind['indication_title'])
-                )
-                if not cur.fetchone():
-                    cur.execute(
-                        "INSERT INTO peptide_research_indications (peptide_id, indication_title, effectiveness_tag) VALUES (%s, %s, %s)",
-                        (peptide_id, ind['indication_title'], ind['effectiveness_tag'])
-                    )
-                    db.conn.commit()
-
-        # 7. References
-        for ref in relations.get("references", []):
-            with db.connect().cursor() as cur:
-                cur.execute(
-                    "SELECT id FROM peptide_references WHERE peptide_id = %s AND title = %s",
-                    (peptide_id, ref['title'])
-                )
-                if not cur.fetchone():
-                    cur.execute(
-                        "INSERT INTO peptide_references (peptide_id, reference_type, title, url, abstract) VALUES (%s, %s, %s, %s, %s)",
-                        (peptide_id, ref['reference_type'], ref['title'], ref.get('url', ''), ref.get('abstract', ''))
-                    )
-                    db.conn.commit()
+            # Sub-relations for protocol (Group E)
+            for step in p["reconstitution_steps"]:
+                db.upsert_reconstitution_step(protocol_id, step)
+            for ind in p["quality_indicators"]:
+                db.upsert_quality_indicator(protocol_id, ind)
+            for place_name in p["application_places"]:
+                ap_id = db.get_lookup_id("application_places", place_name)
+                if ap_id:
+                    db.link_relation("protocol_application_places", "protocol_id", protocol_id, "application_place_id", ap_id)
+            for dose in p["dosages"]:
+                # Dose already has 'notes' formatted
+                db.upsert_protocol_dosage(protocol_id, dose)

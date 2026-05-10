@@ -10,3 +10,4 @@ output_v6/
 .agents/
 graphify-out/
 peptides_temp/
+.env
