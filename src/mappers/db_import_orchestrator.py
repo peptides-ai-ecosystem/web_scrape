@@ -37,6 +37,9 @@ class DbImportOrchestrator:
         """
         Maps a single row into a grouped payload structure.
         """
+        protocols = self.protocol_mapper.map(row)
+        app_places = list({place for p in protocols for place in p["application_places"]})
+        
         return {
             "group_a": {
                 "administration_methods": self.admin_method_mapper.map(row),
@@ -44,13 +47,14 @@ class DbImportOrchestrator:
                 "side_effects": self.side_effect_mapper.map(row),
                 "dosages": self.dosage_mapper.map(row),
                 "schedules": self.schedule_mapper.map(row),
-                "studies": self.study_mapper.map(row)
+                "studies": self.study_mapper.map(row),
+                "application_places": app_places
             },
             "group_b": {
                 "peptide": self.peptide_mapper.map(row)
             },
             "relations": self.relation_mapper.map(row),
-            "protocols": self.protocol_mapper.map(row)
+            "protocols": protocols
         }
 
     def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]]):
@@ -90,6 +94,8 @@ class DbImportOrchestrator:
                 db.upsert_research_study(st)
             else:
                 db.upsert_citation(st)
+        for place in group_a.get("application_places", []):
+            db.insert_lookup("application_places", place)
 
     def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]]):
         # Link Benefits (Group C)

@@ -1,6 +1,9 @@
 import re
+import logging
 from typing import Any, Dict, List
 from src.mappers.base import BaseMapper
+
+logger = logging.getLogger(__name__)
 
 class ReconstitutionMapper(BaseMapper):
     """Group E: Maps protocol reconstitution steps."""
@@ -10,6 +13,8 @@ class ReconstitutionMapper(BaseMapper):
             val = row.get(f"research_protocols_reconstitution_step_{i}", "").strip()
             if val:
                 steps.append({"step_number": i, "description": val})
+        if steps:
+            logger.info(f"  [MAP_RECONSTITUTION] Extracted {len(steps)} steps")
         return steps
 
 class QualityMapper(BaseMapper):
@@ -23,22 +28,19 @@ class QualityMapper(BaseMapper):
                     "indicator_title": f"Indicator {i}",
                     "indicator_description": val
                 })
+        if indicators:
+            logger.info(f"  [MAP_QUALITY] Extracted {len(indicators)} indicators")
         return indicators
 
 class ApplicationPlaceMapper(BaseMapper):
     """Group E: Maps protocol application places."""
     def map(self, row: Dict[str, Any], route: str = "") -> List[str]:
-        places = []
+        # places = []
         if not route:
             route = row.get("route", "").strip() or row.get("research_protocols_route_1", "").strip()
-            
-        if "(" in route and ")" in route:
-            match = re.search(r"\((.*?)\)", route)
-            if match:
-                parts = match.group(1).split(":")
-                place_list = parts[-1].split(",")
-                places = [x.strip() for x in place_list if x.strip()]
-        return places
+        logger.info(f"  [MAP_APP_PLACE] Extracted route: {route}")
+        
+        return [route]
 
 class ProtocolDosageMapper(BaseMapper):
     """Group E: Maps dosages for specific protocols."""
@@ -60,4 +62,6 @@ class ProtocolDosageMapper(BaseMapper):
                 "notes": f"Amount: {typical_dose}"
             })
             
+        if payloads:
+            logger.info(f"  [MAP_DOSAGE] Extracted {len(payloads)} dosages for goal '{goal}'")
         return payloads

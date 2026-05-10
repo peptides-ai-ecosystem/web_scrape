@@ -140,20 +140,22 @@ class DbManager:
                     sql = f"UPDATE citations SET {set_clause} WHERE id = %s"
                     cur.execute(sql, list(updates.values()) + [citation_id])
                     self.conn.commit()
-                    logger.info(f"  [CITATION_UPDATE] Table citations: '{title}' (ID: {citation_id})")
+                    logger.info(f"  [CITATION_UPDATE] Table citations:(ID: {citation_id})")
                 else:
-                    logger.info(f"  [CITATION_EXIST] Table citations: '{title}' (ID: {citation_id})")
+                    logger.info(f"  [CITATION_EXIST] Table citations:(ID: {citation_id})")
                 return citation_id
             
             # Note: doi is NOT NULL in schema, providing placeholder if empty
-            doi = citation.get("doi", f"auto-{hash(title)}")
+            doi = citation.get("doi")
+            if not doi:
+                doi = f"none"
             cur.execute(
                 "INSERT INTO citations (title, publication_url, abstract, doi, authors) VALUES (%s, %s, %s, %s, %s) RETURNING id",
                 (title, url, abstract, doi, authors)
             )
             new_id = cur.fetchone()['id']
             self.conn.commit()
-            logger.info(f"  [INSERT_CITATION] Table citations: '{title}' (ID: {new_id})")
+            logger.info(f"  [INSERT_CITATION] Table citations:(ID: {new_id})")
             return new_id
 
     def upsert_peptide_reference(self, peptide_id: int, ref_type: str, ref_id: int):
@@ -226,11 +228,25 @@ class DbManager:
             row = cur.fetchone()
             return row['id'] if row else None
 
+    def get_research_study_id(self, title: str) -> Optional[int]:
+        title = title or "Unknown Study"
+        with self.connect().cursor() as cur:
+            cur.execute("SELECT id FROM research_studies WHERE title = %s", (title,))
+            row = cur.fetchone()
+            return row['id'] if row else None
+
+    def get_citation_id(self, title: str) -> Optional[int]:
+        title = title or "Unknown Citation"
+        with self.connect().cursor() as cur:
+            cur.execute("SELECT id FROM citations WHERE title = %s", (title,))
+            row = cur.fetchone()
+            return row['id'] if row else None
+
     def upsert_interaction(self, peptide_id: int, interaction: Dict[str, Any]):
         """Upserts a peptide interaction."""
         with self.connect().cursor() as cur:
             cur.execute(
-                "SELECT 1 FROM peptide_interactions WHERE peptide_id_1 = %s AND peptide_name_2 = %s",
+                "SELECT 1 FROM peptide_interactions WHERE peptide_id_1 = %s AND LOWER(peptide_name_2) = LOWER(%s)",
                 (peptide_id, interaction['secondary_peptide_name'])
             )
             row = cur.fetchone()
@@ -241,14 +257,14 @@ class DbManager:
                 try:
                     itype = self._map_interaction_type(interaction.get('interaction_type', 'neutral'))
                     cur.execute(
-                        "INSERT INTO peptide_interactions (peptide_id_1, peptide_name_2, interaction_type, description) VALUES (%s, %s, %s, %s)",
+                        "INSERT INTO peptide_interactions (peptide_id_1, peptide_name_2, interaction_type, description) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
                         (peptide_id, interaction['secondary_peptide_name'], itype, interaction['description'])
                     )
                     self.conn.commit()
-                    logger.info(f"  [RELATION] Table peptide_interactions: Peptide {peptide_id} <-> {interaction['secondary_peptide_name']} ({itype})")
-                except psycopg2.errors.UniqueViolation:
-                    self.conn.rollback()
-                    logger.warning(f"Skipping duplicate interaction (by index) Table peptide_interactions: for peptide {peptide_id}: {interaction['secondary_peptide_name']}")
+                    if cur.rowcount > 0:
+                        logger.info(f"  [RELATION] Table peptide_interactions: Peptide {peptide_id} <-> {interaction['secondary_peptide_name']} ({itype})")
+                    else:
+                        logger.info(f"  [RELATION_EXIST] Table peptide_interactions (by index): Peptide {peptide_id} <-> {interaction['secondary_peptide_name']}")
                 except Exception as e:
                     self.conn.rollback()
                     logger.error(f"Error inserting interaction Table peptide_interactions: {e}")
@@ -334,14 +350,14 @@ class DbManager:
         freq_str = dosage.get('frequency', '')
         notes = dosage.get('notes', f"Amount: {amount_str}, Freq: {freq_str}")
         
-        # 1. Get or Create Dosage
-        dosage_id = self._get_or_create_dosage_id(amount_str)
+        # 1. Get Dosage ID (only lookup, no create here - done in Group A)
+        dosage_id = self._get_or_create_dosage_id(amount_str, create=False)
         
-        # 2. Get or Create Schedule
-        schedule_id = self.insert_lookup("schedules", freq_str, frequency=freq_str)
+        # 2. Get Schedule ID (only lookup)
+        schedule_id = self.get_lookup_id("schedules", freq_str)
         
         if not dosage_id or not schedule_id:
-            logger.error(f"Missing dosage_id ({dosage_id}) or schedule_id ({schedule_id}) for protocol {protocol_id}")
+            logger.warning(f"Missing lookup data dosage_id ({dosage_id}) or schedule_id ({schedule_id}) for protocol {protocol_id}")
             return
 
         with self.connect().cursor() as cur:
@@ -361,7 +377,7 @@ class DbManager:
             self.conn.commit()
             logger.info(f"    [DOSAGE] Table protocol_dosages: Protocol {protocol_id}: Linked dosage {dosage_id} with schedule {schedule_id}")
 
-    def _get_or_create_dosage_id(self, amount_str: str) -> Optional[int]:
+    def _get_or_create_dosage_id(self, amount_str: str, create: bool = True) -> Optional[int]:
         if not amount_str: return None
         
         # 1. Normalize and Parse: Handle ranges like "10-20mg", "10 - 20 mg", "10 to 20mg"
@@ -396,8 +412,12 @@ class DbManager:
             )
             row = cur.fetchone()
             if row:
-                logger.info(f"  [DOSAGE_LOOKUP_EXIST] Table dosages: {amount_str} (ID: {row['id']})")
+                if create:
+                    logger.info(f"  [DOSAGE_LOOKUP_EXIST] Table dosages: {amount_str} (ID: {row['id']})")
                 return row['id']
+
+            if not create:
+                return None
 
             # 3. Create new if missing
             cur.execute(
