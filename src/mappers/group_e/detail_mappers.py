@@ -9,25 +9,58 @@ class ReconstitutionMapper(BaseMapper):
     """Group E: Maps protocol reconstitution steps."""
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         steps = []
-        for i in range(1, 10):
-            val = row.get(f"research_protocols_reconstitution_step_{i}", "").strip()
-            if val:
-                steps.append({"step_number": i, "description": val})
+        raw_text = row.get("how_to_reconstitute_others", "").strip()
+        if not raw_text:
+            return []
+        
+        # Split by newline and look for numeric step markers
+        lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+        
+        current_step_num = None
+        current_step_desc = []
+        
+        for line in lines:
+            # Check if line is just a number (e.g. "1", "2")
+            if line.isdigit():
+                # Save previous step if exists
+                if current_step_num is not None and current_step_desc:
+                    steps.append({
+                        "step_number": int(current_step_num),
+                        "description": " ".join(current_step_desc)
+                    })
+                current_step_num = line
+                current_step_desc = []
+            elif current_step_num is not None:
+                current_step_desc.append(line)
+        
+        # Save last step
+        if current_step_num is not None and current_step_desc:
+            steps.append({
+                "step_number": int(current_step_num),
+                "description": " ".join(current_step_desc)
+            })
+            
         if steps:
-            logger.info(f"  [MAP_RECONSTITUTION] Extracted {len(steps)} steps")
+            logger.info(f"  [MAP_RECONSTITUTION] Extracted {len(steps)} steps from 'how_to_reconstitute_others'")
         return steps
 
 class QualityMapper(BaseMapper):
     """Group E: Maps protocol quality indicators."""
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         indicators = []
-        for i in range(1, 10):
-            val = row.get(f"research_protocols_quality_indicator_{i}", "").strip()
-            if val:
+        
+        # Extract from columns starting with 'quality_indicators_'
+        for key, val in row.items():
+            if key.startswith("quality_indicators_") and val and val.strip():
+                # Humanize the title from the key
+                # e.g. quality_indicators_sterile_lyophilized_powder -> Sterile lyophilized powder
+                title = key.replace("quality_indicators_", "").replace("_", " ").capitalize()
+                
                 indicators.append({
-                    "indicator_title": f"Indicator {i}",
-                    "indicator_description": val
+                    "indicator_title": title,
+                    "indicator_description": val.strip()
                 })
+                
         if indicators:
             logger.info(f"  [MAP_QUALITY] Extracted {len(indicators)} indicators")
         return indicators
