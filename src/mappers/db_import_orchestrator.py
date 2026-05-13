@@ -10,6 +10,7 @@ from src.mappers.group_a.lookup_mappers import (
 from src.mappers.group_b.peptide_mapper import PeptideMapper
 from src.mappers.group_c.relation_mappers import RelationMapper
 from src.mappers.group_d.protocol_mapper import ProtocolMapper
+from src.mappers.group_d.graph_mapper import GraphMapper
 from src.infrastructure.db_manager import DbManager
 
 class DbImportOrchestrator:
@@ -32,6 +33,7 @@ class DbImportOrchestrator:
         # Groups C-F
         self.relation_mapper = RelationMapper()
         self.protocol_mapper = ProtocolMapper()
+        self.graph_mapper = GraphMapper()
 
     def map_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -54,7 +56,8 @@ class DbImportOrchestrator:
                 "peptide": self.peptide_mapper.map(row)
             },
             "relations": self.relation_mapper.map(row),
-            "protocols": protocols
+            "protocols": protocols,
+            "graph_data": self.graph_mapper.map(row)
         }
 
     def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]]):
@@ -73,7 +76,7 @@ class DbImportOrchestrator:
                 peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
                 
                 # 3. Process Relations (Groups C-F)
-                self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"])
+                self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], payload["graph_data"])
         finally:
             db.close()
 
@@ -97,7 +100,7 @@ class DbImportOrchestrator:
         for place in group_a.get("application_places", []):
             db.insert_lookup("application_places", place)
 
-    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]]):
+    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]], graph_data: List[Dict[str, Any]]):
         # Link Benefits (Group C)
         for b in relations["benefits"]:
             b_id = db.get_lookup_id("benefits", b["benefit_name"])
@@ -146,3 +149,7 @@ class DbImportOrchestrator:
             for dose in p["dosages"]:
                 # Dose already has 'notes' formatted
                 db.upsert_protocol_dosage(protocol_id, dose)
+        
+        # Link Graph Data (Group D)
+        for gd in graph_data:
+            db.upsert_graph_data(peptide_id, gd)

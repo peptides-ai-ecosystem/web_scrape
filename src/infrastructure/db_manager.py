@@ -473,6 +473,44 @@ class DbManager:
             return "caution"
         return "neutral"
 
+    def upsert_graph_data(self, peptide_id: int, graph_data: Dict[str, Any]):
+        """Upserts pharmacokinetics graph data."""
+        with self.connect().cursor() as cur:
+            cur.execute(
+                "SELECT id FROM peptide_graph_data WHERE peptide_id = %s AND time_range = %s",
+                (peptide_id, graph_data['time_range'])
+            )
+            row = cur.fetchone()
+            
+            fields = {
+                'peak_concentration': graph_data.get('peak_concentration'),
+                'half_life': graph_data.get('half_life'),
+                'cleared_percentage': graph_data.get('cleared_percentage'),
+                'points': graph_data.get('points'),
+                'x_axis_labels': graph_data.get('x_axis_labels'),
+                'y_axis_labels': graph_data.get('y_axis_labels'),
+                'updated_at': 'NOW()'
+            }
+            
+            if row:
+                graph_id = row['id']
+                set_clause = ", ".join([f"{col} = %s" if col != 'updated_at' else f"{col} = {val}" for col, val in fields.items()])
+                params = [v for k, v in fields.items() if k != 'updated_at'] + [graph_id]
+                cur.execute(f"UPDATE peptide_graph_data SET {set_clause} WHERE id = %s", params)
+                logger.info(f"  [GRAPH_UPDATE] Table peptide_graph_data: Peptide {peptide_id}: '{graph_data['time_range']}'")
+            else:
+                cols = ["peptide_id", "time_range"] + [k for k, v in fields.items() if k != 'updated_at']
+                vals = [peptide_id, graph_data['time_range']] + [v for k, v in fields.items() if k != 'updated_at']
+                placeholders = ", ".join(["%s"] * len(vals))
+                cur.execute(
+                    f"INSERT INTO peptide_graph_data ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",
+                    vals
+                )
+                graph_id = cur.fetchone()['id']
+                logger.info(f"  [GRAPH] Table peptide_graph_data: Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})")
+            
+            self.conn.commit()
+
     def link_relation(self, table: str, fk1_col: str, fk1_val: int, fk2_col: str, fk2_val: int):
         """Generic method to link two entities in a junction table."""
         with self.connect().cursor() as cur:
@@ -542,6 +580,7 @@ class DbManager:
             cur.execute("DELETE FROM peptide_side_effects WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM peptide_interactions WHERE peptide_id_1 = %s OR peptide_id_2 = %s", (peptide_id, peptide_id))
             cur.execute("DELETE FROM peptide_references WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM peptide_graph_data WHERE peptide_id = %s", (peptide_id,))
 
             # --- Pricing / vendor relations ---
             cur.execute("DELETE FROM pepti_price_price_history WHERE peptide_id = %s", (peptide_id,))
