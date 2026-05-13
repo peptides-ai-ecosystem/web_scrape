@@ -121,8 +121,18 @@ class DbManager:
         abstract = citation.get("abstract", "")
         authors = citation.get("authors", "")
         
+        # doi is NOT NULL and UNIQUE in schema, providing placeholder if empty
+        doi = citation.get("doi")
+        if not doi:
+            doi = "none"
+        
         with self.connect().cursor() as cur:
-            cur.execute("SELECT id, publication_url, abstract, authors FROM citations WHERE title = %s", (title,))
+            # Check by title OR doi to cope up with UNIQUE doi constraint 
+            # (especially when multiple citations lack a DOI)
+            cur.execute(
+                "SELECT id, publication_url, abstract, authors FROM citations WHERE title = %s OR doi = %s", 
+                (title, doi)
+            )
             existing = cur.fetchone()
             
             if existing:
@@ -145,10 +155,6 @@ class DbManager:
                     logger.info(f"  [CITATION_EXIST] Table citations:(ID: {citation_id})")
                 return citation_id
             
-            # Note: doi is NOT NULL in schema, providing placeholder if empty
-            doi = citation.get("doi")
-            if not doi:
-                doi = f"none"
             cur.execute(
                 "INSERT INTO citations (title, publication_url, abstract, doi, authors) VALUES (%s, %s, %s, %s, %s) RETURNING id",
                 (title, url, abstract, doi, authors)
@@ -473,12 +479,12 @@ class DbManager:
             return "caution"
         return "neutral"
 
-    def upsert_graph_data(self, peptide_id: int, graph_data: Dict[str, Any]):
+    def upsert_graph_data(self, peptide_id: int, am_id: int, graph_data: Dict[str, Any]):
         """Upserts pharmacokinetics graph data."""
         with self.connect().cursor() as cur:
             cur.execute(
-                "SELECT id FROM peptide_graph_data WHERE peptide_id = %s AND time_range = %s",
-                (peptide_id, graph_data['time_range'])
+                "SELECT id FROM peptide_graph_data WHERE peptide_id = %s AND administration_method_id = %s AND time_range = %s",
+                (peptide_id, am_id, graph_data['time_range'])
             )
             row = cur.fetchone()
             
@@ -499,8 +505,8 @@ class DbManager:
                 cur.execute(f"UPDATE peptide_graph_data SET {set_clause} WHERE id = %s", params)
                 logger.info(f"  [GRAPH_UPDATE] Table peptide_graph_data: Peptide {peptide_id}: '{graph_data['time_range']}'")
             else:
-                cols = ["peptide_id", "time_range"] + [k for k, v in fields.items() if k != 'updated_at']
-                vals = [peptide_id, graph_data['time_range']] + [v for k, v in fields.items() if k != 'updated_at']
+                cols = ["peptide_id", "administration_method_id", "time_range"] + [k for k, v in fields.items() if k != 'updated_at']
+                vals = [peptide_id, am_id, graph_data['time_range']] + [v for k, v in fields.items() if k != 'updated_at']
                 placeholders = ", ".join(["%s"] * len(vals))
                 cur.execute(
                     f"INSERT INTO peptide_graph_data ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",

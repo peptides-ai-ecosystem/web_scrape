@@ -17,9 +17,11 @@ class GraphMapper(BaseMapper):
             # { "24h": { "peak": "...", "points": [...], ... }, "7d": ... }
             data = json.loads(graph_data_json)
             
+            method = row.get("Method", "Injectable")
             for time_range, details in data.items():
                 graph_data_list.append({
                     "time_range": time_range,
+                    "method": method,
                     "peak_concentration": details.get("peak"),
                     "half_life": details.get("half_life"),
                     "cleared_percentage": details.get("cleared"),

@@ -152,4 +152,11 @@ class DbImportOrchestrator:
         
         # Link Graph Data (Group D)
         for gd in graph_data:
-            db.upsert_graph_data(peptide_id, gd)
+            method_name = gd.get("method", "Injectable")
+            # Ensure the method name is normalized to match lookup table (Injectable, Oral, etc.)
+            am_id = db.get_lookup_id("administration_methods", method_name)
+            if am_id:
+                db.upsert_graph_data(peptide_id, am_id, gd)
+            else:
+                # Fallback to 'Injectable' (ID 6) if lookup fails
+                db.upsert_graph_data(peptide_id, 6, gd)
