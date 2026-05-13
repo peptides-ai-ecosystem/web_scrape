@@ -27,6 +27,28 @@ class ProtocolMapper(BaseMapper):
         method = row.get("Method", "").strip()
         main_route = row.get("route", "").strip()
         
+        # Extraction of new fields
+        # Try multiple potential keys for quick_start_guide
+        quick_start = (
+            row.get("how_to_take_others") or 
+            row.get("how_to_reconstitute_others") or 
+            row.get("quick_start_guide", "")
+        ).strip()
+        quick_start_list = [item.strip() for item in quick_start.split("\n") if item.strip()]
+        quick_start_json = json.dumps(quick_start_list) if quick_start_list else json.dumps([])
+        
+        key_benefits = (row.get("overview_key_benefits") or row.get("key_benefits", "")).strip()
+        moa = (row.get("overview_mechanism_of_action") or row.get("mechanism_of_action", "")).strip()
+        timing = row.get("best_timing", "").strip()
+        effects = row.get("effects_timeline", "").strip()
+
+        # Find dynamic description (overview_what_is_<peptide>)
+        description = ""
+        for k, v in row.items():
+            if k.startswith("overview_what_is_") and v and v.strip():
+                description = v.strip()
+                break
+
         # Extract research protocols
         for i in range(1, 6):
             goal = row.get(f"research_protocols_goal_{i}", "").strip()
@@ -37,9 +59,15 @@ class ProtocolMapper(BaseMapper):
                 
                 protocols.append({
                     "name": goal,
+                    "description": description,
                     "administration_method_name": method,
                     "route_name": route,
-                    "expectations": expectations_json, # Already JSON formatted
+                    "expectations": expectations_json,
+                    "quick_start_guide": quick_start_json,
+                    "key_benefits": key_benefits,
+                    "mechanism_of_action": moa,
+                    "best_timing": timing,
+                    "effects_timeline": effects,
                     "reconstitution_steps": self.reconst_mapper.map(row),
                     "quality_indicators": self.quality_mapper.map(row),
                     "application_places": self.place_mapper.map(row, route),
@@ -50,9 +78,15 @@ class ProtocolMapper(BaseMapper):
         if not protocols and (row.get("typical_dose") or main_route):
             protocols.append({
                 "name": method or "Default Protocol",
+                "description": description,
                 "administration_method_name": method,
                 "route_name": main_route,
                 "expectations": expectations_json,
+                "quick_start_guide": quick_start_json,
+                "key_benefits": key_benefits,
+                "mechanism_of_action": moa,
+                "best_timing": timing,
+                "effects_timeline": effects,
                 "reconstitution_steps": self.reconst_mapper.map(row),
                 "quality_indicators": self.quality_mapper.map(row),
                 "application_places": self.place_mapper.map(row, main_route),

@@ -293,26 +293,59 @@ class DbManager:
     def upsert_protocol(self, peptide_id: int, am_id: int, protocol: Dict[str, Any]) -> int:
         """Upserts a peptide protocol."""
         with self.connect().cursor() as cur:
+            # 1. Matches by peptide, method, AND name to distinguish protocols
             cur.execute(
-                "SELECT id FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s",
-                (peptide_id, am_id)
+                "SELECT * FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s AND name = %s",
+                (peptide_id, am_id, protocol['name'])
             )
             row = cur.fetchone()
+            
+            new_fields = {
+                'description': protocol.get('description', ''),
+                'expectations': protocol.get('expectations'),
+                'quick_start_guide': protocol.get('quick_start_guide'),
+                'mechanism_of_action': protocol.get('mechanism_of_action'),
+                'key_benefits': protocol.get('key_benefits'),
+                'best_timing': protocol.get('best_timing'),
+                'effects_timeline': protocol.get('effects_timeline')
+            }
+
             if row:
                 protocol_id = row['id']
                 logger.info(f"  [PROTOCOL_EXIST] Table peptide_protocols: Peptide {peptide_id}: '{protocol['name']}' (ID: {protocol_id})")
-                # Update expectations if empty
-                cur.execute(
-                    "UPDATE peptide_protocols SET expectations = %s WHERE id = %s AND (expectations IS NULL OR expectations = '[]'::jsonb)",
-                    (protocol['expectations'], protocol_id)
-                )
+                
+                updates = {}
+                for col, val in new_fields.items():
+                    existing_val = row.get(col)
+                    # For JSONB fields (expectations, quick_start_guide), check for empty lists or '[]'
+                    is_empty_jsonb = (existing_val is None or existing_val == [] or existing_val == '[]')
+                    if val and (existing_val is None or existing_val == "" or is_empty_jsonb):
+                        updates[col] = val
+                
+                if updates:
+                    set_clause = ", ".join([f"{col} = %s" for col in updates.keys()])
+                    cur.execute(
+                        f"UPDATE peptide_protocols SET {set_clause}, updated_at = NOW() WHERE id = %s",
+                        list(updates.values()) + [protocol_id]
+                    )
+                    logger.info(f"    [PROTOCOL_UPDATE] Updated {', '.join(updates.keys())} for protocol {protocol_id}")
             else:
+                cols = ["peptide_id", "administration_method_id", "name"]
+                vals = [peptide_id, am_id, protocol['name']]
+                
+                for col, val in new_fields.items():
+                    if val:
+                        cols.append(col)
+                        vals.append(val)
+                
+                placeholders = ", ".join(["%s"] * len(cols))
                 cur.execute(
-                    "INSERT INTO peptide_protocols (peptide_id, administration_method_id, name, description, expectations) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                    (peptide_id, am_id, protocol['name'], protocol.get('description', ''), protocol['expectations'])
+                    f"INSERT INTO peptide_protocols ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",
+                    vals
                 )
                 protocol_id = cur.fetchone()['id']
                 logger.info(f"  [PROTOCOL] Table peptide_protocols: Created '{protocol['name']}' (ID: {protocol_id}) for peptide {peptide_id}")
+            
             self.conn.commit()
             return protocol_id
 
@@ -460,39 +493,73 @@ class DbManager:
             logger.info(f"  [LINK] Linked {table}: {fk1_col}={fk1_val} <-> {fk2_col}={fk2_val}")
 
     def delete_peptide_data(self, slug: str):
-        """Deletes a peptide and its related data (if cascading is not fully set)."""
+        """Deletes a peptide and ALL its related data."""
         with self.connect().cursor() as cur:
             cur.execute("SELECT id FROM peptides WHERE slug = %s", (slug,))
             row = cur.fetchone()
             if not row:
-                logger.warning(f"Peptide with slug {slug} not found for deletion.")
+                logger.warning(f"Peptide with slug '{slug}' not found for deletion.")
                 return
-            
+
             peptide_id = row['id']
-            
-            # Simple manual deletion of top-level relations if cascade isn't on
+
+            # --- Protocol subtree ---
             cur.execute("SELECT id FROM peptide_protocols WHERE peptide_id = %s", (peptide_id,))
             protocol_ids = [r['id'] for r in cur.fetchall()]
-            
-            if protocol_ids:
-                p_ids = tuple(protocol_ids)
-                if len(p_ids) == 1: p_ids = f"({p_ids[0]})"
-                else: p_ids = str(p_ids)
-                
-                cur.execute(f"DELETE FROM protocol_dosage_benefits WHERE protocol_dosage_id IN (SELECT id FROM protocol_dosages WHERE protocol_id IN {p_ids})")
-                cur.execute(f"DELETE FROM protocol_dosage_side_effects WHERE protocol_dosage_id IN (SELECT id FROM protocol_dosages WHERE protocol_id IN {p_ids})")
-                cur.execute(f"DELETE FROM protocol_dosages WHERE protocol_id IN {p_ids}")
-                cur.execute(f"DELETE FROM protocol_application_places WHERE protocol_id IN {p_ids}")
-                cur.execute(f"DELETE FROM protocol_quality_indicators WHERE protocol_id IN {p_ids}")
-                cur.execute(f"DELETE FROM peptide_protocol_reconstitution_steps WHERE protocol_id IN {p_ids}")
-                cur.execute(f"DELETE FROM peptide_protocols WHERE id IN {p_ids}")
 
+            if protocol_ids:
+                # protocol_dosages subtree
+                cur.execute(
+                    "SELECT id FROM protocol_dosages WHERE protocol_id = ANY(%s)",
+                    (protocol_ids,)
+                )
+                dosage_ids = [r['id'] for r in cur.fetchall()]
+
+                if dosage_ids:
+                    cur.execute("DELETE FROM protocol_dosage_benefits WHERE protocol_dosage_id = ANY(%s)", (dosage_ids,))
+                    cur.execute("DELETE FROM protocol_dosage_side_effects WHERE protocol_dosage_id = ANY(%s)", (dosage_ids,))
+                    cur.execute("DELETE FROM protocol_dosages WHERE id = ANY(%s)", (dosage_ids,))
+
+                # peptide_research_indication_studies linked via protocol_id
+                cur.execute("DELETE FROM peptide_research_indication_studies WHERE protocol_id = ANY(%s)", (protocol_ids,))
+                cur.execute("DELETE FROM protocol_application_places WHERE protocol_id = ANY(%s)", (protocol_ids,))
+                cur.execute("DELETE FROM protocol_quality_indicators WHERE protocol_id = ANY(%s)", (protocol_ids,))
+                cur.execute("DELETE FROM peptide_protocol_reconstitution_steps WHERE protocol_id = ANY(%s)", (protocol_ids,))
+                cur.execute("DELETE FROM peptide_protocols WHERE id = ANY(%s)", (protocol_ids,))
+                logger.info(f"  Deleted protocol subtree: {len(protocol_ids)} protocol(s) for peptide {peptide_id}")
+
+            # --- Research indications subtree ---
+            cur.execute("SELECT id FROM peptide_research_indications WHERE peptide_id = %s", (peptide_id,))
+            indication_ids = [r['id'] for r in cur.fetchall()]
+
+            if indication_ids:
+                cur.execute("DELETE FROM peptide_research_indication_studies WHERE indication_id = ANY(%s)", (indication_ids,))
+                cur.execute("DELETE FROM peptide_research_indications WHERE id = ANY(%s)", (indication_ids,))
+                logger.info(f"  Deleted {len(indication_ids)} research indication(s) for peptide {peptide_id}")
+
+            # --- Direct peptide relations ---
             cur.execute("DELETE FROM peptide_benefits WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM peptide_side_effects WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM peptide_interactions WHERE peptide_id_1 = %s OR peptide_id_2 = %s", (peptide_id, peptide_id))
-            cur.execute("DELETE FROM peptide_research_indications WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM peptide_references WHERE peptide_id = %s", (peptide_id,))
-            
+
+            # --- Pricing / vendor relations ---
+            cur.execute("DELETE FROM pepti_price_price_history WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM pepti_price_vendor_pricing WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM pepti_price_watchlist WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM vendor_peptides WHERE peptide_id = %s", (peptide_id,))
+
+            # --- Wiki / analytics relations ---
+            cur.execute("DELETE FROM wiki_peptide_analytics WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM wiki_trending_peptides WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM wiki_user_peptide_feedback_answers WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM wiki_user_peptide_question_answers WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM wiki_referral_clicks WHERE peptide_id = %s", (peptide_id,))
+
+            # --- SDS / other relations ---
+            cur.execute("DELETE FROM sds_compounds WHERE peptide_id = %s", (peptide_id,))
+
+            # --- Finally delete the peptide itself ---
             cur.execute("DELETE FROM peptides WHERE id = %s", (peptide_id,))
             self.conn.commit()
-            logger.info(f"Deleted peptide and related data for slug: {slug}")
+            logger.info(f"[DELETE] Fully deleted peptide slug='{slug}' (id={peptide_id}) and all related data.")
