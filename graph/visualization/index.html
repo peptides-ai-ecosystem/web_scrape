@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pharmacokinetics Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="graph-card">
+            <!-- Header section with Stats and Tabs -->
+            <div class="card-header">
+                <div class="stats-container">
+                    <div class="stat-item">
+                        <span class="stat-label">Peak:</span>
+                        <span id="peak-value" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Half-life:</span>
+                        <span id="hl-value" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Cleared:</span>
+                        <span id="cleared-value" class="stat-value">--</span>
+                    </div>
+                </div>
+                
+                <div class="tabs-container">
+                    <button class="tab-btn active" data-range="24h">24h</button>
+                    <button class="tab-btn" data-range="7d">7d</button>
+                    <button class="tab-btn" data-range="14d">14d</button>
+                    <button class="tab-btn" data-range="30d">30d</button>
+                </div>
+            </div>
+
+            <!-- Main Graph Area -->
+            <div class="graph-viewport">
+                <svg id="main-graph" viewBox="0 0 100 50" preserveAspectRatio="xMidYMid meet">
+                    <!-- Grid/Axes placeholder -->
+                    <g id="grid-layer"></g>
+                    
+                    <!-- Main path -->
+                    <path id="graph-path" d="" fill="none" stroke="#3b82f6" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" />
+                    
+                    <!-- Markers -->
+                    <g id="markers-layer"></g>
+                    
+                    <!-- Labels -->
+                    <g id="labels-layer"></g>
+                </svg>
+            </div>
+
+            <!-- Footer/Legend -->
+            <div class="card-footer">
+                <div class="legend-container">
+                    <div class="legend-item">
+                        <span class="dot peak"></span>
+                        <span class="legend-label">Peak</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="dot half-life"></span>
+                        <span class="legend-label">Half-life</span>
+                    </div>
+                </div>
+                <div class="attribution">
+                    Bowers et al. 1991
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

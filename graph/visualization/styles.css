@@ -1,0 +1,193 @@
+:root {
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --accent-blue: #3b82f6;
+    --accent-green: #22c55e;
+    --accent-orange: #f59e0b;
+    --border-color: #e2e8f0;
+    --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --radius: 16px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.dashboard-container {
+    width: 100%;
+    max-width: 800px;
+}
+
+.graph-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    padding: 32px;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.stats-container {
+    display: flex;
+    gap: 24px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.stat-value {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.tabs-container {
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 9999px;
+    display: flex;
+    gap: 4px;
+}
+
+.tab-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 16px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background: white;
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.graph-viewport {
+    width: 100%;
+    aspect-ratio: 2 / 1;
+    margin-bottom: 32px;
+    position: relative;
+}
+
+#main-graph {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Axis Styling */
+.axis-line {
+    stroke: var(--border-color);
+    stroke-width: 0.2;
+}
+
+.axis-text {
+    font-size: 2.5px;
+    fill: var(--text-secondary);
+    font-weight: 500;
+}
+
+.grid-line {
+    stroke: var(--border-color);
+    stroke-width: 0.1;
+    stroke-dasharray: 0.5 0.5;
+}
+
+/* Marker Styling */
+.marker-dot {
+    transition: cx 0.5s cubic-bezier(0.4, 0, 0.2, 1), cy 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.marker-line {
+    stroke-dasharray: 0.5 0.5;
+    stroke-width: 0.1;
+    transition: x1 0.5s, x2 0.5s, y1 0.5s, y2 0.5s;
+}
+
+/* Footer Section */
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    padding-top: 24px;
+}
+
+.legend-container {
+    display: flex;
+    gap: 20px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.dot.peak { background-color: var(--accent-green); }
+.dot.half-life { background-color: var(--accent-orange); }
+
+.legend-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.attribution {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+/* Animations */
+#graph-path {
+    transition: d 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
