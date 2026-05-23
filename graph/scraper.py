@@ -188,5 +188,5 @@ def scrape_graph(url: str):
         driver.quit()
 
 if __name__ == "__main__":
-    target_url = sys.argv[1] if len(sys.argv) > 1 else "https://pep-pedia.org/peptides/dihexa"
+    target_url = sys.argv[1] if len(sys.argv) > 1 else "https://pep-pedia.org/peptides/bpc-157"
     scrape_graph(target_url)

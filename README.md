@@ -116,3 +116,14 @@ Key settings can be adjusted in `src/config.py`:
 - `TIMEOUT`: Page load and element wait timeouts.
 - `OUTPUT_DIR`: Directory for CSV and logs.
 - `button_skip_list`: List of keywords to filter out irrelevant UI elements during scraping.
+
+
+## 📊 Visualization
+
+You can view the generated graphs locally using the built-in visualization tool. Run the following command in your terminal:
+
+```bash
+npx -y serve web_scrape\graph -p 3847
+```
+
+Then open `http://localhost:3847` in your web browser to explore the interactive graphs.

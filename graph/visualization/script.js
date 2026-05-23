@@ -2,41 +2,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     let graphData = null;
     let currentRange = '24h';
 
-    // Elements
+    // ── SVG coordinate system constants (from graph_analysis.md) ──
+    const SVG_Y_TOP = 6;      // Top of the graph area (100% level, where guide lines start)
+    const SVG_Y_BOTTOM = 35;  // Bottom of the graph area (0% level / baseline)
+    const SVG_X_MIN = 10;     // Left edge of the graph area
+    const SVG_X_MAX = 96;     // Right edge of the graph area
+    const SVG_Y_RANGE = SVG_Y_BOTTOM - SVG_Y_TOP; // 29
+
+    // ── DOM Elements ──
     const peakEl = document.getElementById('peak-value');
     const hlEl = document.getElementById('hl-value');
     const clearedEl = document.getElementById('cleared-value');
     const graphPath = document.getElementById('graph-path');
+    const graphFill = document.getElementById('graph-fill');
     const gridLayer = document.getElementById('grid-layer');
     const markersLayer = document.getElementById('markers-layer');
     const labelsLayer = document.getElementById('labels-layer');
     const tabBtns = document.querySelectorAll('.tab-btn');
+    const svg = document.getElementById('main-graph');
+    const tooltip = document.getElementById('tooltip');
+    const hoverGuide = document.getElementById('hover-guide');
+    const hoverPoint = document.getElementById('hover-point');
+    const graphViewport = document.getElementById('graph-viewport');
 
-    // Load Data
+    // ── Load Data ──
     try {
-        // Assuming the json is in the parent directory relative to index.html
         const response = await fetch('../graph_data.json');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         graphData = await response.json();
         renderGraph(currentRange);
     } catch (error) {
         console.error('Error loading graph data:', error);
-        alert('Failed to load graph data. Please ensure graph_data.json exists in the graph/ directory.');
     }
 
-    // Tab Switching
+    // ── Tab Switching ──
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const range = btn.dataset.range;
             if (range === currentRange) return;
 
-            // Update UI State
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-
             currentRange = range;
             renderGraph(range);
         });
     });
+
+    // ══════════════════════════════════════════
+    // ── RENDER GRAPH ──
+    // ══════════════════════════════════════════
 
     function renderGraph(range) {
         const data = graphData[range];
@@ -47,164 +61,175 @@ document.addEventListener('DOMContentLoaded', async () => {
         hlEl.textContent = data.metadata.half_life || '--';
         clearedEl.textContent = data.metadata.cleared || '--';
 
-        // 2. Update Main Path
+        // 2. Update Main Path — use the exact path_data from the JSON, no transformation
         graphPath.setAttribute('d', data.path_data);
 
-        // 3. Update Markers
+        // 3. Update Fill Path — close the curve to baseline for gradient fill
+        if (graphFill && data.path_data) {
+            graphFill.setAttribute('d', `${data.path_data} L ${SVG_X_MAX} ${SVG_Y_BOTTOM} L ${SVG_X_MIN} ${SVG_Y_BOTTOM} Z`);
+        }
+
+        // 4. Update Markers — use exact marker coordinates from JSON
         updateMarkers(data.markers);
 
-        // 4. Update Axes/Grid/Labels
+        // 5. Update Axes/Grid/Labels — use website-matching positions
         renderAxes(data.x_labels, data.y_labels);
     }
 
+    // ══════════════════════════════════════════
+    // ── MARKERS ──
+    // Uses exact (cx, cy) from graph_data.json markers array
+    // ══════════════════════════════════════════
+
     function updateMarkers(markers) {
         markersLayer.innerHTML = '';
-        markers.forEach(m => {
-            // Create a vertical dashed line to the X-axis (y=35 is base)
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', m.cx);
-            line.setAttribute('x2', m.cx);
-            line.setAttribute('y1', m.cy);
-            line.setAttribute('y2', '35');
-            line.setAttribute('stroke', m.fill);
-            line.setAttribute('class', 'marker-line');
-            line.setAttribute('opacity', '0.5');
-            markersLayer.appendChild(line);
+        if (!markers) return;
 
-            // Create the dot
+        markers.forEach(m => {
+            const isHalfLife = isHalfLifeColor(m.fill);
+            const isPeak = isPeakColor(m.fill);
+
+            // Draw vertical guide line for the Half-life marker (y=6 to y=35)
+            if (isHalfLife) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', m.cx);
+                line.setAttribute('x2', m.cx);
+                line.setAttribute('y1', SVG_Y_TOP);  // Fixed: use y=6, matching the website
+                line.setAttribute('y2', SVG_Y_BOTTOM);
+                line.setAttribute('stroke', m.fill);
+                line.setAttribute('class', 'marker-line');
+                markersLayer.appendChild(line);
+            }
+
+            // Pulse ring animation behind the dot
+            const pulse = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            pulse.setAttribute('cx', m.cx);
+            pulse.setAttribute('cy', m.cy);
+            pulse.setAttribute('r', m.r || 0.7);
+            pulse.setAttribute('fill', 'none');
+            pulse.setAttribute('stroke', m.fill);
+            pulse.setAttribute('stroke-width', '0.15');
+            pulse.setAttribute('class', 'marker-pulse');
+            markersLayer.appendChild(pulse);
+
+            // The dot itself — use exact radius from data (0.7)
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', m.cx);
             circle.setAttribute('cy', m.cy);
-            circle.setAttribute('r', '0.8');
+            circle.setAttribute('r', m.r || 0.7);
             circle.setAttribute('fill', m.fill);
             circle.setAttribute('class', 'marker-dot');
             markersLayer.appendChild(circle);
         });
     }
 
+    // ══════════════════════════════════════════
+    // ── AXES / GRID ──
+    // Matches the website's exact SVG structure
+    // ══════════════════════════════════════════
+
     function renderAxes(xLabels, yLabels) {
         gridLayer.innerHTML = '';
         labelsLayer.innerHTML = '';
 
-        // Base X-axis line (assuming baseline is at y=35)
-        const xAxisLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        xAxisLine.setAttribute('x1', '10');
-        xAxisLine.setAttribute('x2', '96');
-        xAxisLine.setAttribute('y1', '35');
-        xAxisLine.setAttribute('y2', '35');
-        xAxisLine.setAttribute('class', 'axis-line');
-        gridLayer.appendChild(xAxisLine);
+        // 50% dashed grid line at y=20.5 (from analysis: the website uses y=20.5)
+        const gridLine50 = createLine(SVG_X_MIN, 20.5, SVG_X_MAX, 20.5);
+        gridLine50.setAttribute('class', 'grid-line grid-line-50');
+        gridLayer.appendChild(gridLine50);
 
-        // Render Grid Lines and Labels
+        // Baseline at y=35
+        const baselineLine = createLine(SVG_X_MIN, SVG_Y_BOTTOM, SVG_X_MAX, SVG_Y_BOTTOM);
+        baselineLine.setAttribute('class', 'grid-line grid-line-baseline');
+        gridLayer.appendChild(baselineLine);
+
+        // X-axis labels at y=43 (matching the website, not y=40)
         xLabels.forEach(label => {
-            // Label text
-            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            text.setAttribute('x', label.pos);
-            text.setAttribute('y', '40');
-            text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('class', 'axis-text');
-            text.textContent = label.text;
+            const text = createSvgText(label.pos, 43, label.text, 'middle');
+            text.setAttribute('class', 'axis-text axis-text-x');
             labelsLayer.appendChild(text);
         });
 
+        // Y-axis labels — use exact positions from data, placed at x=8.5 (matching website)
         yLabels.forEach(label => {
-            // Horizontal grid line
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', '10');
-            line.setAttribute('x2', '96');
-            line.setAttribute('y1', label.pos);
-            line.setAttribute('y2', label.pos);
-            line.setAttribute('class', 'grid-line');
-            gridLayer.appendChild(line);
-
-            // Label text
-            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            text.setAttribute('x', '8');
-            text.setAttribute('y', label.pos);
-            text.setAttribute('text-anchor', 'end');
+            const text = createSvgText(8.5, label.pos, label.text, 'end');
+            text.setAttribute('class', 'axis-text axis-text-y');
             text.setAttribute('dominant-baseline', 'middle');
-            text.setAttribute('class', 'axis-text');
-            text.textContent = label.text;
             labelsLayer.appendChild(text);
         });
     }
 
-    // ── Hover Tooltip Logic ──
+    // ── SVG Element Helpers ──
 
-    const svg = document.getElementById('main-graph');
-    const tooltip = document.getElementById('tooltip');
-    const hoverGuide = document.getElementById('hover-guide');
-    const hoverPoint = document.getElementById('hover-point');
-    const graphViewport = document.querySelector('.graph-viewport');
+    function createLine(x1, y1, x2, y2) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        return line;
+    }
+
+    function createSvgText(x, y, content, anchor) {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', x);
+        text.setAttribute('y', y);
+        text.setAttribute('text-anchor', anchor);
+        text.textContent = content;
+        return text;
+    }
+
+    // ── Color Detection ──
+
+    function isHalfLifeColor(fill) {
+        const f = fill.toLowerCase();
+        return f === '#f59e0b' || f === 'rgb(245, 158, 11)';
+    }
+
+    function isPeakColor(fill) {
+        const f = fill.toLowerCase();
+        return f === '#22c55e' || f === 'rgb(34, 197, 94)';
+    }
+
+    // ══════════════════════════════════════════
+    // ── HOVER / TOOLTIP ──
+    // ══════════════════════════════════════════
 
     /**
-     * Convert an SVG x-coordinate to a human-readable time label
-     * by linearly interpolating between the axis labels.
+     * Get the total hours represented by the current range tab.
      */
-    function interpolateXLabel(svgX, xLabels) {
-        if (!xLabels || xLabels.length < 2) return svgX.toFixed(1);
-
-        // Clamp to range
-        if (svgX <= xLabels[0].pos) return xLabels[0].text;
-        if (svgX >= xLabels[xLabels.length - 1].pos) return xLabels[xLabels.length - 1].text;
-
-        // Find the two surrounding labels
-        for (let i = 0; i < xLabels.length - 1; i++) {
-            const a = xLabels[i];
-            const b = xLabels[i + 1];
-            if (svgX >= a.pos && svgX <= b.pos) {
-                const t = (svgX - a.pos) / (b.pos - a.pos);
-                // Parse numeric values from labels for interpolation
-                const aVal = parseTimeLabel(a.text);
-                const bVal = parseTimeLabel(b.text);
-                if (aVal !== null && bVal !== null) {
-                    const interpolated = aVal + t * (bVal - aVal);
-                    return formatTimeValue(interpolated, b.text);
-                }
-                // Fallback: show fraction between the two
-                return `${a.text} + ${(t * 100).toFixed(0)}%`;
-            }
-        }
-        return svgX.toFixed(1);
+    function getTotalHours(range) {
+        const map = { '24h': 24, '7d': 168, '14d': 336, '30d': 720 };
+        return map[range] || 24;
     }
 
     /**
-     * Parse a time label like "6h", "1d", "7d", "Dose" into hours.
+     * Convert an SVG x-coordinate to a time value in hours using direct linear mapping.
      */
-    function parseTimeLabel(label) {
-        if (label === 'Dose') return 0;
-        const hMatch = label.match(/^(\d+\.?\d*)h$/);
-        if (hMatch) return parseFloat(hMatch[1]);
-        const dMatch = label.match(/^(\d+\.?\d*)d$/);
-        if (dMatch) return parseFloat(dMatch[1]) * 24;
-        return null;
+    function svgXToTime(svgX) {
+        const totalHours = getTotalHours(currentRange);
+        return ((svgX - SVG_X_MIN) / (SVG_X_MAX - SVG_X_MIN)) * totalHours;
     }
 
     /**
-     * Format an interpolated hour value back into a readable label.
+     * Format time in hours as a rounded readable label (e.g., "6h", "2d").
      */
-    function formatTimeValue(hours, contextLabel) {
-        // If context uses days, format in days when > 24h
-        if (contextLabel && contextLabel.includes('d') && hours >= 24) {
-            const days = hours / 24;
-            return days % 1 === 0 ? `${days}d` : `${days.toFixed(1)}d`;
-        }
+    function formatTime(hours) {
         if (hours >= 24) {
-            const days = hours / 24;
-            return days % 1 === 0 ? `${days}d` : `${days.toFixed(1)}d`;
+            const days = Math.round(hours / 24);
+            return `${days}d`;
         }
-        if (hours % 1 === 0) return `${hours}h`;
-        return `${hours.toFixed(1)}h`;
+        if (hours < 1) {
+            return `${Math.round(hours * 60)}m`;
+        }
+        return `${Math.round(hours)}h`;
     }
 
     /**
      * Convert an SVG y-coordinate to a percentage.
-     * The graph runs from y=8 (100%) to y=35 (0%).
+     * Uses y=6 (top, 100%) to y=35 (bottom, 0%) — fixed from analysis.
      */
     function interpolateYValue(svgY) {
-        const yTop = 8;    // 100%
-        const yBottom = 35; // 0%
-        const pct = ((yBottom - svgY) / (yBottom - yTop)) * 100;
+        const pct = ((SVG_Y_BOTTOM - svgY) / SVG_Y_RANGE) * 100;
         return Math.max(0, Math.min(100, pct)).toFixed(1);
     }
 
@@ -221,26 +246,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Find the nearest data point to a given SVG x-coordinate.
+     * Uses binary search for efficiency (points are sorted by x).
      */
     function findNearestPoint(svgX, points) {
-        let nearest = points[0];
-        let minDist = Math.abs(svgX - nearest.x);
-        for (const p of points) {
-            const dist = Math.abs(svgX - p.x);
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = p;
+        let lo = 0, hi = points.length - 1;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (points[mid].x < svgX) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
             }
         }
-        return nearest;
+        // Check if the previous point is closer
+        if (lo > 0 && Math.abs(points[lo - 1].x - svgX) < Math.abs(points[lo].x - svgX)) {
+            lo = lo - 1;
+        }
+        return points[lo];
     }
 
-    // Mouse Events
-    svg.addEventListener('mousemove', (e) => {
+    // ── Mouse / Touch Event Handlers ──
+
+    function handleHover(e) {
         const data = graphData?.[currentRange];
         if (!data || !data.points || data.points.length === 0) return;
 
         const svgCoord = mouseToSVG(e);
+
+        // Only respond when within the graph area
+        if (svgCoord.x < SVG_X_MIN - 1 || svgCoord.x > SVG_X_MAX + 1) {
+            hideHover();
+            return;
+        }
+
         const nearest = findNearestPoint(svgCoord.x, data.points);
 
         // Position hover elements
@@ -252,26 +290,85 @@ document.addEventListener('DOMContentLoaded', async () => {
         hoverPoint.setAttribute('cy', nearest.y);
         hoverPoint.style.opacity = '1';
 
-        // Calculate real values
-        const timeLabel = interpolateXLabel(nearest.x, data.x_labels);
-        const pctValue = interpolateYValue(nearest.y);
+        // Determine if hovering near a marker (within 1.5 SVG units in 2D space)
+        let isPeakHovered = false;
+        let isHLHovered = false;
 
-        // Position tooltip (in DOM pixel space)
-        const rect = graphViewport.getBoundingClientRect();
+        if (data.markers) {
+            for (const m of data.markers) {
+                const dx = nearest.x - m.cx;
+                const dy = nearest.y - m.cy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 1.5) {
+                    if (isPeakColor(m.fill)) isPeakHovered = true;
+                    if (isHalfLifeColor(m.fill)) isHLHovered = true;
+                }
+            }
+        }
+
+        // Calculate actual time label for the hovered point
+        let actualTimeLabel = formatTime(svgXToTime(nearest.x));
+
+        // Build tooltip content & style hover point
+        let timeLabel = '';
+        if (isPeakHovered && isHLHovered) {
+            timeLabel = `Peak & Half-life (${actualTimeLabel})`;
+            hoverPoint.setAttribute('fill', '#ef4444');
+        } else if (isPeakHovered) {
+            timeLabel = `Peak (${actualTimeLabel})`;
+            hoverPoint.setAttribute('fill', '#22c55e');
+        } else if (isHLHovered) {
+            timeLabel = `Half-life (${actualTimeLabel})`;
+            hoverPoint.setAttribute('fill', '#f59e0b');
+        } else {
+            timeLabel = actualTimeLabel;
+            hoverPoint.setAttribute('fill', '#3b82f6');
+        }
+
+        // Get the interpolated percentage value
+        let pctValueRaw = parseFloat(interpolateYValue(nearest.y));
+        let pctValue = Math.round(pctValueRaw);
+
+        // Position tooltip in DOM pixel space
+        // Account for the corrected viewBox (100x45)
         const svgRect = svg.getBoundingClientRect();
-        const scaleX = svgRect.width / 100; // viewBox is 0-100
-        const tooltipX = (nearest.x * scaleX) + svgRect.left - rect.left;
-        const tooltipY = (nearest.y / 50) * svgRect.height + svgRect.top - rect.top;
+        const viewportRect = graphViewport.getBoundingClientRect();
+        const scaleX = svgRect.width / 100;   // viewBox width is 100
+        const scaleY = svgRect.height / 45;    // viewBox height is 45 (FIXED from 50)
 
-        tooltip.textContent = `${timeLabel} : ${pctValue}% remaining`;
+        const tooltipX = (nearest.x * scaleX) + svgRect.left - viewportRect.left;
+        const tooltipY = (nearest.y * scaleY) + svgRect.top - viewportRect.top;
+
+        tooltip.textContent = `${timeLabel} · ${pctValue}%`;
         tooltip.style.opacity = '1';
-        tooltip.style.left = `${tooltipX + 10}px`;
-        tooltip.style.top = `${tooltipY - 30}px`;
-    });
+        tooltip.classList.add('visible');
 
-    svg.addEventListener('mouseleave', () => {
+        // Smart positioning: flip tooltip if it would overflow right
+        const estimatedWidth = tooltip.offsetWidth || 150;
+        if (tooltipX + estimatedWidth + 16 > viewportRect.width) {
+            tooltip.style.left = `${tooltipX - estimatedWidth - 10}px`;
+        } else {
+            tooltip.style.left = `${tooltipX + 12}px`;
+        }
+        tooltip.style.top = `${tooltipY - 36}px`;
+    }
+
+    function hideHover() {
         hoverGuide.style.opacity = '0';
         hoverPoint.style.opacity = '0';
         tooltip.style.opacity = '0';
-    });
+        tooltip.classList.remove('visible');
+    }
+
+    svg.addEventListener('mousemove', handleHover);
+    svg.addEventListener('mouseleave', hideHover);
+
+    // Touch support
+    svg.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleHover(touch);
+    }, { passive: false });
+
+    svg.addEventListener('touchend', hideHover);
 });
