@@ -4,7 +4,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 
 # -------------------- CONFIG -------------------- #
-TIMEOUT = 15  # increased from 5
+TIMEOUT = 5  # increased from 5
 OUTPUT_DIR = Path("output_v6")
 OUTPUT_DIR.mkdir(exist_ok=True)
 MASTER_CSV = OUTPUT_DIR / "pep_pedia_master.csv"
@@ -29,7 +29,7 @@ def crawl_peptide_urls():
             pass
 
         # Extra buffer for slow JS frameworks
-        time.sleep(3)
+        time.sleep(1)
 
         # Debug info — check what the page actually loaded
         source = driver.page_source
@@ -43,6 +43,6 @@ def crawl_peptide_urls():
         print(f"[DEBUG] Found {len(links)} peptide links")
 
         peptide_urls = [link.get_attribute("href") for link in links]
-        return list(set(peptide_urls[:10]))
+        return list(set(peptide_urls[:30]))
     finally:
         driver.quit()

@@ -299,10 +299,10 @@ class DbManager:
     def upsert_protocol(self, peptide_id: int, am_id: int, protocol: Dict[str, Any]) -> int:
         """Upserts a peptide protocol."""
         with self.connect().cursor() as cur:
-            # 1. Matches by peptide, method, AND name to distinguish protocols
+            # Matches by peptide and method to avoid duplicate constraint violation
             cur.execute(
-                "SELECT * FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s AND name = %s",
-                (peptide_id, am_id, protocol['name'])
+                "SELECT * FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s",
+                (peptide_id, am_id)
             )
             row = cur.fetchone()
             
@@ -318,7 +318,7 @@ class DbManager:
 
             if row:
                 protocol_id = row['id']
-                logger.info(f"  [PROTOCOL_EXIST] Table peptide_protocols: Peptide {peptide_id}: '{protocol['name']}' (ID: {protocol_id})")
+                logger.info(f"  [PROTOCOL_EXIST] Table peptide_protocols: Peptide {peptide_id}: '{row['name']}' (ID: {protocol_id})")
                 
                 updates = {}
                 for col, val in new_fields.items():
@@ -429,8 +429,12 @@ class DbManager:
         match = re.search(r"([\d\.]+(?:\s*-\s*[\d\.]+)?)\s*([a-zA-Z%/]+)?", normalized)
         
         if match:
-            # val: standardize "10 - 20" to "10-20"
-            val = match.group(1).replace(" ", "")
+            # Extract numeric part; if a range like "10-20" is present, take the first number.
+            raw_val = match.group(1).replace(" ", "")
+            if "-" in raw_val:
+                val = raw_val.split("-")[0]
+            else:
+                val = raw_val
             # unit: default to "unit" if not found
             unit = match.group(2) if match.group(2) else "unit"
         else:
@@ -483,7 +487,7 @@ class DbManager:
         """Upserts pharmacokinetics graph data."""
         with self.connect().cursor() as cur:
             cur.execute(
-                "SELECT id FROM peptide_graph_data WHERE peptide_id = %s AND administration_method_id = %s AND time_range = %s",
+                "SELECT id FROM peptide_graph WHERE peptide_id = %s AND administration_method_id = %s AND time_range = %s",
                 (peptide_id, am_id, graph_data['time_range'])
             )
             row = cur.fetchone()
@@ -492,9 +496,12 @@ class DbManager:
                 'peak_concentration': graph_data.get('peak_concentration'),
                 'half_life': graph_data.get('half_life'),
                 'cleared_percentage': graph_data.get('cleared_percentage'),
+                'path_data': graph_data.get('path_data'),
+                'markers': graph_data.get('markers'),
                 'points': graph_data.get('points'),
                 'x_axis_labels': graph_data.get('x_axis_labels'),
                 'y_axis_labels': graph_data.get('y_axis_labels'),
+                'legend': graph_data.get('legend'),
                 'updated_at': 'NOW()'
             }
             
@@ -502,20 +509,101 @@ class DbManager:
                 graph_id = row['id']
                 set_clause = ", ".join([f"{col} = %s" if col != 'updated_at' else f"{col} = {val}" for col, val in fields.items()])
                 params = [v for k, v in fields.items() if k != 'updated_at'] + [graph_id]
-                cur.execute(f"UPDATE peptide_graph_data SET {set_clause} WHERE id = %s", params)
-                logger.info(f"  [GRAPH_UPDATE] Table peptide_graph_data: Peptide {peptide_id}: '{graph_data['time_range']}'")
+                cur.execute(f"UPDATE peptide_graph SET {set_clause} WHERE id = %s", params)
+                logger.info(f"  [GRAPH_UPDATE] Table peptide_graph: Peptide {peptide_id}: '{graph_data['time_range']}'")
             else:
                 cols = ["peptide_id", "administration_method_id", "time_range"] + [k for k, v in fields.items() if k != 'updated_at']
                 vals = [peptide_id, am_id, graph_data['time_range']] + [v for k, v in fields.items() if k != 'updated_at']
                 placeholders = ", ".join(["%s"] * len(vals))
                 cur.execute(
-                    f"INSERT INTO peptide_graph_data ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",
+                    f"INSERT INTO peptide_graph ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",
                     vals
                 )
                 graph_id = cur.fetchone()['id']
-                logger.info(f"  [GRAPH] Table peptide_graph_data: Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})")
+                logger.info(f"  [GRAPH] Table peptide_graph: Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})")
             
             self.conn.commit()
+
+    def get_methods_for_peptide(self, peptide_id: int) -> List[Dict[str, Any]]:
+        """Get all available administration methods for a peptide."""
+        with self.connect().cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT am.id, am.name
+                FROM peptide_graph pg
+                JOIN administration_methods am ON pg.administration_method_id = am.id
+                WHERE pg.peptide_id = %s
+                ORDER BY am.name
+            """, (peptide_id,))
+            return [{"id": row['id'], "name": row['name']} for row in cur.fetchall()]
+
+    def get_graph_data_for_visualization(self, peptide_id: int, method_name: str = "Injectable") -> Dict[str, Any]:
+        """Fetch and format graph data for frontend visualization.
+
+        Returns data in visualization format with peptide and method metadata:
+        {
+          "peptide_name": "...",
+          "administration_method": "...",
+          "24h": {
+            "metadata": {"peak": "...", "half_life": "...", "cleared": "..."},
+            "path_data": "...",
+            "markers": [...],
+            "points": [...],
+            "x_labels": [...],
+            "y_labels": [...],
+            "legend": {...}
+          },
+          "7d": {...}
+        }
+        """
+        result = {}
+        with self.connect().cursor() as cur:
+            # Get peptide name
+            cur.execute("SELECT name FROM peptides WHERE id = %s", (peptide_id,))
+            peptide_row = cur.fetchone()
+            result['peptide_name'] = peptide_row['name'] if peptide_row else 'Unknown'
+            result['administration_method'] = method_name
+
+            # Get administration method ID
+            cur.execute("SELECT id FROM administration_methods WHERE name = %s", (method_name,))
+            am_row = cur.fetchone()
+            am_id = am_row['id'] if am_row else 6  # Default to Injectable (ID 6)
+
+            # Fetch all graph records for this peptide
+            cur.execute(
+                "SELECT * FROM peptide_graph WHERE peptide_id = %s AND administration_method_id = %s ORDER BY time_range",
+                (peptide_id, am_id)
+            )
+            rows = cur.fetchall()
+
+            for row in rows:
+                time_range = row['time_range']
+
+                # Helper function to parse JSON - handles both string and already-parsed objects
+                def parse_json(val, default):
+                    if val is None:
+                        return default
+                    if isinstance(val, (list, dict)):
+                        return val  # Already parsed by psycopg2
+                    try:
+                        return json.loads(val) if val else default
+                    except (json.JSONDecodeError, TypeError):
+                        return default
+
+                result[time_range] = {
+                    "metadata": {
+                        "peak": row.get('peak_concentration', ''),
+                        "half_life": row.get('half_life', ''),
+                        "cleared": row.get('cleared_percentage', '')
+                    },
+                    "path_data": row.get('path_data', ''),
+                    "markers": parse_json(row.get('markers'), []),
+                    "points": parse_json(row.get('points'), []),
+                    "x_labels": parse_json(row.get('x_axis_labels'), []),
+                    "y_labels": parse_json(row.get('y_axis_labels'), []),
+                    "legend": parse_json(row.get('legend'), {})
+                }
+
+        return result
 
     def link_relation(self, table: str, fk1_col: str, fk1_val: int, fk2_col: str, fk2_val: int):
         """Generic method to link two entities in a junction table."""
@@ -528,7 +616,7 @@ class DbManager:
             if row:
                 logger.info(f"  [LINK_EXIST] Table {table}: {fk1_col}={fk1_val} <-> {fk2_col}={fk2_val}")
                 return
-            
+
             cur.execute(
                 f"INSERT INTO {table} ({fk1_col}, {fk2_col}) VALUES (%s, %s)",
                 (fk1_val, fk2_val)
@@ -586,7 +674,7 @@ class DbManager:
             cur.execute("DELETE FROM peptide_side_effects WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM peptide_interactions WHERE peptide_id_1 = %s OR peptide_id_2 = %s", (peptide_id, peptide_id))
             cur.execute("DELETE FROM peptide_references WHERE peptide_id = %s", (peptide_id,))
-            cur.execute("DELETE FROM peptide_graph_data WHERE peptide_id = %s", (peptide_id,))
+            cur.execute("DELETE FROM peptide_graph WHERE peptide_id = %s", (peptide_id,))
 
             # --- Pricing / vendor relations ---
             cur.execute("DELETE FROM pepti_price_price_history WHERE peptide_id = %s", (peptide_id,))

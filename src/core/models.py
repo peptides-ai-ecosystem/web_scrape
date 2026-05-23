@@ -33,7 +33,10 @@ class GraphData:
     peak: str
     half_life: str
     cleared: str
+    path_data: str = ""
     points: List[GraphPoint] = field(default_factory=list)
+    markers: List[Dict] = field(default_factory=list)
+    legend: Dict[str, str] = field(default_factory=dict)
     x_axis_labels: List[AxisLabel] = field(default_factory=list)
     y_axis_labels: List[AxisLabel] = field(default_factory=list)
 

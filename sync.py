@@ -17,6 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description="Sync Peptide CSV data to PostgreSQL")
     parser.add_argument("--csv", required=False, help="Path to the CSV file")
     parser.add_argument("--delete", metavar="SLUG", help="Delete a peptide and its related data by slug")
+    parser.add_argument("--limit",default=100, help="limit the insertion list")
     
     args = parser.parse_args()
 
@@ -39,14 +40,16 @@ def main():
     rows: List[Dict[str, Any]] = []
     with open(args.csv, mode='r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        for i,row in enumerate(reader):
             rows.append(row)
+            if i > int(args.limit):
+                break
 
     print(f"Read {len(rows)} rows from {args.csv}")
     
     # Sync to DB
     print("Starting sync...")
-    orchestrator.sync_to_db(args.url, rows)
+    orchestrator.sync_to_db(os.getenv("DATABASE_URL"), rows)
     print("Sync completed successfully.")
 
 if __name__ == "__main__":
