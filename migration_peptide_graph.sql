@@ -1,3 +1,8 @@
+-- Add legend JSONB column to peptide_graph table
+-- This stores the marker type to color mapping extracted from the website
+-- Example: {"peak": "rgb(34, 197, 94)", "half-life": "rgb(245, 158, 11)"}
+
+
 CREATE TABLE IF NOT EXISTS peptide_graph (
     id SERIAL PRIMARY KEY,
     peptide_id INTEGER REFERENCES peptides(id) ON DELETE CASCADE,
@@ -15,18 +20,3 @@ CREATE TABLE IF NOT EXISTS peptide_graph (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
--- Migrate existing data
-INSERT INTO peptide_graph (
-    peptide_id, administration_method_id, time_range,
-    peak_concentration, half_life, cleared_percentage,
-    points, x_axis_labels, y_axis_labels, legend, updated_at
-)
-SELECT 
-    peptide_id, administration_method_id, time_range,
-    peak_concentration, half_life, cleared_percentage,
-    points, x_axis_labels, y_axis_labels, legend, updated_at
-FROM peptide_graph;
-
--- Drop old table
--- DROP TABLE IF EXISTS peptide_graph;

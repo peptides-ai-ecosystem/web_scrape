@@ -39,6 +39,3 @@ if user_url:
 
             # hide_index=True
         )
-##uv run streamlit run src/read_data.py  --server.headless true
-##uv run streamlit run src/read_data.py  --server.headless true --server.port 8501 --server.address 0.0.0.0
-##ngrok http 8501
