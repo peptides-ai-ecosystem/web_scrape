@@ -1,12 +1,13 @@
 from selenium.webdriver.common.by import By
-from ..core.models import PeptideData
-from ..core.interfaces import IScraper
-from ..extractors.hero import HeroExtractor
-from ..extractors.quick_guide import QuickGuideExtractor
-from ..extractors.community import CommunityExtractor
-from ..extractors.section import SectionExtractor
-from ..extractors.graph import GraphExtractor
-from ..infrastructure.webdriver_factory import WebDriverFactory
+from src.core.models import PeptideData
+from src.core.interfaces import IScraper
+from src.extractors.hero import HeroExtractor
+from src.extractors.quick_guide import QuickGuideExtractor
+from src.extractors.community import CommunityExtractor
+from src.extractors.section import SectionExtractor
+from src.extractors.graph import GraphExtractor
+from src.infrastructure.webdriver_factory import WebDriverFactory
+from src.config import log_debug, log_error
 from typing import List, Tuple, Optional
 import time
 
@@ -22,16 +23,19 @@ class PageScraper(IScraper):
         driver, wait = WebDriverFactory.create_driver()
         try:
             print(f"[INFO] Processing: {url}")
+            log_debug(f"Starting scrape for URL: {url}", "page_scraper.py")
             driver.get(url)
             time.sleep(2)
 
             results = []
             # Get categories (e.g. Injection, Nasal, Oral)
             categories = self._get_categories(driver, wait)
+            log_debug(f"Found {len(categories)} categories for {url}", "page_scraper.py")
 
             for cat in categories:
                 # Click the category button
                 self._click_category(driver, wait, cat)
+                log_debug(f"Processing category '{cat}' for {url}", "page_scraper.py")
                 
                 hero_data = self.hero_extractor.extract(driver, wait)
                 quick_guide = self.quick_guide_extractor.extract(driver, wait)
@@ -51,10 +55,13 @@ class PageScraper(IScraper):
                     sections=sections,
                     graph_data=graph_data
                 ))
+            log_debug(f"Successfully scraped {len(results)} results from {url}", "page_scraper.py")
             return results, None
         except Exception as e:
-            print(f"[ERROR] {url}: {e}")
-            return [], f"{url} - {str(e)}"
+            error_msg = f"{url} - {str(e)}"
+            print(f"[ERROR] {error_msg}")
+            log_error(error_msg, "page_scraper.py")
+            return [], error_msg
         finally:
             driver.quit()
 

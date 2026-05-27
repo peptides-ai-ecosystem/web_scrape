@@ -1,7 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from .base import BaseExtractor
-from ..core.models import HeroData, HeroFact
+from src.extractors.base import BaseExtractor
+from src.core.models import HeroData, HeroFact
 
 class HeroExtractor(BaseExtractor):
     def extract(self, driver, wait) -> HeroData:

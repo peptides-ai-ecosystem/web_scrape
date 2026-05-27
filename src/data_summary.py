@@ -2,7 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from src.config import MASTER_CSV, ERROR_LOG, OUTPUT_DIR
+from src.config import MASTER_CSV, ERROR_LOG, DEBUG_LOG, OUTPUT_DIR
+
 REPORT_PATH = OUTPUT_DIR / "summary_report.csv"
 
 # ---------------- LOAD DATA ---------------- #

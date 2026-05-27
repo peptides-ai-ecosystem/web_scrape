@@ -3,7 +3,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
-from ..config import TIMEOUT
+from src.config import TIMEOUT
 
 
 class WebDriverFactory:

@@ -1,13 +1,12 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from src.extractors.base import BaseExtractor
+from src.core.models import GraphData, GraphPoint, AxisLabel
+from src.config import TIME_RANGES
+from typing import Dict, List, Optional
 import re
 import time
-from .base import BaseExtractor
-from ..core.models import GraphData, GraphPoint, AxisLabel
-from ..config import TIME_RANGES
-from typing import Dict, List, Optional
-
 
 class GraphExtractor(BaseExtractor):
     """Extracts pharmacokinetics graph data for the currently active delivery method.

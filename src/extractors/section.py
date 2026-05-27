@@ -1,10 +1,10 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-import time
-from .base import BaseExtractor
+from src.extractors.base import BaseExtractor
 from typing import List, Dict
-from ..config import button_skip_list
+from src.config import button_skip_list
+
 
 class SectionExtractor(BaseExtractor):
     def extract(self, driver, wait) -> List[Dict[str, str]]:

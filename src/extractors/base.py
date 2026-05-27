@@ -1,6 +1,6 @@
 import time
 from selenium.webdriver.support import expected_conditions as EC
-from ..core.interfaces import IExtractor
+from src.core.interfaces import IExtractor
 
 class BaseExtractor(IExtractor):
     def safe_click(self, driver, wait, element):

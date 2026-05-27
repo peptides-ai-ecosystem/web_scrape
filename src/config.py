@@ -1,48 +1,91 @@
+import os
 from pathlib import Path
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-import time
+from datetime import datetime
+from typing import Optional
 
-# -------------------- CONFIG -------------------- #
-TIMEOUT = 5  # increased from 5
-OUTPUT_DIR = Path("output_v6")
-OUTPUT_DIR.mkdir(exist_ok=True)
-MASTER_CSV = OUTPUT_DIR / "pep_pedia_master.csv"
-ERROR_LOG = OUTPUT_DIR / "error_log.txt"
+# -------------------- SETTINGS -------------------- #
 
-TIME_RANGES = ["24h", "7d", "14d", "30d"]
+class Settings:
+    """Application settings loaded from environment variables"""
+    
+    # Selenium settings
+    TIMEOUT: int = int(os.getenv("TIMEOUT", 5))
+    
+    # Directory settings
+    OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "output"))
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    
+    # File paths
+    MASTER_CSV: Path = OUTPUT_DIR / "pep_pedia_master.csv"
+    ERROR_LOG: Path = OUTPUT_DIR / "error_log.txt"
+    DEBUG_LOG: Path = OUTPUT_DIR / "debug_log.txt"
+    
+    # Time range settings
+    TIME_RANGES: list = ["24h", "7d", "14d", "30d"]
+    
+    # Skip list settings
+    BUTTON_SKIP_LIST: list = [
+        "peak", "half-life", "cleared", "hrs", "hr", "day",
+    ] + TIME_RANGES
 
-button_skip_list = [
-    "peak", "half-life", "cleared", "hrs", "hr", "day",
-] + TIME_RANGES
 
-def crawl_peptide_urls():
-    from .infrastructure.webdriver_factory import WebDriverFactory
-    driver, wait = WebDriverFactory.create_driver()
+# -------------------- MODULE-LEVEL EXPORTS -------------------- #
+# Create a default Settings instance for module-level imports
+settings = Settings()
+
+# Export settings for easy imports
+TIMEOUT = settings.TIMEOUT
+OUTPUT_DIR = settings.OUTPUT_DIR
+MASTER_CSV = settings.MASTER_CSV
+ERROR_LOG = settings.ERROR_LOG
+DEBUG_LOG = settings.DEBUG_LOG
+TIME_RANGES = settings.TIME_RANGES
+BUTTON_SKIP_LIST = settings.BUTTON_SKIP_LIST
+
+
+# -------------------- LOGGING FUNCTIONS -------------------- #
+
+def log_error(message: str, filename: Optional[str] = None) -> None:
+    """
+    Log an error message to ERROR_LOG with timestamp.
+    
+    Args:
+        message: Error message to log
+        filename: Optional filename prefix for per-file tracking
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {f'[{filename}] ' if filename else ''}{message}"
+    
     try:
-        driver.get("https://pep-pedia.org/browse")
+        with open(ERROR_LOG, "a", encoding="utf-8") as f:
+            f.write(log_entry + "\n")
+    except Exception as e:
+        print(f"[WARNING] Failed to write to error log: {e}")
 
-        # Wait for JS to render — wait until at least one <a> tag exists
-        try:
-            wait.until(EC.presence_of_element_located((By.TAG_NAME, "a")))
-        except Exception:
-            pass
 
-        # Extra buffer for slow JS frameworks
-        time.sleep(1)
+def log_debug(message: str, filename: Optional[str] = None) -> None:
+    """
+    Log a debug message to DEBUG_LOG with timestamp.
+    
+    Args:
+        message: Debug message to log
+        filename: Optional filename prefix for per-file tracking
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {f'[{filename}] ' if filename else ''}{message}"
+    
+    try:
+        with open(DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(log_entry + "\n")
+    except Exception as e:
+        print(f"[WARNING] Failed to write to debug log: {e}")
 
-        # Debug info — check what the page actually loaded
-        source = driver.page_source
-        print(f"[DEBUG] Page source length: {len(source)}")
-        print(f"[DEBUG] Page source snippet:\n{source[:1500]}\n")
 
-        all_links = driver.find_elements(By.TAG_NAME, "a")
-        print(f"[DEBUG] Found total {len(all_links)} links on page")
-
-        links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/peptides/']")
-        print(f"[DEBUG] Found {len(links)} peptide links")
-
-        peptide_urls = [link.get_attribute("href") for link in links]
-        return list(set(peptide_urls[:30]))
-    finally:
-        driver.quit()
+def clear_logs() -> None:
+    """Clear both error and debug logs (useful at start of execution)."""
+    try:
+        ERROR_LOG.write_text("")
+        DEBUG_LOG.write_text("")
+        print(f"[INFO] Logs cleared at {ERROR_LOG} and {DEBUG_LOG}")
+    except Exception as e:
+        print(f"[WARNING] Failed to clear logs: {e}")

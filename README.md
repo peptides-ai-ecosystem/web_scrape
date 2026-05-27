@@ -83,33 +83,6 @@ The project follows a modular design for maintainability and scalability:
 
 ---
 
-## 🧪 Tests and Verification
-
-### Manual Verification
-You can verify the scraper logic and refactor integrity using:
-```bash
-uv run python verify_refactor.py
-```
-This script scrapes a sample page (`adalank`) and prints a summary of the extracted data to the console, testing both extraction and storage.
-
-### Unit Testing (Planned)
-Future updates will include a comprehensive test suite using `pytest` to validate individual extractors and models in isolation.
-
----
-
-## 🗄️ Database Schema & Documentation
-
-The project includes a detailed relational mapping for structured data insertion into PostgreSQL.
-
-- **[structured.md](file:///home/saif/Documents/web_scrape/structured.md)**: Defines the exact insertion order and hierarchy required to preserve referential integrity (Foreign Keys).
-- **[mapper.md](file:///home/saif/Documents/web_scrape/mapper.md)**: Maps the flat scraped data to the relational entities.
-- **[structure_data.md](file:///home/saif/Documents/web_scrape/structure_data.md)**: Provides a technical mapping of CSV columns to the hierarchical JSON payload.
-
-### Insertion Order
-Data must be inserted in specific groups (Lookups -> Peptides -> Protocols -> Dosages) as documented in the files above.
-
----
-
 ## ⚙️ Configuration
 
 Key settings can be adjusted in `src/config.py`:
@@ -117,13 +90,3 @@ Key settings can be adjusted in `src/config.py`:
 - `OUTPUT_DIR`: Directory for CSV and logs.
 - `button_skip_list`: List of keywords to filter out irrelevant UI elements during scraping.
 
-
-## 📊 Visualization
-
-You can view the generated graphs locally using the built-in visualization tool. Run the following command in your terminal:
-
-```bash
-npx -y serve web_scrape\graph -p 3847
-```
-
-Then open `http://localhost:3847` in your web browser to explore the interactive graphs.
