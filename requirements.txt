@@ -57,6 +57,7 @@ toml==0.10.2
 toolz==1.1.0
 tornado==6.5.4
 trio==0.32.0
+tqdm==4.66.2
 trio-typing==0.10.0
 trio-websocket==0.12.2
 types-certifi==2021.10.8.3

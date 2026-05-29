@@ -51,7 +51,7 @@ class QualityMapper(BaseMapper):
         
         # Extract from columns starting with 'quality_indicators_'
         for key, val in row.items():
-            if key.startswith("quality_indicators_") and val and val.strip():
+            if key and isinstance(key, str) and key.startswith("quality_indicators_") and val and isinstance(val, str) and val.strip():
                 # Humanize the title from the key
                 # e.g. quality_indicators_sterile_lyophilized_powder -> Sterile lyophilized powder
                 title = key.replace("quality_indicators_", "").replace("_", " ").capitalize()

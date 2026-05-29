@@ -9,6 +9,7 @@ from src.extractors.graph import GraphExtractor
 from src.infrastructure.webdriver_factory import WebDriverFactory
 from src.config import log_debug, log_error
 from typing import List, Tuple, Optional
+from tqdm import tqdm
 import time
 
 class PageScraper(IScraper):
@@ -25,14 +26,14 @@ class PageScraper(IScraper):
             print(f"[INFO] Processing: {url}")
             log_debug(f"Starting scrape for URL: {url}", "page_scraper.py")
             driver.get(url)
-            time.sleep(2)
+            time.sleep(1)
 
             results = []
             # Get categories (e.g. Injection, Nasal, Oral)
             categories = self._get_categories(driver, wait)
             log_debug(f"Found {len(categories)} categories for {url}", "page_scraper.py")
 
-            for cat in categories:
+            for cat in tqdm(categories, desc="Processing categories", unit="category", leave=False):
                 # Click the category button
                 self._click_category(driver, wait, cat)
                 log_debug(f"Processing category '{cat}' for {url}", "page_scraper.py")

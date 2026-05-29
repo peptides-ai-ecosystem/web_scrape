@@ -1,6 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from src.infrastructure.webdriver_factory import WebDriverFactory
+from tqdm import tqdm
 import time
 def crawl_peptide_urls():
     driver, wait = WebDriverFactory.create_driver()
@@ -27,7 +28,7 @@ def crawl_peptide_urls():
         links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/peptides/']")
         print(f"[DEBUG] Found {len(links)} peptide links")
 
-        peptide_urls = [link.get_attribute("href") for link in links]
-        return list(set(peptide_urls[:1]))
+        peptide_urls = [link.get_attribute("href") for link in tqdm(links[:20], desc="Extracting URLs", unit="link")]
+        return list(set(peptide_urls))
     finally:
         driver.quit()

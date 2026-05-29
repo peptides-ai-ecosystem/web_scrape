@@ -75,7 +75,7 @@ class ResearchStudyMapper(BaseMapper):
         studies = []
         for key, val in row.items():
             if val:
-                if key.startswith("references_research_studies_"):
+                if key and isinstance(key, str) and key.startswith("references_research_studies_"):
                     title_match = re.search(r"references_research_studies_\((.*)\)", key)
                     title = title_match.group(1).replace('_', ' ') if title_match else val[:50]
                     studies.append({
@@ -84,7 +84,7 @@ class ResearchStudyMapper(BaseMapper):
                         "abstract": val if not val.startswith("http") else "",
                         "type": "study"
                     })
-                elif key.startswith("references_citations_"):
+                elif key and isinstance(key, str) and key.startswith("references_citations_"):
                     # remove 'View Publication\n(opens in new tab)\nâ (opens in new tab)' variants
                     clean_val = re.sub(r'View Publication.*', '', val, flags=re.DOTALL).strip()
                     full_abstract = clean_val # Keep full cleaned text for abstract

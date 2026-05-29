@@ -36,7 +36,7 @@ class RelationMapper(BaseMapper):
     def _map_interactions(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         interactions = []
         for key, val in row.items():
-            if val and key.startswith("peptide_interactions_"):
+            if val and key and isinstance(key, str) and key.startswith("peptide_interactions_"):
                 parts = key.replace("peptide_interactions_", "").split("_")
                 if len(parts) >= 2:
                     interaction_type = parts[-1]
@@ -52,7 +52,7 @@ class RelationMapper(BaseMapper):
     def _map_indications(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         indications = []
         for key, val in row.items():
-            if val and key.startswith("research_indications_"):
+            if val and key and isinstance(key, str) and key.startswith("research_indications_"):
                 match = re.search(r"research_indications_(.+?)_(most_effective|effective|moderate)_?\((.*)\)?", key)
                 if match:
                     category = match.group(1).replace('_', ' ').title()

@@ -1,5 +1,6 @@
 from multiprocessing import Pool, cpu_count
 from typing import List, Callable
+from tqdm import tqdm
 from .page_scraper import PageScraper
 from src.infrastructure.csv_storage import CSVStorage
 from src.config import log_debug, log_error, MASTER_CSV
@@ -21,7 +22,7 @@ class ScraperManager:
         log_debug(f"Starting scrape batch with {len(urls)} URLs", "scraper_manager.py")
 
         with Pool(processes=self.max_processes) as pool:
-            results = pool.map(scrape_url_wrapper, urls)
+            results = list(tqdm(pool.imap_unordered(scrape_url_wrapper, urls), total=len(urls), desc="Scraping URLs", unit="url"))
             
             for p_data_list, error in results:
                 if p_data_list:

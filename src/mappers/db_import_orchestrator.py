@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+from tqdm import tqdm
 from src.mappers.group_a.lookup_mappers import (
     AdministrationMethodMapper,
     BenefitMapper,
@@ -66,7 +67,7 @@ class DbImportOrchestrator:
         """
         db = DbManager(db_url)
         try:
-            for row in rows:
+            for row in tqdm(rows, desc="Syncing to database", unit="row"):
                 payload = self.map_row(row)
                 
                 # 1. Process Group A (Independent Lookups)
@@ -158,5 +159,5 @@ class DbImportOrchestrator:
             if am_id:
                 db.upsert_graph_data(peptide_id, am_id, gd)
             else:
-                # Fallback to 'Injectable' (ID 6) if lookup fails
-                db.upsert_graph_data(peptide_id, 6, gd)
+                # Fallback to 'Injectable' (ID 1) if lookup fails
+                db.upsert_graph_data(peptide_id, 1, gd)

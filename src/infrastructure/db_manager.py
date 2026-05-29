@@ -347,14 +347,17 @@ class DbManager:
             )
             row = cur.fetchone()
             
+            # Truncate name to fit VARCHAR(100) constraint
+            protocol_name = (protocol.get('name') or '')[:100]
+            
             new_fields = {
                 'description': protocol.get('description', ''),
                 'expectations': protocol.get('expectations'),
                 'quick_start_guide': protocol.get('quick_start_guide'),
                 'mechanism_of_action': protocol.get('mechanism_of_action'),
                 'key_benefits': protocol.get('key_benefits'),
-                'best_timing': protocol.get('best_timing'),
-                'effects_timeline': protocol.get('effects_timeline')
+                'best_timing': (protocol.get('best_timing') or '')[:200],  # VARCHAR(200)
+                'effects_timeline': (protocol.get('effects_timeline') or '')[:200]  # VARCHAR(200)
             }
 
             if row:
@@ -378,7 +381,7 @@ class DbManager:
                     logger.info(f"    [PROTOCOL_UPDATE] Updated {', '.join(updates.keys())} for protocol {protocol_id}")
             else:
                 cols = ["peptide_id", "administration_method_id", "name"]
-                vals = [peptide_id, am_id, protocol['name']]
+                vals = [peptide_id, am_id, protocol_name]
                 
                 for col, val in new_fields.items():
                     if val:
@@ -487,6 +490,15 @@ class DbManager:
             else:
                 val = "1.0"
                 unit = amount_str[:20] if amount_str else "unit"
+        
+        # Convert to float and cap at maximum NUMERIC(10,4) value: 999999.9999
+        try:
+            val_float = float(val)
+            # Ensure it's within NUMERIC(10,4) range
+            val_float = min(val_float, 999999.9999)
+            val = str(val_float)
+        except (ValueError, TypeError):
+            val = "1.0"
 
         with self.connect().cursor() as cur:
             # Strict lookup: Check for exact match of name, amount, and unit 

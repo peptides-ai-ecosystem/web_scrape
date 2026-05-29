@@ -17,7 +17,7 @@ class PeptideMapper(BaseMapper):
         if not overview:
             # Fallback to search any column starting with overview_what_is
             for k, v in row.items():
-                if k.startswith("overview_what_is_") and v.strip():
+                if k and isinstance(k, str) and k.startswith("overview_what_is_") and v and isinstance(v, str) and v.strip():
                     overview = v.strip()
                     break
 

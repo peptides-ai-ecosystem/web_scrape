@@ -45,7 +45,7 @@ class ProtocolMapper(BaseMapper):
         # Find dynamic description (overview_what_is_<peptide>)
         description = ""
         for k, v in row.items():
-            if k.startswith("overview_what_is_") and v and v.strip():
+            if k and isinstance(k, str) and k.startswith("overview_what_is_") and v and isinstance(v, str) and v.strip():
                 description = v.strip()
                 break
 
@@ -58,7 +58,7 @@ class ProtocolMapper(BaseMapper):
                 route = row.get(f"research_protocols_route_{i}", "").strip() or main_route
                 
                 protocols.append({
-                    "name": goal,
+                    "name": goal[:100],
                     "description": description,
                     "administration_method_name": method,
                     "route_name": route,
@@ -77,7 +77,7 @@ class ProtocolMapper(BaseMapper):
         # Default baseline
         if not protocols and (row.get("typical_dose") or main_route):
             protocols.append({
-                "name": method or "Default Protocol",
+                "name": (method or "Default Protocol")[:100],
                 "description": description,
                 "administration_method_name": method,
                 "route_name": main_route,

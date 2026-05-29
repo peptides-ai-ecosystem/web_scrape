@@ -1,5 +1,6 @@
 import pandas as pd
 from typing import List
+from tqdm import tqdm
 from src.core.models import PeptideData
 from src.core.interfaces import IStorage
 import json
@@ -14,7 +15,7 @@ class CSVStorage(IStorage):
         try:
             log_debug(f"Starting CSV save operation for {len(data)} records", "csv_storage.py")
             rows = []
-            for p_data in data:
+            for p_data in tqdm(data, desc="Processing records for CSV", unit="record", leave=False):
                 row = {
                     "Peptide_Name": p_data.name,
                     "Full_Name": p_data.full_name,
@@ -78,7 +79,7 @@ class CSVStorage(IStorage):
         rows: List[Dict[str, Any]] = []
         with open(MASTER_CSV, mode='r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
-            for i, row in enumerate(reader):
+            for row in tqdm(reader, desc="Reading CSV file", unit="row"):
                 rows.append(row)
         print(f"Read {len(rows)} rows from {MASTER_CSV}")
         return rows
