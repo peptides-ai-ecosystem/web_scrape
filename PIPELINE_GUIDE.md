@@ -9,7 +9,7 @@ The pipeline is divided into four main stages: Database Setup, Environment Prepa
 
 ### Step 1: Database Initialization
 
-
+#### PostgreSQL Setup on Docker
 Open the terminal in the root directory of the project.
 ```bash
 ### docker compose 
@@ -28,11 +28,68 @@ docker exec -it postgres-container psql -U admin  -d peptides
 docker exec -i postgres-container psql -U admin  -d peptides < full_dump.sql  
 
 ```
-### graph table execute
+#### Graph Table Migration Execute
 
 ```bash
 docker exec -i postgres-container psql -U admin -d peptides < migration_peptide_graph.sql
 ```
+
+
+#### PostgreSQL Setup on Fedora (Local Installation)
+
+Open the terminal in the root directory of the project.
+
+```bash
+### Start PostgreSQL Service
+sudo systemctl start postgresql
+
+### Check PostgreSQL Status
+systemctl status postgresql
+
+### Switch to postgres user
+sudo -i -u postgres
+
+### Enter PostgreSQL shell
+psql
+
+### Create a new database named "peptides"
+CREATE DATABASE peptides;
+
+
+### OR directly enter a specific database
+psql -U postgres -d peptides
+
+### To check database list
+\l
+
+### To connect to peptides database
+\c peptides
+
+### To check table list
+\dt
+
+### Exit PostgreSQL shell
+\q
+
+### Exit postgres user
+logout
+```
+
+
+#### For restoring the full peptides db from a dump file
+
+```bash
+psql -U postgres -d peptides < full_dump.sql
+```
+
+---
+
+### Graph Table Migration Execute
+
+```bash
+psql -U postgres -d peptides < migration_peptide_graph.sql
+```
+
 
 
 ### Step 2: Local Environment Setup
@@ -44,22 +101,19 @@ uv sync
 ### Step 3: Run the Ingestion Pipeline
 The `main.py` script handles both scraping and database synchronization.
 *   **Full Run (Scrape + Sync)**:
-    ```powershell
-    python main.py --scrape --sync --limit 100
-    ```
     *   `--scrape`: Crawls URLs and extracts peptide data into a CSV.
     *   `--sync`: Takes the CSV data and maps/inserts it into the PostgreSQL tables.
 
 ```bash
 ### To only scrape data from website
-uv run main.py --csv "output\pep_pedia_master.csv"  --sync --limit 100
+uv run main.py --scrape
 
 ### To only sync scraped data with db
-uv run main.py --csv "output\pep_pedia_master.csv"  --sync --limit 100
+uv run main.py --sync
 
 
 ### To run everything at once scraped -> sync
-uv run main.py --csv "output\pep_pedia_master.csv" --scrape --sync --limit 100
+uv run main.py--scrape --sync
 ```
 
 
@@ -67,7 +121,7 @@ uv run main.py --csv "output\pep_pedia_master.csv" --scrape --sync --limit 100
 ### Step 4: Start Visualization API
 Launch the FastAPI server to serve the graph data and the visualization frontend.
 ```bash
-uv run viz_server.py
+uv run -m viz_server
 ```
 Open your browser at: `http://localhost:5000/` or directly to the dashboard at `http://localhost:5000/visualization/`
 

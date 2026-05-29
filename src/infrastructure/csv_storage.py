@@ -2,7 +2,12 @@ import pandas as pd
 from typing import List
 from src.core.models import PeptideData
 from src.core.interfaces import IStorage
+import json
+from dataclasses import asdict
 from src.config import MASTER_CSV, log_debug, log_error
+from typing import List, Dict, Any
+import csv
+import os
 
 class CSVStorage(IStorage):
     def save(self, data: List[PeptideData]) -> None:
@@ -42,8 +47,6 @@ class CSVStorage(IStorage):
                             row[k] = v.strip()
                 
                 # Graph Data
-                import json
-                from dataclasses import asdict
                 if p_data.graph_data:
                     # We store the full graph data as a JSON string in one column for simplicity in CSV
                     # or we could flatten it more if needed.
@@ -54,7 +57,6 @@ class CSVStorage(IStorage):
             if rows:
                 df = pd.DataFrame(rows)
                 # Append to existing CSV if it exists, otherwise create new
-                import os
                 if os.path.exists(MASTER_CSV):
                     df.to_csv(MASTER_CSV, mode='a', header=False, index=False)
                     log_debug(f"Successfully appended {len(rows)} rows to {MASTER_CSV}", "csv_storage.py")
@@ -67,3 +69,16 @@ class CSVStorage(IStorage):
             error_msg = f"Failed to save CSV: {str(e)}"
             print(f"[ERROR] {error_msg}")
             log_error(error_msg, "csv_storage.py")
+
+    def read(self) -> List[PeptideData]:
+        """Read CSV file with optional row limit."""
+        if not os.path.exists(MASTER_CSV):
+            print(f"Error: CSV file not found at {MASTER_CSV}")
+            return []
+        rows: List[Dict[str, Any]] = []
+        with open(MASTER_CSV, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for i, row in enumerate(reader):
+                rows.append(row)
+        print(f"Read {len(rows)} rows from {MASTER_CSV}")
+        return rows

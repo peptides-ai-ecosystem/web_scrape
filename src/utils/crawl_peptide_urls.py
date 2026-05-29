@@ -18,8 +18,8 @@ def crawl_peptide_urls():
 
         # Debug info — check what the page actually loaded
         source = driver.page_source
-        print(f"[DEBUG] Page source length: {len(source)}")
-        print(f"[DEBUG] Page source snippet:\n{source[:1500]}\n")
+        # print(f"[DEBUG] Page source length: {len(source)}")
+        # print(f"[DEBUG] Page source snippet:\n{source[:1500]}\n")
 
         all_links = driver.find_elements(By.TAG_NAME, "a")
         print(f"[DEBUG] Found total {len(all_links)} links on page")
@@ -28,12 +28,6 @@ def crawl_peptide_urls():
         print(f"[DEBUG] Found {len(links)} peptide links")
 
         peptide_urls = [link.get_attribute("href") for link in links]
-        return list(set(peptide_urls))
+        return list(set(peptide_urls[:1]))
     finally:
         driver.quit()
-if __name__ == "__main__":
-    urls = crawl_peptide_urls()
-    print(f"Found {len(urls)} peptide URLs:")
-    for url in urls:
-        print(url)
-        

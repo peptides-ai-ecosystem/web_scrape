@@ -8,17 +8,22 @@ from typing import Optional
 class Settings:
     """Application settings loaded from environment variables"""
     
+    # Database settings
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/peptides_db")
+
     # Selenium settings
     TIMEOUT: int = int(os.getenv("TIMEOUT", 5))
     
     # Directory settings
     OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "output"))
     OUTPUT_DIR.mkdir(exist_ok=True)
+    LOG_DIR: Path = Path(os.getenv("LOG_DIR", "output"))
+    LOG_DIR.mkdir(exist_ok=True)
     
     # File paths
     MASTER_CSV: Path = OUTPUT_DIR / "pep_pedia_master.csv"
-    ERROR_LOG: Path = OUTPUT_DIR / "error_log.txt"
-    DEBUG_LOG: Path = OUTPUT_DIR / "debug_log.txt"
+    ERROR_LOG: Path = LOG_DIR / "error_log.txt"
+    DEBUG_LOG: Path = LOG_DIR / "debug_log.txt"
     
     # Time range settings
     TIME_RANGES: list = ["24h", "7d", "14d", "30d"]
@@ -34,6 +39,7 @@ class Settings:
 settings = Settings()
 
 # Export settings for easy imports
+DATABASE_URL = settings.DATABASE_URL
 TIMEOUT = settings.TIMEOUT
 OUTPUT_DIR = settings.OUTPUT_DIR
 MASTER_CSV = settings.MASTER_CSV

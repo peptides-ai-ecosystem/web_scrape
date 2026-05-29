@@ -1,9 +1,6 @@
 import argparse
-import csv
 import os
-import sys
 import time
-from typing import List, Dict, Any
 from dotenv import load_dotenv
 from src.config import ERROR_LOG, clear_logs, log_error, log_debug
 
@@ -12,6 +9,7 @@ from src.utils.crawl_peptide_urls import crawl_peptide_urls
 from src.services.scraper_manager import ScraperManager
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
 from src.infrastructure.db_manager import DbManager
+from src.infrastructure.csv_storage import CSVStorage
 
 MODULE_NAME="main"
 def scrape_peptides() -> None:
@@ -47,27 +45,13 @@ def scrape_peptides() -> None:
         log_debug(f"Total execution time: {total_time} seconds", MODULE_NAME)
         print(f"[INFO] Total scraping time: {total_time} seconds")
 
-def read_csv(csv_path: str, limit: int) -> List[Dict[str, Any]]:
-    """Read CSV file with optional row limit."""
-    if not os.path.exists(csv_path):
-        print(f"Error: CSV file not found at {csv_path}")
-        sys.exit(1)
 
-    rows: List[Dict[str, Any]] = []
-    with open(csv_path, mode='r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for i, row in enumerate(reader):
-            rows.append(row)
-            if i >= int(limit):
-                break
 
-    return rows
-
-def sync(csv_path: str, limit: int) -> None:
+def db_sync() -> None:
     """Sync CSV data to database."""
-    rows = read_csv(csv_path, limit)
-    print(f"Read {len(rows)} rows from {csv_path}")
-    
+    csv_store = CSVStorage()
+    rows = csv_store.read()
+
     orchestrator = DbImportOrchestrator()
     print("Starting sync...")
     orchestrator.sync_to_db(os.getenv("DATABASE_URL"), rows)
@@ -84,9 +68,7 @@ def delete_peptide(slug: str) -> None:
 def setup_argument_parser() -> argparse.ArgumentParser:
     """Configure and return argument parser."""
     parser = argparse.ArgumentParser(description="Sync Peptide CSV data to PostgreSQL")
-    parser.add_argument("--csv", default="peptides.csv", help="Path to the CSV file")
     parser.add_argument("--delete", metavar="SLUG", help="Delete a peptide and its related data by slug")
-    parser.add_argument("--limit", type=int, default=100, help="Limit the number of rows to insert")
     parser.add_argument("--scrape", action="store_true", help="Run scraper before sync")
     parser.add_argument("--sync", action="store_true", help="Run sync without scraping")
     return parser
@@ -103,7 +85,7 @@ def main() -> None:
     if args.scrape:
         scrape_peptides()
     if args.sync:
-        sync(args.csv, args.limit)
+        db_sync()
 
 if __name__ == "__main__":
     main()
