@@ -4,7 +4,10 @@ import os
 import sys
 import time
 from typing import List, Dict, Any
+from dotenv import load_dotenv
 from src.config import ERROR_LOG, clear_logs, log_error, log_debug
+
+load_dotenv()
 from src.utils.crawl_peptide_urls import crawl_peptide_urls
 from src.services.scraper_manager import ScraperManager
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
@@ -14,7 +17,7 @@ MODULE_NAME="main"
 def scrape_peptides() -> None:
     """Crawl URLs and scrape peptide data."""
     start_total = time.time()
-    clear_logs()
+    # clear_logs()
     
     log_debug("Starting scraper execution", MODULE_NAME)
     print("[INFO] Crawling peptide URLs...")

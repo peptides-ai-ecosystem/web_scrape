@@ -32,6 +32,9 @@ class ScraperManager:
         if all_results:
             log_debug(f"Saving {len(all_results)} records to {MASTER_CSV}", "scraper_manager.py")
             self.storage.save(all_results)
+        else:
+            log_debug("No results to save - all_results is empty", "scraper_manager.py")
+            print("[WARNING] No data was scraped. Check URLs and scraper errors.")
         
         if error_logs:
             log_debug(f"Batch completed with {len(error_logs)} errors", "scraper_manager.py")

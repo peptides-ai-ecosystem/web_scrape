@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 import json
 import logging
 import re
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -12,15 +13,55 @@ class DbManager:
     def __init__(self, db_url: str):
         self.db_url = db_url
         self.conn = None
+        self.last_used = 0
+        self.timeout = 60  # Timeout connection after 60 seconds of disuse
 
     def connect(self):
-        if not self.conn or self.conn.closed:
-            self.conn = psycopg2.connect(self.db_url, cursor_factory=RealDictCursor)
-        return self.conn
+        """Get a database connection, reusing if available and valid."""
+        current_time = time.time()
+        
+        # Try to reuse existing connection
+        if self.conn and not self.conn.closed:
+            # Check if connection is still valid
+            try:
+                # Do a simple ping
+                with self.conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                self.last_used = current_time
+                return self.conn
+            except (psycopg2.OperationalError, psycopg2.DatabaseError):
+                # Connection is stale, close it
+                try:
+                    self.conn.close()
+                except:
+                    pass
+                self.conn = None
+        
+        # Create new connection with retry logic
+        max_retries = 2
+        retry_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Creating new database connection (attempt {attempt + 1}/{max_retries})")
+                self.conn = psycopg2.connect(self.db_url, cursor_factory=RealDictCursor, connect_timeout=5)
+                self.last_used = current_time
+                return self.conn
+            except psycopg2.OperationalError as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Connection attempt {attempt + 1} failed, retrying in {retry_delay}s: {str(e)[:80]}")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Failed to connect to database after {max_retries} attempts")
+                    raise
 
     def close(self):
         if self.conn and not self.conn.closed:
-            self.conn.close()
+            try:
+                self.conn.close()
+            except:
+                pass
+            self.conn = None
 
     def get_peptide_by_slug(self, slug: str) -> Optional[Dict[str, Any]]:
         with self.connect().cursor() as cur:

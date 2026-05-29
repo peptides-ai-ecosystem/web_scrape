@@ -3,7 +3,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from src.extractors.base import BaseExtractor
 from typing import List, Dict
-from src.config import button_skip_list
+from src.config import BUTTON_SKIP_LIST as button_skip_list
 
 
 class SectionExtractor(BaseExtractor):
