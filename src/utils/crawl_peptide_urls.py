@@ -28,7 +28,7 @@ def crawl_peptide_urls():
         links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/peptides/']")
         print(f"[DEBUG] Found {len(links)} peptide links")
 
-        peptide_urls = [link.get_attribute("href") for link in tqdm(links[:20], desc="Extracting URLs", unit="link")]
+        peptide_urls = [link.get_attribute("href") for link in tqdm(links, desc="Extracting URLs", unit="link")]
         return list(set(peptide_urls))
     finally:
         driver.quit()
