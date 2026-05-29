@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 
+from src.config import MASTER_CSV
+
 st.set_page_config(page_title="CSV URL Viewer", layout="wide")
 
 st.title("🔎 CSV URL Data Viewer")
@@ -8,7 +10,7 @@ st.title("🔎 CSV URL Data Viewer")
 # Cache load (important for large CSVs)
 @st.cache_data
 def load_data():
-    df = pd.read_csv("output_v3/pep_pedia_master.csv")
+    df = pd.read_csv(MASTER_CSV)
     df = df.convert_dtypes().astype("object")
     df["URL"] = df["URL"].str.strip().str.lower()   # normalize
     return df
@@ -37,6 +39,3 @@ if user_url:
 
             # hide_index=True
         )
-##uv run streamlit run src/read_data.py  --server.headless true
-##uv run streamlit run src/read_data.py  --server.headless true --server.port 8501 --server.address 0.0.0.0
-##ngrok http 8501

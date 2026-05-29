@@ -1,113 +1,68 @@
+# Pep-Pedia Web Scraper & Visualization Pipeline
 
+A robust, modular web scraper designed to extract comprehensive peptide data and graph coordinates from [pep-pedia.org](https://pep-pedia.org). Built with Python, Selenium, PostgreSQL, and FastAPI, it supports concurrent scraping, structured data export, database synchronization, and interactive visualization.
 
-# PepPedia Scraper
+## 🚀 Features
 
-A Python project to **scrape peptide data from PepPedia** using Selenium.
-Supports **single URL scraping** or **batch/multiprocessing scraping**.
-
----
-
-## Features
-
-* Scrape **hero information** (`name`, `subtitle`, `facts`)
-* Scrape **Quick Start Guide**
-* Scrape **sections** with multiple paragraphs and accordions
-* Supports **single URL scraping**
-* Supports **multiple URLs scraping with multiprocessing**
-* Outputs results to **CSV** ready for analysis or RAG/LLM ingestion
+- **Deep Extraction**: Captures Hero sections, Quick Guides, and multiple content sections including accordions.
+- **Graph Data Capture**: Extracts complex SVG paths and coordinate markers for graph rendering.
+- **Concurrent Processing**: Utilizes multiprocessing to scrape multiple peptide URLs simultaneously.
+- **Auto-Discovery**: Automatically crawls the bridge page to find all available peptide links.
+- **Database Synchronization**: Built-in scripts to map and sync scraped CSV data into a PostgreSQL database.
+- **Interactive Dashboard**: A FastAPI-powered backend and frontend dashboard to visualize the extracted peptide data and SVG graphs.
+- **Docker Ready**: Supports running in a fully containerized ecosystem via Docker Compose.
 
 ---
 
-## Requirements
+## 📖 Execution Guide
 
-* Python 3.10+
-* Google Chrome installed
-* ChromeDriver matching your Chrome version
-* `uv` Python package manager installed
+**For comprehensive, step-by-step instructions on setting up the database, running the web scraper, and launching the visualization server, please read the [Execution Guide](execution_guide.md).**
+
+The Execution Guide contains details for both **Docker (Recommended)** and **Local PostgreSQL** setup paths.
 
 ---
 
-## Installation
+## 🛠️ Quick Start Summary
 
-1. **Clone the repository**:
+This is a brief summary of how to get started. See the [Execution Guide](execution_guide.md) for full commands and database setup.
 
+### 1. Setup Environment
+Ensure you have `uv` installed. If not, install it via:
 ```bash
-git clone <repo-url>
-cd <project-folder>
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-2. **Install dependencies using `uv`**:
-
+### 2. Clone & Install
 ```bash
+git clone https://github.com/sazzad1779-dev/web_scrape.git
+cd web_scrape
 uv sync
 ```
 
-3. **Download ChromeDriver** matching your Chrome version and add it to your PATH:
-
-* [ChromeDriver Download](https://sites.google.com/chromium.org/driver/)
-
----
-
-## File Structure
-
-```
-src/
-├── single_page_scrape.py   # Scrapes a single URL
-├── multi_scrape.py         # Scrapes multiple URLs using multiprocessing
-```
-
----
-
-## Configuration
-
-* **Single URL**: Edit `single_page_scrape.py` to set the `URL` variable:
-
-```python
-URL = "https://pep-pedia.org/peptides/adalank"
-```
-
-* **Multiple URLs**: Edit `multi_scrape.py` and update the `URLS` list:
-
-```python
-URLS = [
-    "https://pep-pedia.org/peptides/adalank",
-    "https://pep-pedia.org/peptides/5-amino-1mq",
-    # Add more URLs here
-]
-```
-
----
-
-## Running the Scraper
-
-### Single URL Scrape
-
+### 3. Run the Pipeline (`main.py`)
+The `main.py` script orchestrates the pipeline:
 ```bash
-uv run -m src.single_page_scrape
+uv run main.py --scrape --sync
 ```
+*(You can also run `--scrape` or `--sync` individually.)*
 
-* Scrapes the single URL specified in `single_page_scrape.py`.
-* Output CSV: `pep_pedia_single.csv`
-
-### Multiple URLs Scrape
-
+### 4. Launch the Visualization Dashboard
 ```bash
-uv run -m src.multi_page_scrape
+uv run -m viz_server
 ```
-
-* Scrapes all URLs in the `URLS` list with **multiprocessing**.
-* Output CSV: `pep_pedia_batch_multiprocess.csv`
+Then navigate to `http://localhost:5000/visualization/` in your browser.
 
 ---
 
-## Notes
+## 🏗️ Code Architecture
 
-* Each Selenium process opens its **own Chrome instance**, so **multiprocessing consumes more memory**.
-* Make sure **ChromeDriver version matches your installed Chrome**.
-* The scraper handles:
+The project follows a modular design for maintainability and scalability:
 
-  * Multiple categories per peptide
-  * Hero section
-  * Quick Start Guide
-  * Sections and accordions with multiple paragraphs (using newlines)
-* For large batches, adjust `max_workers` in `multi_scrape.py` to match your system resources.
+- **`main.py`**: The entry point. Handles URL discovery and orchestrates the scraping and database synchronization process.
+- **`viz_server.py`**: The FastAPI server that delivers database graph records and hosts the frontend UI.
+- **`src/core/`**: Defines data models (`Peptide`, `HeroSection`, `Graph`, etc.) and interfaces.
+- **`src/extractors/`**: Specialized classes for parsing specific parts of the page (Hero, Quick Guide, Content Sections, Graphs).
+- **`src/infrastructure/`**: Handles external concerns like `WebDriver` creation, `CSV` storage, and `PostgreSQL` database connections.
+- **`src/services/`**: High-level orchestrators (`PageScraper`, `ScraperManager`) that combine extractors and infrastructure.
+- **`src/visualization/`**: Frontend HTML/JS/CSS for dynamically rendering the extracted SVG graph data.
+- **`src/config.py`**: Centralized configuration for timeouts, paths, crawling logic, and credentials.

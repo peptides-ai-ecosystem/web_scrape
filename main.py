@@ -1,45 +1,91 @@
-
+import argparse
+import os
 import time
-import pandas as pd
-from multiprocessing import Pool, cpu_count
-from src.multi_page_scrape import scrape_url
-from src.config import MASTER_CSV, ERROR_LOG
-from src.config import URLS
+from dotenv import load_dotenv
+from src.config import ERROR_LOG, clear_logs, log_error, log_debug
 
-# -------------------- MULTIPROCESSING -------------------- #
+load_dotenv()
+from src.utils.crawl_peptide_urls import crawl_peptide_urls
+from src.services.scraper_manager import ScraperManager
+from src.mappers.db_import_orchestrator import DbImportOrchestrator
+from src.infrastructure.db_manager import DbManager
+from src.infrastructure.csv_storage import CSVStorage
+
+MODULE_NAME="main"
+def scrape_peptides() -> None:
+    """Crawl URLs and scrape peptide data."""
+    start_total = time.time()
+    # clear_logs()
+    
+    log_debug("Starting scraper execution", MODULE_NAME)
+    print("[INFO] Crawling peptide URLs...")
+    
+    try:
+        urls = crawl_peptide_urls()
+        log_debug(f"Found {len(urls)} URLs to scrape", MODULE_NAME)
+        print(f"[INFO] Found {len(urls)} URLs to scrape.")
+
+        manager = ScraperManager()
+        error_logs = manager.run(urls)
+
+        if error_logs:
+            log_debug(f"Scraping completed with {len(error_logs)} errors", MODULE_NAME)
+            for error in error_logs:
+                log_error(error, "scraper_manager")
+            print(f"[INFO] {len(error_logs)} errors logged at {ERROR_LOG}")
+        else:
+            log_debug("Scraping completed successfully with no errors", MODULE_NAME)
+            print("[INFO] Scraping completed successfully!")
+
+    except Exception as e:
+        log_error(f"Fatal error during scraping: {e}", MODULE_NAME)
+        print(f"[ERROR] Fatal error: {e}")
+    finally:
+        total_time = round(time.time() - start_total, 2)
+        log_debug(f"Total execution time: {total_time} seconds", MODULE_NAME)
+        print(f"[INFO] Total scraping time: {total_time} seconds")
+
+
+
+def db_sync() -> None:
+    """Sync CSV data to database."""
+    csv_store = CSVStorage()
+    rows = csv_store.read()
+
+    orchestrator = DbImportOrchestrator()
+    print("Starting sync...")
+    orchestrator.sync_to_db(os.getenv("DATABASE_URL"), rows)
+    print("Sync completed successfully.")
+
+def delete_peptide(slug: str) -> None:
+    """Delete a peptide and its related data by slug."""
+    db = DbManager(os.getenv("DATABASE_URL"))
+    try:
+        db.delete_peptide_data(slug)
+    finally:
+        db.close()
+
+def setup_argument_parser() -> argparse.ArgumentParser:
+    """Configure and return argument parser."""
+    parser = argparse.ArgumentParser(description="Sync Peptide CSV data to PostgreSQL")
+    parser.add_argument("--delete", metavar="SLUG", help="Delete a peptide and its related data by slug")
+    parser.add_argument("--scrape", action="store_true", help="Run scraper before sync")
+    parser.add_argument("--sync", action="store_true", help="Run sync without scraping")
+    return parser
+
+def main() -> None:
+    """Main entry point."""
+    parser = setup_argument_parser()
+    args = parser.parse_args()
+
+    if args.delete:
+        delete_peptide(args.delete)
+        return
+
+    if args.scrape:
+        scrape_peptides()
+    if args.sync:
+        db_sync()
 
 if __name__ == "__main__":
-    start_total = time.time()
-    all_rows = []
-    error_logs = []
-
-    def process_result(result):
-        rows, error = result
-        if rows:
-            all_rows.extend(rows)
-        if error:
-            error_logs.append(error)
-
-    # with Pool(processes=min(cpu_count(), 8)) as pool:
-    #     for result in pool.imap_unordered(scrape_url, URLS):
-    #         process_result(result)
-    with Pool(processes=min(cpu_count(), 4)) as pool:
-        results = pool.map(scrape_url, URLS)  # each URL is processed once
-        for result in results:
-            process_result(result)
-    
-    # process_result(scrape_url(URLS[0]))
-    
-
-    # Save master CSV
-    pd.DataFrame(all_rows).to_csv(MASTER_CSV, index=False)
-    print(f"[INFO] Master CSV saved at {MASTER_CSV}")
-
-    # Save error log
-    if error_logs:
-        with open(ERROR_LOG, "w") as f:
-            for line in error_logs:
-                f.write(line + "\n")
-        print(f"[INFO] Errors logged at {ERROR_LOG}")
-
-    print(f"[INFO] Total scraping time: {round(time.time() - start_total, 2)} seconds")
+    main()

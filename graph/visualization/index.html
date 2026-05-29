@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BPC-157 Pharmacokinetics Visualization</title>
+    <meta name="description" content="Interactive pharmacokinetics graph visualization for BPC-157 peptide showing plasma concentration over time.">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="graph-card">
+            <!-- Header section with Stats and Tabs -->
+            <div class="card-header">
+                <div class="stats-container">
+                    <div class="stat-item">
+                        <span class="stat-label">Peak:</span>
+                        <span id="peak-value" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Half-life:</span>
+                        <span id="hl-value" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Cleared:</span>
+                        <span id="cleared-value" class="stat-value">--</span>
+                    </div>
+                </div>
+                
+                <div class="tabs-container">
+                    <button class="tab-btn active" data-range="24h" id="tab-24h">24h</button>
+                    <button class="tab-btn" data-range="7d" id="tab-7d">7d</button>
+                    <button class="tab-btn" data-range="14d" id="tab-14d">14d</button>
+                    <button class="tab-btn" data-range="30d" id="tab-30d">30d</button>
+                </div>
+            </div>
+
+            <!-- Main Graph Area -->
+            <div class="graph-viewport" id="graph-viewport">
+                <svg id="main-graph" viewBox="0 0 100 45" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <linearGradient id="pk-gradient" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.12"></stop>
+                            <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"></stop>
+                        </linearGradient>
+                        <!-- Glow filter for the curve -->
+                        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="0.3" result="blur"/>
+                            <feMerge>
+                                <feMergeNode in="blur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                        <!-- Marker pulse animation -->
+                        <filter id="marker-glow" x="-100%" y="-100%" width="300%" height="300%">
+                            <feGaussianBlur stdDeviation="0.4" result="blur"/>
+                            <feMerge>
+                                <feMergeNode in="blur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    
+                    <!-- Grid/Axes placeholder -->
+                    <g id="grid-layer"></g>
+                    
+                    <!-- Filled background path -->
+                    <path id="graph-fill" d="" fill="url(#pk-gradient)" />
+                    
+                    <!-- Main path -->
+                    <path id="graph-path" d="" fill="none" stroke="#3b82f6" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" />
+                    
+                    <!-- Markers -->
+                    <g id="markers-layer"></g>
+                    
+                    <!-- Labels -->
+                    <g id="labels-layer"></g>
+
+                    <!-- Hover elements -->
+                    <line id="hover-guide" class="hover-guide" x1="0" x2="0" y1="6" y2="35" />
+                    <circle id="hover-point" class="hover-point" cx="0" cy="0" r="0.9" />
+                </svg>
+
+                <!-- Tooltip -->
+                <div id="tooltip" class="tooltip"></div>
+            </div>
+
+            <!-- Footer/Legend -->
+            <div class="card-footer">
+                <div class="legend-container">
+                    <div class="legend-item" id="legend-peak">
+                        <span class="dot peak"></span>
+                        <span class="legend-label">Peak</span>
+                    </div>
+                    <div class="legend-item" id="legend-halflife">
+                        <span class="dot half-life"></span>
+                        <span class="legend-label">Half-life</span>
+                    </div>
+                </div>
+                <div class="attribution">
+                    Sikiric et al. various studies
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

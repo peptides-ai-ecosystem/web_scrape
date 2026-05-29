@@ -2,13 +2,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-output_dir = Path("output_v6")
-# ---------------- CONFIG ---------------- #
-DATA_PATH = output_dir / "pep_pedia_master.csv"
-REPORT_PATH = output_dir / "summary_report.csv"
+from src.config import MASTER_CSV, ERROR_LOG, DEBUG_LOG, OUTPUT_DIR
+
+REPORT_PATH = OUTPUT_DIR / "summary_report.csv"
 
 # ---------------- LOAD DATA ---------------- #
-df = pd.read_csv(DATA_PATH)
+df = pd.read_csv(MASTER_CSV)
 
 print("\n========== DATA LOADED ==========")
 print(df.head())

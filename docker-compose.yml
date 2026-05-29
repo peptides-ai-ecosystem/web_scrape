@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: postgres-container
+
+    environment:
+      POSTGRES_DB: peptides
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 2244
+
+    ports:
+      - "15432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  scraper:
+    build: .
+    volumes:
+      - ./output_v6:/app/output_v6
+
+    environment:
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROMEDRIVER_BIN=/usr/bin/chromedriver
+
+    shm_size: '2gb'
+
+    cap_add:
+      - SYS_ADMIN
+
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:

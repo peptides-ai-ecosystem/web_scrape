@@ -1,54 +1,97 @@
+import os
 from pathlib import Path
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.common.by import By
-import time
-button_skip_list = [
-    "peak",
-    "half-life",
-    "cleared",
-    "hrs",
-    "hr",
-    "day",
-    "24h",
-    "7d",
-    "14d",
-    "30d"
-]
-# -------------------- CONFIG -------------------- #
-TIMEOUT = 5
-OUTPUT_DIR = Path("output_v6")
-OUTPUT_DIR.mkdir(exist_ok=True)
-MASTER_CSV = OUTPUT_DIR / "pep_pedia_master.csv"
-ERROR_LOG = OUTPUT_DIR / "error_log.txt"
+from datetime import datetime
+from typing import Optional
 
-# -------------------- DRIVER SETUP -------------------- #
-def create_driver():
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    driver = webdriver.Chrome(options=options)
-    wait = WebDriverWait(driver, TIMEOUT)
-    return driver, wait
+# -------------------- SETTINGS -------------------- #
 
-
-def crawl_peptide_urls():
-    driver,wait = create_driver()
-    driver.get("https://pep-pedia.org/browse")
-
-    time.sleep(5)  # wait for JS to load the peptides
-
-    # Find all peptide links
-    links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/peptides/']")
-    peptide_urls = [link.get_attribute("href") for link in links]
-
-    # Remove duplicates
-    peptide_urls = list(set(peptide_urls))
-
-    driver.quit()
+class Settings:
+    """Application settings loaded from environment variables"""
     
-    return peptide_urls
-URLS= crawl_peptide_urls()
+    # Database settings
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/peptides_db")
+
+    # Selenium settings
+    TIMEOUT: int = int(os.getenv("TIMEOUT", 5))
+    
+    # Directory settings
+    OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "output"))
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    LOG_DIR: Path = Path(os.getenv("LOG_DIR", "output"))
+    LOG_DIR.mkdir(exist_ok=True)
+    
+    # File paths
+    MASTER_CSV: Path = OUTPUT_DIR / "pep_pedia_master.csv"
+    ERROR_LOG: Path = LOG_DIR / "error_log.txt"
+    DEBUG_LOG: Path = LOG_DIR / "debug_log.txt"
+    
+    # Time range settings
+    TIME_RANGES: list = ["24h", "7d", "14d", "30d"]
+    
+    # Skip list settings
+    BUTTON_SKIP_LIST: list = [
+        "peak", "half-life", "cleared", "hrs", "hr", "day",
+    ] + TIME_RANGES
+
+
+# -------------------- MODULE-LEVEL EXPORTS -------------------- #
+# Create a default Settings instance for module-level imports
+settings = Settings()
+
+# Export settings for easy imports
+DATABASE_URL = settings.DATABASE_URL
+TIMEOUT = settings.TIMEOUT
+OUTPUT_DIR = settings.OUTPUT_DIR
+MASTER_CSV = settings.MASTER_CSV
+ERROR_LOG = settings.ERROR_LOG
+DEBUG_LOG = settings.DEBUG_LOG
+TIME_RANGES = settings.TIME_RANGES
+BUTTON_SKIP_LIST = settings.BUTTON_SKIP_LIST
+
+
+# -------------------- LOGGING FUNCTIONS -------------------- #
+
+def log_error(message: str, filename: Optional[str] = None) -> None:
+    """
+    Log an error message to ERROR_LOG with timestamp.
+    
+    Args:
+        message: Error message to log
+        filename: Optional filename prefix for per-file tracking
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {f'[{filename}] ' if filename else ''}{message}"
+    
+    try:
+        with open(ERROR_LOG, "a", encoding="utf-8") as f:
+            f.write(log_entry + "\n")
+    except Exception as e:
+        print(f"[WARNING] Failed to write to error log: {e}")
+
+
+def log_debug(message: str, filename: Optional[str] = None) -> None:
+    """
+    Log a debug message to DEBUG_LOG with timestamp.
+    
+    Args:
+        message: Debug message to log
+        filename: Optional filename prefix for per-file tracking
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {f'[{filename}] ' if filename else ''}{message}"
+    
+    try:
+        with open(DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(log_entry + "\n")
+    except Exception as e:
+        print(f"[WARNING] Failed to write to debug log: {e}")
+
+
+def clear_logs() -> None:
+    """Clear both error and debug logs (useful at start of execution)."""
+    try:
+        ERROR_LOG.write_text("")
+        DEBUG_LOG.write_text("")
+        print(f"[INFO] Logs cleared at {ERROR_LOG} and {DEBUG_LOG}")
+    except Exception as e:
+        print(f"[WARNING] Failed to clear logs: {e}")
