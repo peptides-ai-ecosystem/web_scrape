@@ -1,28 +1,30 @@
-# Pep-Pedia Web Scraper
+# Pep-Pedia Web Scraper & Visualization Pipeline
 
-A robust, modular web scraper designed to extract comprehensive peptide data from [pep-pedia.org](https://pep-pedia.org). Built with Python, Selenium, and Docker, it supports concurrent scraping and structured data export.
+A robust, modular web scraper designed to extract comprehensive peptide data and graph coordinates from [pep-pedia.org](https://pep-pedia.org). Built with Python, Selenium, PostgreSQL, and FastAPI, it supports concurrent scraping, structured data export, database synchronization, and interactive visualization.
 
 ## 🚀 Features
 
 - **Deep Extraction**: Captures Hero sections, Quick Guides, and multiple content sections including accordions.
+- **Graph Data Capture**: Extracts complex SVG paths and coordinate markers for graph rendering.
 - **Concurrent Processing**: Utilizes multiprocessing to scrape multiple peptide URLs simultaneously.
-- **Modular Architecture**: Clean separation of concerns between core models, extractors, and infrastructure.
-- **Dockerized**: Ready-to-run containerized environment with all system dependencies pre-configured.
 - **Auto-Discovery**: Automatically crawls the bridge page to find all available peptide links.
-- **Robust Storage**: Exports results to a master CSV file with error logging for failed pages.
+- **Database Synchronization**: Built-in scripts to map and sync scraped CSV data into a PostgreSQL database.
+- **Interactive Dashboard**: A FastAPI-powered backend and frontend dashboard to visualize the extracted peptide data and SVG graphs.
+- **Docker Ready**: Supports running in a fully containerized ecosystem via Docker Compose.
 
 ---
 
-## 🛠️ Prerequisites
+## 📖 Execution Guide
 
-- **Python**: 3.12+
-- **Browser**: Google Chrome / Chromium
-- **Tools**: `uv` (modern Python package manager)
-- **Containerization**: Docker & Docker Compose (optional, for containerized runs)
+**For comprehensive, step-by-step instructions on setting up the database, running the web scraper, and launching the visualization server, please read the [Execution Guide](execution_guide.md).**
+
+The Execution Guide contains details for both **Docker (Recommended)** and **Local PostgreSQL** setup paths.
 
 ---
 
-## 💻 Local Installation & Usage
+## 🛠️ Quick Start Summary
+
+This is a brief summary of how to get started. See the [Execution Guide](execution_guide.md) for full commands and database setup.
 
 ### 1. Setup Environment
 Ensure you have `uv` installed. If not, install it via:
@@ -32,31 +34,23 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### 2. Clone & Install
 ```bash
-git clone <repo-url>
+git clone https://github.com/sazzad1779-dev/web_scrape.git
 cd web_scrape
 uv sync
 ```
 
-### 3. Run the Scraper
-Start the full scraping workflow (discovery + extraction):
+### 3. Run the Pipeline (`main.py`)
+The `main.py` script orchestrates the pipeline:
 ```bash
-uv run python main.py
+uv run main.py --scrape --sync
 ```
-Data will be saved to `output_v6/pep_pedia_master.csv`.
+*(You can also run `--scrape` or `--sync` individually.)*
 
----
-
-## 🐳 Docker Usage
-
-Run the scraper without worrying about local Chrome/ChromeDriver versions.
-
-### Build and Run
+### 4. Launch the Visualization Dashboard
 ```bash
-docker compose build
-docker compose up
+uv run -m viz_server
 ```
-
-The `output_v6` directory is mounted as a volume, so your scraped data and error logs will persist on your host machine.
+Then navigate to `http://localhost:5000/visualization/` in your browser.
 
 ---
 
@@ -64,29 +58,11 @@ The `output_v6` directory is mounted as a volume, so your scraped data and error
 
 The project follows a modular design for maintainability and scalability:
 
-- **`main.py`**: The entry point. Handles URL discovery and orchestrates the scraping process.
-- **`src/core/`**: Defines data models (`Peptide`, `HeroSection`, etc.) and interfaces.
-- **`src/extractors/`**: Specialized classes for parsing specific parts of the page (Hero, Quick Guide, Content Sections).
-- **`src/infrastructure/`**: Handles external concerns like `WebDriver` creation and `CSV` storage.
+- **`main.py`**: The entry point. Handles URL discovery and orchestrates the scraping and database synchronization process.
+- **`viz_server.py`**: The FastAPI server that delivers database graph records and hosts the frontend UI.
+- **`src/core/`**: Defines data models (`Peptide`, `HeroSection`, `Graph`, etc.) and interfaces.
+- **`src/extractors/`**: Specialized classes for parsing specific parts of the page (Hero, Quick Guide, Content Sections, Graphs).
+- **`src/infrastructure/`**: Handles external concerns like `WebDriver` creation, `CSV` storage, and `PostgreSQL` database connections.
 - **`src/services/`**: High-level orchestrators (`PageScraper`, `ScraperManager`) that combine extractors and infrastructure.
-- **`src/config.py`**: Centralized configuration for timeouts, paths, and crawling logic.
-
----
-
-## 🔄 Full Workflow
-
-1. **Discovery**: `crawl_peptide_urls()` in `config.py` visits the browse page and collects all peptide links.
-2. **Orchestration**: `ScraperManager` receives the URLs and distributes them across multiple processes.
-3. **Scraping**: `PageScraper` navigates to each URL and uses multiple `Extractors` to parse the DOM.
-4. **Storage**: `CSVStorage` converts the unstructured data into a tabular format and appends it to the master CSV.
-5. **Logging**: Any failures are captured and written to `error_log.txt` for later review.
-
----
-
-## ⚙️ Configuration
-
-Key settings can be adjusted in `src/config.py`:
-- `TIMEOUT`: Page load and element wait timeouts.
-- `OUTPUT_DIR`: Directory for CSV and logs.
-- `button_skip_list`: List of keywords to filter out irrelevant UI elements during scraping.
-
+- **`src/visualization/`**: Frontend HTML/JS/CSS for dynamically rendering the extracted SVG graph data.
+- **`src/config.py`**: Centralized configuration for timeouts, paths, crawling logic, and credentials.
