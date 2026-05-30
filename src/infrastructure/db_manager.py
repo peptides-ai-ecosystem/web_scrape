@@ -1,5 +1,7 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from psycopg2.pool import ThreadedConnectionPool
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 import json
 import logging
@@ -749,3 +751,65 @@ class DbManager:
             cur.execute("DELETE FROM peptides WHERE id = %s", (peptide_id,))
             self.conn.commit()
             logger.info(f"[DELETE] Fully deleted peptide slug='{slug}' (id={peptide_id}) and all related data.")
+
+
+class DbPool:
+    """
+    Thread-safe connection pool backed by psycopg2.ThreadedConnectionPool.
+
+    Each concurrent request checks out its own dedicated connection, uses it,
+    then returns it — so connections are never shared between requests and
+    no new TCP sockets are created per request.
+
+    Usage:
+        pool = DbPool(db_url, minconn=1, maxconn=5)
+
+        with pool.acquire() as db:
+            data = db.get_methods_for_peptide(peptide_id)
+    """
+
+    def __init__(self, db_url: str, minconn: int = 1, maxconn: int = 5):
+        self._db_url = db_url
+        self._pool = ThreadedConnectionPool(
+            minconn,
+            maxconn,
+            db_url,
+            cursor_factory=RealDictCursor,
+            connect_timeout=10,
+        )
+        logger.info(f"DbPool created (minconn={minconn}, maxconn={maxconn}).")
+
+    @contextmanager
+    def acquire(self):
+        """
+        Context manager that yields a DbManager whose connection comes from
+        the pool.  The connection is always returned to the pool on exit,
+        even if an exception is raised.
+        """
+        conn = self._pool.getconn()
+        try:
+            db = DbManager(self._db_url)
+            db.conn = conn          # inject pooled connection; bypasses reconnect logic
+            db.last_used = time.time()
+            yield db
+        except Exception:
+            # Roll back any open transaction so the connection is clean on return
+            try:
+                if not conn.closed:
+                    conn.rollback()
+            except Exception:
+                pass
+            raise
+        finally:
+            # Always reset state and return connection to pool
+            try:
+                if not conn.closed:
+                    conn.rollback()   # no-op if already committed; clears any open txn
+            except Exception:
+                pass
+            self._pool.putconn(conn)
+
+    def close(self):
+        """Close all pooled connections (call on application shutdown)."""
+        self._pool.closeall()
+        logger.info("DbPool closed.")

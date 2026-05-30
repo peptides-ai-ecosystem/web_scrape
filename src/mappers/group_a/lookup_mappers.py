@@ -1,6 +1,54 @@
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from src.mappers.base import BaseMapper
+
+
+def parse_dosage_string(dose_str: str) -> Tuple[str, str]:
+    """
+    Parse a dosage string to extract amount and unit.
+    Returns (amount, unit) as strings.
+    On parse failure, returns ("", "") to avoid errors.
+    
+    Examples:
+        "100 mcg" → ("100", "mcg")
+        "0.5mg/ml" → ("0.5", "mg/ml")
+        "2%" → ("2", "%")
+        "150-250mcg" → ("150-250", "mcg")
+        "~5mg/kg/day" → ("5", "mg/kg/day")
+        "Invalid text" → ("", "")
+    """
+    if not dose_str or not isinstance(dose_str, str):
+        return ("", "")
+    
+    dose_str = dose_str.strip()
+    if not dose_str:
+        return ("", "")
+    
+    try:
+        # Remove leading special characters (~, ≈, etc.) but keep them in mind
+        cleaned = dose_str.lstrip('~≈±')
+        
+        # Remove trailing parenthetical info like "(...)" for unit extraction
+        # Keep amount as-is
+        main_part = re.sub(r'\s*\(.*\)\s*$', '', cleaned).strip()
+        
+        # Pattern to match:
+        # - optional number with optional decimal
+        # - optional range with dash and another number
+        # - optional spaces
+        # - remaining text as unit
+        match = re.match(r'^([0-9]*\.?[0-9]+(?:\s*-\s*[0-9]*\.?[0-9]+)?)\s*(.*)$', main_part)
+        
+        if match:
+            amount = match.group(1).strip()
+            unit = match.group(2).strip()
+            return (amount, unit)
+        else:
+            # No numeric part found
+            return ("", "")
+    except Exception:
+        # On any exception, return empty values
+        return ("", "")
 
 class AdministrationMethodMapper(BaseMapper):
     """Group A: Maps administration methods (e.g., Injectable, Oral)."""
@@ -10,7 +58,7 @@ class AdministrationMethodMapper(BaseMapper):
         if method_str:
             for m in [x.strip() for x in method_str.split(',') if x.strip()]:
                 methods.append({
-                    "name": m,
+                    "name": m[:100],  # Truncate to 100 chars (administration_methods.name limit)
                     "description": f"{m} administration method"
                 })
         return methods
@@ -39,7 +87,7 @@ class SideEffectMapper(BaseMapper):
                 parts = re.split(r'[.]', val)
                 for side_effect in [s.strip() for s in parts if s.strip()]:
                     side_effects.append({
-                        "name": side_effect[:100],
+                        "name": side_effect[:100],  # Truncate to 100 chars (side_effects.name limit)
                         "description": side_effect
                     })
         return side_effects
@@ -51,7 +99,10 @@ class ScheduleMapper(BaseMapper):
         for i in range(1, 6):
             freq = row.get(f"research_protocols_frequency_{i}", "").strip()
             if freq:
-                schedules.append({"name": freq, "frequency": freq})
+                schedules.append({
+                    "name": freq[:100],  # Truncate to 100 chars (schedules.name limit)
+                    "frequency": freq[:100]  # Truncate to 100 chars (schedules.frequency limit)
+                })
         return schedules
 
 class DosageMapper(BaseMapper):
@@ -60,12 +111,16 @@ class DosageMapper(BaseMapper):
         dosages = []
         typical = row.get("typical_dose", "").strip()
         if typical:
-            dosages.append({"amount": typical, "unit": ""})
+            amount, unit = parse_dosage_string(typical)
+            dosages.append({"amount": amount, "unit": unit})
         
         for i in range(1, 6):
             dose = row.get(f"research_protocols_dose_{i}", "").strip()
             if dose:
-                dosages.append({"amount": dose, "unit": ""})
+                amount, unit = parse_dosage_string(dose)
+                dosages.append({"amount": amount, "unit": unit})
+                
+        print(f"  [MAP_DOSAGE] Extracted {len(dosages)} dosages", dosages)
         return dosages
 
 

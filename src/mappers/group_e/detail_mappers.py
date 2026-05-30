@@ -72,8 +72,7 @@ class ApplicationPlaceMapper(BaseMapper):
         if not route:
             route = row.get("route", "").strip() or row.get("research_protocols_route_1", "").strip()
         logger.info(f"  [MAP_APP_PLACE] Extracted route: {route}")
-        
-        return [route]
+        return [route[:100]] if route else []  # Truncate to 100 chars (application_places.name limit)
 
 class ProtocolDosageMapper(BaseMapper):
     """Group E: Maps dosages for specific protocols."""

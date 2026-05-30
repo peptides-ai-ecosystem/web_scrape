@@ -21,6 +21,27 @@ cd web_scrape
 ## Step 2: Database Setup
 You can set up the database using either **Docker (Recommended)** or a **Local PostgreSQL Installation**. Please follow the instructions for your preferred method.
 
+
+
+
+
+
+
+
+
+### setup the cloud supabase
+
+1. **Dump sql from original db**
+2. **restore in mock supabase db**
+```bash
+docker run --rm -i postgres:17 psql "postgresql://postgres.kyfvfzivwzetdilgjmrk:49yRlw2E0RmloZsL@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres" < full_dump.sql
+```
+
+3. **Create peptide-graph table**
+```bash
+docker run --rm -i postgres:17 psql "postgresql://postgres.kyfvfzivwzetdilgjmrk:49yRlw2E0RmloZsL@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres" < migration_peptide_graph.sql
+```
+
 ### Option A: Docker Setup (Recommended)
 1. **Start the PostgreSQL service** (in the background):
    ```bash
