@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from tqdm import tqdm
 from src.mappers.group_a.lookup_mappers import (
     AdministrationMethodMapper,
@@ -13,6 +13,7 @@ from src.mappers.group_c.relation_mappers import RelationMapper
 from src.mappers.group_d.protocol_mapper import ProtocolMapper
 from src.mappers.group_d.graph_mapper import GraphMapper
 from src.infrastructure.db_manager import DbManager
+from src.utils.error_tracker import ErrorTracker
 
 class DbImportOrchestrator:
     """
@@ -61,23 +62,44 @@ class DbImportOrchestrator:
             "graph_data": self.graph_mapper.map(row)
         }
 
-    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]]):
+    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None):
         """
         Main entry point to sync rows using the grouped logic.
         """
         db = DbManager(db_url)
         try:
             for row in tqdm(rows, desc="Syncing to database", unit="row"):
-                payload = self.map_row(row)
-                
+                row_id = row.get("name") or row.get("peptide_name") or str(list(row.values())[:1])
+
+                # Map raw row to payload
+                try:
+                    payload = self.map_row(row)
+                except Exception as e:
+                    if tracker:
+                        tracker.record_db_error(row_id, "map_row", e)
+                    continue
+
                 # 1. Process Group A (Independent Lookups)
-                self._sync_group_a(db, payload["group_a"])
-                
-                # 2. Process Group B (Peptides)
-                peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
-                
+                try:
+                    self._sync_group_a(db, payload["group_a"])
+                except Exception as e:
+                    if tracker:
+                        tracker.record_db_error(row_id, "group_a", e)
+
+                # 2. Process Group B (Peptides) — must succeed to continue
+                try:
+                    peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
+                except Exception as e:
+                    if tracker:
+                        tracker.record_db_error(row_id, "group_b", e)
+                    continue
+
                 # 3. Process Relations (Groups C-F)
-                self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], payload["graph_data"])
+                try:
+                    self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], payload["graph_data"])
+                except Exception as e:
+                    if tracker:
+                        tracker.record_db_error(row_id, "relations", e)
         finally:
             db.close()
 

@@ -29,6 +29,6 @@ def crawl_peptide_urls():
         print(f"[DEBUG] Found {len(links)} peptide links")
 
         peptide_urls = [link.get_attribute("href") for link in tqdm(links, desc="Extracting URLs", unit="link")]
-        return list(set(peptide_urls))
+        return list(set(peptide_urls[:40]))
     finally:
         driver.quit()

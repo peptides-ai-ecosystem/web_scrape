@@ -2,7 +2,8 @@ import argparse
 import os
 import time
 from dotenv import load_dotenv
-from src.config import ERROR_LOG, clear_logs, log_error, log_debug
+from src.config import ERROR_LOG, OUTPUT_DIR, clear_logs, log_error, log_debug
+from src.utils.error_tracker import ErrorTracker
 
 load_dotenv()
 from src.utils.crawl_peptide_urls import crawl_peptide_urls
@@ -16,26 +17,18 @@ def scrape_peptides() -> None:
     """Crawl URLs and scrape peptide data."""
     start_total = time.time()
     # clear_logs()
-    
+
     log_debug("Starting scraper execution", MODULE_NAME)
     print("[INFO] Crawling peptide URLs...")
-    
+
+    tracker = ErrorTracker()
     try:
         urls = crawl_peptide_urls()
         log_debug(f"Found {len(urls)} URLs to scrape", MODULE_NAME)
         print(f"[INFO] Found {len(urls)} URLs to scrape.")
 
         manager = ScraperManager()
-        error_logs = manager.run(urls)
-
-        if error_logs:
-            log_debug(f"Scraping completed with {len(error_logs)} errors", MODULE_NAME)
-            for error in error_logs:
-                log_error(error, "scraper_manager")
-            print(f"[INFO] {len(error_logs)} errors logged at {ERROR_LOG}")
-        else:
-            log_debug("Scraping completed successfully with no errors", MODULE_NAME)
-            print("[INFO] Scraping completed successfully!")
+        manager.run(urls, tracker=tracker)
 
     except Exception as e:
         log_error(f"Fatal error during scraping: {e}", MODULE_NAME)
@@ -44,6 +37,10 @@ def scrape_peptides() -> None:
         total_time = round(time.time() - start_total, 2)
         log_debug(f"Total execution time: {total_time} seconds", MODULE_NAME)
         print(f"[INFO] Total scraping time: {total_time} seconds")
+        if tracker.has_errors():
+            report_path = tracker.save(OUTPUT_DIR / "tracker_report.json")
+            tracker.print_summary()
+            print(f"[TRACKER] Report saved to {report_path}")
 
 
 
@@ -52,10 +49,17 @@ def db_sync() -> None:
     csv_store = CSVStorage()
     rows = csv_store.read()
 
+    tracker = ErrorTracker()
     orchestrator = DbImportOrchestrator()
     print("Starting sync...")
-    orchestrator.sync_to_db(os.getenv("DATABASE_URL"), rows)
-    print("Sync completed successfully.")
+    orchestrator.sync_to_db(os.getenv("DATABASE_URL"), rows, tracker=tracker)
+    print("Sync completed.")
+    if tracker.has_errors():
+        report_path = tracker.save(OUTPUT_DIR / "tracker_report.json")
+        tracker.print_summary()
+        print(f"[TRACKER] Report saved to {report_path}")
+    else:
+        print("Sync completed successfully with no errors.")
 
 def delete_peptide(slug: str) -> None:
     """Delete a peptide and its related data by slug."""
