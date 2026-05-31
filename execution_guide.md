@@ -34,12 +34,12 @@ You can set up the database using either **Docker (Recommended)** or a **Local P
 1. **Dump sql from original db**
 2. **restore in mock supabase db**
 ```bash
-docker run --rm -i postgres:17 psql "postgresql://postgres.kyfvfzivwzetdilgjmrk:49yRlw2E0RmloZsL@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres" < full_dump.sql
+docker run --rm -i postgres:17 psql "db_url" < full_dump.sql
 ```
 
 3. **Create peptide-graph table**
 ```bash
-docker run --rm -i postgres:17 psql "postgresql://postgres.kyfvfzivwzetdilgjmrk:49yRlw2E0RmloZsL@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres" < migration_peptide_graph.sql
+docker run --rm -i postgres:17 psql "db_url" < migration_peptide_graph.sql
 ```
 
 ### Option A: Docker Setup (Recommended)
