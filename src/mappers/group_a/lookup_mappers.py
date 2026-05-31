@@ -54,7 +54,7 @@ class AdministrationMethodMapper(BaseMapper):
     """Group A: Maps administration methods (e.g., Injectable, Oral)."""
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         methods = []
-        method_str = row.get("Method", "").strip()
+        method_str = (row.get("Method") or "").strip()
         if method_str:
             for m in [x.strip() for x in method_str.split(',') if x.strip()]:
                 methods.append({
@@ -67,7 +67,7 @@ class BenefitMapper(BaseMapper):
     """Group A: Maps general benefits."""
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         benefits = []
-        key_benefits = row.get("overview_key_benefits", "").strip()
+        key_benefits = (row.get("overview_key_benefits") or "").strip()
         if key_benefits:
             parts = re.split(r'[.]', key_benefits)
             for benefit in [b.strip() for b in parts if b.strip()]:
@@ -82,7 +82,7 @@ class SideEffectMapper(BaseMapper):
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         side_effects = []
         for i in range(1, 10):
-            val = row.get(f"side_effects_and_safety_side_effects_{i}", "").strip()
+            val = (row.get(f"side_effects_and_safety_side_effects_{i}") or "").strip()
             if val:
                 parts = re.split(r'[.]', val)
                 for side_effect in [s.strip() for s in parts if s.strip()]:
@@ -97,7 +97,7 @@ class ScheduleMapper(BaseMapper):
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         schedules = []
         for i in range(1, 6):
-            freq = row.get(f"research_protocols_frequency_{i}", "").strip()
+            freq = (row.get(f"research_protocols_frequency_{i}") or "").strip()
             if freq:
                 schedules.append({
                     "name": freq[:100],  # Truncate to 100 chars (schedules.name limit)
@@ -109,13 +109,13 @@ class DosageMapper(BaseMapper):
     """Group A: Maps base dosage units and amounts."""
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         dosages = []
-        typical = row.get("typical_dose", "").strip()
+        typical = (row.get("typical_dose") or "").strip()
         if typical:
             amount, unit = parse_dosage_string(typical)
             dosages.append({"amount": amount, "unit": unit})
         
         for i in range(1, 6):
-            dose = row.get(f"research_protocols_dose_{i}", "").strip()
+            dose = (row.get(f"research_protocols_dose_{i}") or "").strip()
             if dose:
                 amount, unit = parse_dosage_string(dose)
                 dosages.append({"amount": amount, "unit": unit})

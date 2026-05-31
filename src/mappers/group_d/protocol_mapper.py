@@ -21,11 +21,11 @@ class ProtocolMapper(BaseMapper):
         protocols = []
         
         # Base expectations (Formatted as JSON here, logic moved from db_manager)
-        expectations = [row.get(f"what_to_expect_{i}", "").strip() for i in range(1, 6) if row.get(f"what_to_expect_{i}", "").strip()]
+        expectations = [(row.get(f"what_to_expect_{i}") or "").strip() for i in range(1, 6) if (row.get(f"what_to_expect_{i}") or "").strip()]
         expectations_json = json.dumps(expectations)
         
-        method = row.get("Method", "").strip()
-        main_route = row.get("route", "").strip()
+        method = (row.get("Method") or "").strip()
+        main_route = (row.get("route") or "").strip()
         
         # Extraction of new fields
         # Try multiple potential keys for quick_start_guide
@@ -39,8 +39,8 @@ class ProtocolMapper(BaseMapper):
         
         key_benefits = (row.get("overview_key_benefits") or row.get("key_benefits", "")).strip()
         moa = (row.get("overview_mechanism_of_action") or row.get("mechanism_of_action", "")).strip()
-        timing = row.get("best_timing", "").strip()
-        effects = row.get("effects_timeline", "").strip()
+        timing = (row.get("best_timing") or "").strip()
+        effects = (row.get("effects_timeline") or "").strip()
 
         # Find dynamic description (overview_what_is_<peptide>)
         description = ""
@@ -51,11 +51,11 @@ class ProtocolMapper(BaseMapper):
 
         # Extract research protocols
         for i in range(1, 6):
-            goal = row.get(f"research_protocols_goal_{i}", "").strip()
+            goal = (row.get(f"research_protocols_goal_{i}") or "").strip()
             if goal:
-                dose = row.get(f"research_protocols_dose_{i}", "").strip()
-                freq = row.get(f"research_protocols_frequency_{i}", "").strip()
-                route = row.get(f"research_protocols_route_{i}", "").strip() or main_route
+                dose = (row.get(f"research_protocols_dose_{i}") or "").strip()
+                freq = (row.get(f"research_protocols_frequency_{i}") or "").strip()
+                route = (row.get(f"research_protocols_route_{i}") or "").strip() or main_route
                 
                 protocols.append({
                     "name": goal[:100],

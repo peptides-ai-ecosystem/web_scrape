@@ -8,7 +8,7 @@ from src.extractors.section import SectionExtractor
 from src.extractors.graph import GraphExtractor
 from src.infrastructure.webdriver_factory import WebDriverFactory
 from src.config import log_debug, log_error
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 from tqdm import tqdm
 import time
 
@@ -20,8 +20,10 @@ class PageScraper(IScraper):
         self.section_extractor = SectionExtractor()
         self.graph_extractor = GraphExtractor()
 
-    def scrape(self, url: str) -> Tuple[List[PeptideData], Optional[str]]:
+    def scrape(self, url: str) -> Tuple[List[PeptideData], List[dict]]:
+        """Returns (results, errors) where errors is a list of error dicts."""
         driver, wait = WebDriverFactory.create_driver()
+        errors: List[dict] = []
         try:
             print(f"[INFO] Processing: {url}")
             log_debug(f"Starting scrape for URL: {url}", "page_scraper.py")
@@ -34,35 +36,42 @@ class PageScraper(IScraper):
             log_debug(f"Found {len(categories)} categories for {url}", "page_scraper.py")
 
             for cat in tqdm(categories, desc="Processing categories", unit="category", leave=False):
-                # Click the category button
-                self._click_category(driver, wait, cat)
-                log_debug(f"Processing category '{cat}' for {url}", "page_scraper.py")
-                
-                hero_data = self.hero_extractor.extract(driver, wait)
-                quick_guide = self.quick_guide_extractor.extract(driver, wait)
-                community = self.community_extractor.extract(driver, wait)
-                sections = self.section_extractor.extract(driver, wait)
-                graph_data = self.graph_extractor.extract(driver, wait)
+                try:
+                    # Click the category button
+                    self._click_category(driver, wait, cat)
+                    log_debug(f"Processing category '{cat}' for {url}", "page_scraper.py")
 
-                results.append(PeptideData(
-                    name=hero_data.name,
-                    full_name=hero_data.subtitle,
-                    method=cat,
-                    url=driver.current_url,
-                    hero=hero_data,
-                    quick_guide=quick_guide,
-                    community_insights=community["insights"],
-                    poll_results=community["polls"],
-                    sections=sections,
-                    graph_data=graph_data
-                ))
-            log_debug(f"Successfully scraped {len(results)} results from {url}", "page_scraper.py")
-            return results, None
+                    hero_data = self.hero_extractor.extract(driver, wait)
+                    quick_guide = self.quick_guide_extractor.extract(driver, wait)
+                    community = self.community_extractor.extract(driver, wait)
+                    sections = self.section_extractor.extract(driver, wait)
+                    graph_data = self.graph_extractor.extract(driver, wait)
+
+                    results.append(PeptideData(
+                        name=hero_data.name,
+                        full_name=hero_data.subtitle,
+                        method=cat,
+                        url=driver.current_url,
+                        hero=hero_data,
+                        quick_guide=quick_guide,
+                        community_insights=community["insights"],
+                        poll_results=community["polls"],
+                        sections=sections,
+                        graph_data=graph_data
+                    ))
+                except Exception as cat_e:
+                    error_msg = f"{url} [{cat}] - {str(cat_e)}"
+                    print(f"[ERROR] {error_msg}")
+                    log_error(error_msg, "page_scraper.py")
+                    errors.append({"url": url, "category": cat, "error": str(cat_e)})
+
+            log_debug(f"Scraped {len(results)} results from {url} with {len(errors)} category errors", "page_scraper.py")
+            return results, errors
         except Exception as e:
             error_msg = f"{url} - {str(e)}"
             print(f"[ERROR] {error_msg}")
             log_error(error_msg, "page_scraper.py")
-            return [], error_msg
+            return [], [{"url": url, "category": None, "error": str(e)}]
         finally:
             driver.quit()
 

@@ -158,6 +158,11 @@ class GraphExtractor(BaseExtractor):
             # Extract main path data (raw SVG d attribute) + parsed points
             path_data, points = self._extract_path_and_points(container)
 
+            # Check if there's actually a graph path extracted
+            if not path_data or len(path_data) < 5:
+                log_debug(f"[WARNING] No valid graph path data found for {time_range}, skipping.", "graph_extractor.py")
+                return None, None
+
             # Extract markers (circle elements in SVG)
             markers = self._extract_markers(container)
 

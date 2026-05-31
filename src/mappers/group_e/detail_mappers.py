@@ -9,7 +9,7 @@ class ReconstitutionMapper(BaseMapper):
     """Group E: Maps protocol reconstitution steps."""
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         steps = []
-        raw_text = row.get("how_to_reconstitute_others", "").strip()
+        raw_text = (row.get("how_to_reconstitute_others") or "").strip()
         if not raw_text:
             return []
         
@@ -70,7 +70,7 @@ class ApplicationPlaceMapper(BaseMapper):
     def map(self, row: Dict[str, Any], route: str = "") -> List[str]:
         # places = []
         if not route:
-            route = row.get("route", "").strip() or row.get("research_protocols_route_1", "").strip()
+            route = (row.get("route") or "").strip() or (row.get("research_protocols_route_1") or "").strip()
         logger.info(f"  [MAP_APP_PLACE] Extracted route: {route}")
         return [route[:100]] if route else []  # Truncate to 100 chars (application_places.name limit)
 
@@ -87,7 +87,7 @@ class ProtocolDosageMapper(BaseMapper):
                 "notes": f"Amount: {dose}, Freq: {freq}" # Logic moved from db_manager
             })
         elif row.get("typical_dose"):
-            typical_dose = row.get("typical_dose", "").strip()
+            typical_dose = (row.get("typical_dose") or "").strip()
             payloads.append({
                 "amount": typical_dose,
                 "is_default": True,
