@@ -12,7 +12,7 @@ from src.mappers.group_b.peptide_mapper import PeptideMapper
 from src.mappers.group_c.relation_mappers import RelationMapper
 from src.mappers.group_d.protocol_mapper import ProtocolMapper
 from src.mappers.group_d.graph_mapper import GraphMapper
-from src.infrastructure.db_manager import DbManager
+from src.infrastructure.db import DbManager
 from src.utils.error_tracker import ErrorTracker
 
 class DbImportOrchestrator:

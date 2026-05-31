@@ -14,7 +14,7 @@ if project_root not in sys.path:
 load_dotenv(os.path.join(project_root, ".env"))
 
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
-from src.infrastructure.db_manager import DbManager
+from src.infrastructure.db import DbManager
 
 def test_actual_ingestion(db_url: str, csv_path: str, limit: int):
     print(f"\n{'='*60}")

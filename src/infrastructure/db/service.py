@@ -132,9 +132,11 @@ class DbManager:
         """Initialize with database URL (delegates to DbConnection)."""
         self.db_connection = DbConnection(db_url)
         self.service = DbService(self.db_connection)
-        
-        # For direct access to connection (backward compatibility)
-        self.conn = self.db_connection.conn
+
+    @property
+    def conn(self):
+        """Proxy to the underlying connection (stays current after connect())."""
+        return self.db_connection.conn
     
     def connect(self):
         """For backward compatibility."""
@@ -230,7 +232,8 @@ class DbPool:
                 self.service = None
             
             def __enter__(self):
-                self.cm = self.pool._pool.acquire()
+                # pool is a NewDbPool instance; call acquire() directly on it
+                self.cm = self.pool.acquire()
                 self.conn = self.cm.__enter__()
                 self.service = DbService(self.conn)
                 return self.service

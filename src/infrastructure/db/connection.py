@@ -7,7 +7,6 @@ import logging
 import time
 from typing import Optional
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

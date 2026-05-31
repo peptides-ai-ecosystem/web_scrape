@@ -43,7 +43,7 @@ class GraphMapper(BaseMapper):
 
         if not graph_data_json:
             return graph_data_list
-
+            
         try:
             # Deserialize the JSON string (stored in CSV column)
             data = json.loads(graph_data_json)

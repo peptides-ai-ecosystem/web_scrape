@@ -12,7 +12,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.infrastructure.db_manager import DbPool
+from src.infrastructure.db import DbPool
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -41,15 +41,13 @@ async def get_peptides():
     """Get all peptides with available graph data."""
     try:
         with get_pool().acquire() as db:
-            with db.conn.cursor() as cur:
-                cur.execute("""
-                    SELECT DISTINCT p.id, p.name
-                    FROM peptides p
-                    JOIN peptide_graph pg ON p.id = pg.peptide_id
-                    ORDER BY p.name
-                """)
-                peptides = [{"id": row['id'], "name": row['name']} for row in cur.fetchall()]
-        return peptides
+            peptides = db.graph.execute_all("""
+                SELECT DISTINCT p.id, p.name
+                FROM peptides p
+                JOIN peptide_graph pg ON p.id = pg.peptide_id
+                ORDER BY p.name
+            """)
+            return [{"id": row['id'], "name": row['name']} for row in peptides]
     except Exception as e:
         logger.error(f"Failed to fetch peptides: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -60,7 +58,7 @@ async def get_peptide_methods(peptide_id: int):
     """Get all available administration methods for a peptide."""
     try:
         with get_pool().acquire() as db:
-            methods = db.get_methods_for_peptide(peptide_id)
+            methods = db.graph.get_methods_for_peptide(peptide_id)
         return methods
     except Exception as e:
         logger.error(f"Failed to fetch methods for peptide {peptide_id}: {e}")
@@ -72,7 +70,7 @@ async def get_graph_data(peptide_id: int, method: str = Query("Injectable")):
     """Fetch graph data for a peptide by ID and administration method."""
     try:
         with get_pool().acquire() as db:
-            data = db.get_graph_data_for_visualization(peptide_id, method)
+            data = db.graph.get_visualization_data(peptide_id, method)
         if not data or not any(k not in ['peptide_name', 'administration_method'] for k in data.keys()):
             raise HTTPException(status_code=404, detail=f"No graph data found for peptide {peptide_id} with method {method}")
         return data
@@ -81,3 +79,4 @@ async def get_graph_data(peptide_id: int, method: str = Query("Injectable")):
     except Exception as e:
         logger.error(f"Failed to fetch graph data for peptide {peptide_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+

@@ -9,7 +9,7 @@ load_dotenv()
 from src.utils.crawl_peptide_urls import crawl_peptide_urls
 from src.services.scraper_manager import ScraperManager
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
-from src.infrastructure.db_manager import DbManager
+from src.infrastructure.db import DbManager
 from src.infrastructure.csv_storage import CSVStorage
 
 MODULE_NAME="main"

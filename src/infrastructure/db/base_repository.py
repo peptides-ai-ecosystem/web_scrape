@@ -73,7 +73,10 @@ class BaseRepository:
         with self.get_cursor() as cur:
             cur.execute(query, params)
             row = cur.fetchone()
-            return row[list(row.keys())[0]] if row else None if isinstance(row, dict) else (row[0] if row else None)
+            if row is None:
+                return None
+            # psycopg2 with RealDictCursor returns RealDictRow (dict-like)
+            return list(row.values())[0]
 
     def execute_update(self, query: str, params: tuple) -> int:
         """Execute update/insert/delete query and return row count."""
