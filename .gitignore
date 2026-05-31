@@ -13,3 +13,5 @@ peptides_temp/
 graph_html/
 .env
 graph/graph_data.json
+output_dir/
+log/

@@ -13,7 +13,7 @@ from src.infrastructure.db_manager import DbManager
 from src.infrastructure.csv_storage import CSVStorage
 
 MODULE_NAME="main"
-def scrape_peptides() -> None:
+def scrape_peptides(args) -> None:
     """Crawl URLs and scrape peptide data."""
     start_total = time.time()
     # clear_logs()
@@ -24,6 +24,8 @@ def scrape_peptides() -> None:
     tracker = ErrorTracker()
     try:
         urls = crawl_peptide_urls()
+        if args.limit is not None:
+            urls = urls[:args.limit]
         log_debug(f"Found {len(urls)} URLs to scrape", MODULE_NAME)
         print(f"[INFO] Found {len(urls)} URLs to scrape.")
 
@@ -75,6 +77,7 @@ def setup_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--delete", metavar="SLUG", help="Delete a peptide and its related data by slug")
     parser.add_argument("--scrape", action="store_true", help="Run scraper before sync")
     parser.add_argument("--sync", action="store_true", help="Run sync without scraping")
+    parser.add_argument("--limit", type=int, help="Limit the number of peptides to scrape (for testing)")
     return parser
 
 def main() -> None:
@@ -87,7 +90,7 @@ def main() -> None:
         return
 
     if args.scrape:
-        scrape_peptides()
+        scrape_peptides(args)
     if args.sync:
         db_sync()
 
