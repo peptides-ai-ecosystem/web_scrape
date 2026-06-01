@@ -14,4 +14,5 @@ graph_html/
 .env
 graph/graph_data.json
 output_dir/
+output_dir2/
 log/
