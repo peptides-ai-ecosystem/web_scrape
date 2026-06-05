@@ -174,14 +174,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // X-axis labels at y=43 (matching the website, not y=40)
         xLabels.forEach(label => {
-            const text = createSvgText(label.pos, 43, label.text, 'middle');
+            const text = createSvgText(label.pos, 43, label.label || label.text, 'middle');
             text.setAttribute('class', 'axis-text axis-text-x');
             labelsLayer.appendChild(text);
         });
 
         // Y-axis labels — use exact positions from data, placed at x=8.5 (matching website)
         yLabels.forEach(label => {
-            const text = createSvgText(8.5, label.pos, label.text, 'end');
+            const text = createSvgText(8.5, label.pos, label.label || label.text, 'end');
             text.setAttribute('class', 'axis-text axis-text-y');
             text.setAttribute('dominant-baseline', 'middle');
             labelsLayer.appendChild(text);

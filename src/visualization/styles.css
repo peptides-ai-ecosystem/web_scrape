@@ -264,6 +264,21 @@ body {
     font-size: 2.2px;
 }
 
+.axis-title {
+    font-size: 2.5px;
+    fill: var(--text-dim);
+    font-weight: 500;
+    font-family: system-ui, sans-serif;
+}
+
+.axis-title-x {
+    opacity: 0.6;
+}
+
+.axis-title-y {
+    opacity: 0.6;
+}
+
 .grid-line {
     stroke: currentColor;
     stroke-width: 0.15;
