@@ -39,10 +39,23 @@ class PeptideMapper(BaseMapper):
             "key_information": (row.get("overview_key_benefits") or "").strip()
         }
 
-    def _extract_stop_signs(self, row: Dict[str, Any]) -> str:
-        stops = []
-        for i in range(1, 10):
-            val = (row.get(f"side_effects_and_safety_when_to_stop_{i}") or "").strip()
-            if val:
-                stops.append(val)
-        return ", ".join(stops)
+    def _extract_stop_signs(self, row: Dict[str, Any]) -> list[str]:
+        prefix = "side_effects_and_safety_when_to_stop_"
+        stop_items = []
+
+        for key, value in row.items():
+            if isinstance(key, str) and key.startswith(prefix) and isinstance(value, str):
+                trimmed = value.strip()
+                if trimmed:
+                    suffix = key[len(prefix):]
+                    stop_items.append((suffix, trimmed))
+
+        def sort_key(item: tuple[str, str]) -> tuple[int | str, str]:
+            suffix, _ = item
+            try:
+                return (int(suffix), suffix)
+            except ValueError:
+                return (float('inf'), suffix)
+
+        stop_items.sort(key=sort_key)
+        return [value for _, value in stop_items]
