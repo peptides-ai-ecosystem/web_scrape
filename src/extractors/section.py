@@ -83,6 +83,16 @@ class SectionExtractor(BaseExtractor):
                 tab_parent = tab_btn.find_element(By.XPATH, "./ancestor::div[contains(@class, 'border-b')]")
                 content_area = tab_parent.find_element(By.XPATH, "./following-sibling::div[1]")
 
+                buttons = content_area.find_elements(By.TAG_NAME, "button")
+                for btn in buttons:
+                    if "show" in btn.text.lower() and "more" in btn.text.lower():
+                        try:
+                            self.safe_click(driver, wait, btn)
+                            self.wait_for_loading(0.5)
+                            content_area = tab_parent.find_element(By.XPATH, "./following-sibling::div[1]")
+                        except Exception:
+                            pass
+
                 h4_elements = content_area.find_elements(By.TAG_NAME, "h4")
                 citation_cards = content_area.find_elements(By.CSS_SELECTOR, "div.p-6 > p")
 
@@ -105,6 +115,10 @@ class SectionExtractor(BaseExtractor):
                             text = elem.text.strip()
                             if text and text not in content_parts:
                                 content_parts.append(text)
+                                if elem.tag_name == "a":
+                                    href = elem.get_attribute("href")
+                                    if href and href not in content_parts:
+                                        content_parts.append(href)
                         column_name = f"{h2_text}_{tab_name}_{idx}"
                         section_data[column_name] = " ".join(content_parts)
                 else:
