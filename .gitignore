@@ -16,5 +16,6 @@ graph/graph_data.json
 output_dir/
 output_dir2/
 log/
-*.sql
+full_dump_main.sql
 *.csv
+full_dump.sql
