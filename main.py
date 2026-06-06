@@ -20,11 +20,15 @@ def scrape_peptides(args) -> None:
     # clear_logs()
 
     log_debug("Starting scraper execution", MODULE_NAME)
-    print("[INFO] Crawling peptide URLs...")
 
     tracker = ErrorTracker()
     try:
-        urls = crawl_peptide_urls()
+        if getattr(args, "url", None):
+            urls = args.url
+            print(f"[INFO] Using {len(urls)} directly provided URL(s).")
+        else:
+            print("[INFO] Crawling peptide URLs...")
+            urls = crawl_peptide_urls()
         if args.limit is not None:
             urls = urls[:args.limit]
         log_debug(f"Found {len(urls)} URLs to scrape", MODULE_NAME)
@@ -92,17 +96,32 @@ def delete_peptide(slug: str) -> None:
 
 def setup_argument_parser() -> argparse.ArgumentParser:
     """Configure and return argument parser."""
-    parser = argparse.ArgumentParser(description="Sync Peptide CSV data to PostgreSQL")
+    parser = argparse.ArgumentParser(
+        description="Scrape peptide data and sync to PostgreSQL. "
+                    "By default, runs both scrape and sync (v2). "
+                    "Use flags to run individual steps."
+    )
     parser.add_argument("--delete", metavar="SLUG", help="Delete a peptide and its related data by slug")
-    parser.add_argument("--scrape", action="store_true", help="Run scraper before sync")
-    parser.add_argument("--sync", action="store_true", help="Run sync without scraping (v1 original)")
+    parser.add_argument("--scrape", action="store_true", help="Run scraper only (no sync)")
+    parser.add_argument("--sync", action="store_true", help="Run sync only — v1 original (no scraping)")
     parser.add_argument("--sync-v2", action="store_true", dest="sync_v2",
-                        help="Run optimized sync (v2): single tx/row, ON CONFLICT upserts")
+                        help="Run sync only — v2 optimized: single tx/row, ON CONFLICT upserts (no scraping)")
+    parser.add_argument(
+        "--url", metavar="URL", nargs="+",
+        help="One or more direct peptide URLs to scrape (skips crawling)"
+    )
     parser.add_argument("--limit", type=int, help="Limit the number of peptides to scrape (for testing)")
     return parser
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point.
+
+    Default (no flags): runs scrape then sync (v2).
+    Individual flags run only that step:
+      --scrape     → scrape only
+      --sync       → sync v1 only
+      --sync-v2    → sync v2 only
+    """
     parser = setup_argument_parser()
     args = parser.parse_args()
 
@@ -110,12 +129,19 @@ def main() -> None:
         delete_peptide(args.delete)
         return
 
-    if args.scrape:
+    any_flag = args.scrape or args.sync or args.sync_v2
+
+    if not any_flag:
+        # Default: run full pipeline
         scrape_peptides(args)
-    if args.sync:
         db_sync()
-    if args.sync_v2:
-        db_sync_v2()
+    else:
+        if args.scrape:
+            scrape_peptides(args)
+        if args.sync:
+            db_sync()
+        if args.sync_v2:
+            db_sync_v2()
 
 if __name__ == "__main__":
     main()

@@ -105,6 +105,10 @@ class SectionExtractor(BaseExtractor):
                             text = elem.text.strip()
                             if text and text not in content_parts:
                                 content_parts.append(text)
+                            if elem.tag_name == "a":
+                                href = elem.get_attribute("href")
+                                if href and href not in content_parts:
+                                    content_parts.append(href)
                         column_name = f"{h2_text}_{tab_name}_({h4.text.strip().replace('-', '').replace(' ', '_')})"
                         section_data[column_name] = " ".join(content_parts)
                 elif citation_cards and tab_name == "citations":
