@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+import re
 from tqdm import tqdm
 from src.mappers.group_a.lookup_mappers import (
     AdministrationMethodMapper,
@@ -65,11 +66,27 @@ class DbImportOrchestrator:
     def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None):
         """
         Main entry point to sync rows using the grouped logic.
+        Only processes peptides that already exist in the database.
         """
         db = DbManager(db_url)
         try:
+            # Pre-fetch all existing peptide identifiers (slugs + lowercase names)
+            existing_peptides = db.get_all_peptide_identifiers()
+            print(f"[INFO] Found {len(existing_peptides)} existing peptide identifiers in DB")
+
+            skipped_count = 0
             for row in tqdm(rows, desc="Syncing to database", unit="row"):
                 row_id = row.get("name") or row.get("peptide_name") or str(list(row.values())[:1])
+
+                # Extract peptide name from CSV row and generate slug for matching
+                raw_name = (row.get("Peptide_Name") or row.get("name") or "").strip()
+                row_slug = re.sub(r'[^a-z0-9]+', '-', raw_name.lower()).strip('-')
+
+                # Skip if this peptide doesn't exist in DB
+                if row_slug not in existing_peptides and raw_name.lower() not in existing_peptides:
+                    skipped_count += 1
+                    print(f"  [SKIP] Peptide '{raw_name}' not found in DB — skipping")
+                    continue
 
                 # Map raw row to payload
                 try:
@@ -100,6 +117,9 @@ class DbImportOrchestrator:
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "relations", e)
+
+            if skipped_count > 0:
+                print(f"[INFO] Skipped {skipped_count} peptide(s) not found in DB")
         finally:
             db.close()
 
