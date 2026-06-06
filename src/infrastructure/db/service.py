@@ -208,6 +208,10 @@ class DbManager:
     def link_relation(self, table: str, fk1_col: str, fk1_val: int, fk2_col: str, fk2_val: int):
         self.service.reference.link_entities(table, fk1_col, fk1_val, fk2_col, fk2_val)
 
+    def get_all_peptide_identifiers(self) -> set:
+        """Fetch all existing peptide slugs and lowercase names for pre-filtering."""
+        return self.service.peptide.get_all_identifiers()
+
     def delete_peptide_data(self, slug: str):
         self.service.delete_peptide_full(slug)
 

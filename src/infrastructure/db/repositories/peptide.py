@@ -14,6 +14,18 @@ class PeptideRepository(BaseRepository):
         """Get peptide by ID."""
         return self.execute_one("SELECT * FROM peptides WHERE id = %s", (peptide_id,))
 
+    def get_all_identifiers(self) -> set:
+        """Fetch all existing peptide slugs and lowercase names as a set.
+        Used for pre-filtering CSV rows against existing DB peptides."""
+        rows = self.execute_all("SELECT slug, LOWER(name) as name_lower FROM peptides")
+        identifiers = set()
+        for row in rows:
+            if row.get('slug'):
+                identifiers.add(row['slug'])
+            if row.get('name_lower'):
+                identifiers.add(row['name_lower'])
+        return identifiers
+
     def upsert_fill_nulls(self, payload: Dict[str, Any]) -> int:
         """
         Inserts a peptide or updates its NULL columns if it exists.
