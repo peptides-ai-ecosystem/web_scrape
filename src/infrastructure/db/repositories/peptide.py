@@ -69,7 +69,7 @@ class PeptideRepository(BaseRepository):
             
             return peptide_id
 
-    def delete_peptide_cascading(self, slug: str):
+    def delete_peptide_cascading(self, slug: str) -> bool:
         """
         Deletes a peptide and ALL its related data (full cascade).
         This should be called by a service/orchestrator that manages the cascade.
@@ -79,7 +79,7 @@ class PeptideRepository(BaseRepository):
             row = cur.fetchone()
             if not row:
                 self.log_operation("NOT_FOUND", "peptides", f"slug='{slug}'")
-                return
+                return False
 
             peptide_id = row['id']
 
@@ -126,6 +126,7 @@ class PeptideRepository(BaseRepository):
             cur.execute("DELETE FROM peptide_graph WHERE peptide_id = %s", (peptide_id,))
 
             # --- Pricing / vendor relations ---
+            cur.execute("DELETE FROM pepti_price_peptide_tests WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM pepti_price_price_history WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM pepti_price_vendor_pricing WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM pepti_price_watchlist WHERE peptide_id = %s", (peptide_id,))
@@ -145,3 +146,4 @@ class PeptideRepository(BaseRepository):
             cur.execute("DELETE FROM peptides WHERE id = %s", (peptide_id,))
             self._commit()
             self.log_operation("DELETE_FULL", "peptides", f"slug='{slug}' (id={peptide_id}) and all related data")
+            return True
