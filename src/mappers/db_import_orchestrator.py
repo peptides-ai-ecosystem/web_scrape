@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Optional
 import re
-from tqdm import tqdm
 from src.mappers.group_a.lookup_mappers import (
     AdministrationMethodMapper,
     BenefitMapper,
@@ -75,7 +74,9 @@ class DbImportOrchestrator:
             print(f"[INFO] Found {len(existing_peptides)} existing peptide identifiers in DB")
 
             skipped_count = 0
-            for row in tqdm(rows, desc="Syncing to database", unit="row"):
+            total = len(rows)
+            synced_count = 0
+            for idx, row in enumerate(rows, start=1):
                 row_id = row.get("name") or row.get("peptide_name") or str(list(row.values())[:1])
 
                 # Extract peptide name from CSV row and generate slug for matching
@@ -85,65 +86,114 @@ class DbImportOrchestrator:
                 # Skip if this peptide doesn't exist in DB
                 if row_slug not in existing_peptides and raw_name.lower() not in existing_peptides:
                     skipped_count += 1
-                    print(f"  [SKIP] Peptide '{raw_name}' not found in DB — skipping")
+                    print(f"\n{raw_name}")
+                    print(f"  → Skipped: not found in DB")
                     continue
 
-                # Map raw row to payload
+                print(f"\n{raw_name}")
+
+                # Stage 1: Map raw row to payload
+                print(f"  Stage 1: Mapping raw row to structured payload")
                 try:
                     payload = self.map_row(row)
+                    ga = payload["group_a"]
+                    s1_summary = (
+                        f"{len(ga['dosages'])} dosages, "
+                        f"{len(ga['benefits'])} benefits, "
+                        f"{len(ga['side_effects'])} side effects, "
+                        f"{len(ga['schedules'])} schedules, "
+                        f"{len(ga['studies'])} references"
+                    )
+                    print(f"         → mapped: {s1_summary}")
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "map_row", e)
+                    print(f"  ✗ Stage 1 failed: {e}")
                     continue
 
-                # 1. Process Group A (Independent Lookups)
+                # Stage 2: Sync Group A lookup tables
+                print(f"  Stage 2: Syncing lookup tables (dosages, benefits, side effects, schedules)")
                 try:
-                    self._sync_group_a(db, payload["group_a"])
+                    a_summary = self._sync_group_a(db, payload["group_a"])
+                    print(f"         → {a_summary}")
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "group_a", e)
 
-                # 2. Process Group B (Peptides) — must succeed to continue
+                # Stage 3: Upsert peptide record — check before to detect insert vs update
+                print(f"  Stage 3: Upserting peptide record")
                 try:
+                    peptide_slug = payload["group_b"]["peptide"].get("slug")
+                    pre_existing = db.get_peptide_by_slug(peptide_slug)
                     peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
+                    if not pre_existing:
+                        print(f"         → inserted new peptide record")
+                    else:
+                        # Count how many fields were null before and now have values
+                        pep_payload = payload["group_b"]["peptide"]
+                        filled = sum(
+                            1 for col, val in pep_payload.items()
+                            if val and (pre_existing.get(col) is None or pre_existing.get(col) == "")
+                        )
+                        if filled:
+                            print(f"         → updated {filled} previously empty field(s)")
+                        else:
+                            print(f"         → already complete, no changes")
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "group_b", e)
+                    print(f"  ✗ Stage 3 failed: {e}")
                     continue
 
-                # 3. Process Relations (Groups C-F)
+                # Stage 4: Link relations, protocols, graph data
+                print(f"  Stage 4: Linking relations, protocols, and graph data")
                 try:
-                    self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], payload["graph_data"])
+                    r_count = self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], payload["graph_data"])
+                    print(f"         → {r_count} relation record(s) processed")
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "relations", e)
 
+                synced_count += 1
+                print(f"  ✓ Done")
+
             if skipped_count > 0:
                 print(f"[INFO] Skipped {skipped_count} peptide(s) not found in DB")
+            print(f"[INFO] Synced {synced_count} peptide(s) successfully")
         finally:
             db.close()
 
-    def _sync_group_a(self, db: DbManager, group_a: Dict[str, Any]):
+    def _sync_group_a(self, db: DbManager, group_a: Dict[str, Any]) -> str:
+        """Sync Group A lookup tables and return a short summary string."""
+        counts = {"methods": 0, "benefits": 0, "side_effects": 0, "dosages": 0, "schedules": 0, "references": 0}
         for am in group_a["administration_methods"]:
             db.insert_lookup("administration_methods", am["name"], description=am.get("description"))
+            counts["methods"] += 1
         for b in group_a["benefits"]:
             db.insert_lookup("benefits", b["name"], description=b.get("description"))
+            counts["benefits"] += 1
         for se in group_a["side_effects"]:
             db.insert_lookup("side_effects", se["name"], description=se.get("description"))
+            counts["side_effects"] += 1
         for d in group_a["dosages"]:
-            # Uses amount_str to find/create dosage
             db._get_or_create_dosage_id(d["amount"])
+            counts["dosages"] += 1
         for s in group_a["schedules"]:
             db.insert_lookup("schedules", s["name"], frequency=s.get("frequency"))
+            counts["schedules"] += 1
         for st in group_a["studies"]:
             if st.get("type") == "study":
                 db.upsert_research_study(st)
             else:
                 db.upsert_citation(st)
+            counts["references"] += 1
         for place in group_a.get("application_places", []):
             db.insert_lookup("application_places", place)
+        parts = [f"{v} {k}" for k, v in counts.items() if v]
+        return ", ".join(parts) if parts else "nothing to sync"
 
-    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]], graph_data: List[Dict[str, Any]]):
+    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]], graph_data: List[Dict[str, Any]]) -> int:
+        """Sync relations and return total count of records processed."""
         # Link Benefits (Group C)
         for b in relations["benefits"]:
             b_id = db.get_lookup_id("benefits", b["benefit_name"])

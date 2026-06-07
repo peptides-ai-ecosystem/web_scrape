@@ -10,7 +10,7 @@ from src.utils.crawl_peptide_urls import crawl_peptide_urls
 from src.services.scraper_manager import ScraperManager
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
 from src.mappers.db_import_orchestrator_v2 import DbImportOrchestratorV2
-from src.infrastructure.db import DbManager
+from src.infrastructure.db.service import DbManager
 from src.infrastructure.csv_storage import CSVStorage
 
 MODULE_NAME="main"
@@ -51,10 +51,12 @@ def scrape_peptides(args) -> None:
 
 
 
-def db_sync() -> None:
+def db_sync(args) -> None:
     """Sync CSV data to database (v1 — original)."""
     csv_store = CSVStorage()
     rows = csv_store.read()
+    if getattr(args, "limit", None) is not None:
+        rows = rows[:args.limit]
 
     tracker = ErrorTracker()
     orchestrator = DbImportOrchestrator()
@@ -69,10 +71,12 @@ def db_sync() -> None:
         print("Sync completed successfully with no errors.")
 
 
-def db_sync_v2() -> None:
+def db_sync_v2(args) -> None:
     """Sync CSV data to database (v2 — optimized: single tx per row, ON CONFLICT upserts)."""
     csv_store = CSVStorage()
     rows = csv_store.read()
+    if getattr(args, "limit", None) is not None:
+        rows = rows[:args.limit]
 
     tracker = ErrorTracker()
     orchestrator = DbImportOrchestratorV2()
@@ -90,7 +94,13 @@ def delete_peptide(slug: str) -> None:
     """Delete a peptide and its related data by slug."""
     db = DbManager(os.getenv("DATABASE_URL"))
     try:
-        db.delete_peptide_data(slug)
+        deleted = db.delete_peptide_data(slug)
+        if deleted:
+            print(f"[INFO] Deleted peptide {slug} and its related data.")
+        else:
+            print(f"[WARNING] Peptide with slug '{slug}' not found.")
+    except Exception as e:
+        print(f"[ERROR] Failed to delete peptide {slug}: {e}")
     finally:
         db.close()
 
@@ -134,14 +144,14 @@ def main() -> None:
     if not any_flag:
         # Default: run full pipeline
         scrape_peptides(args)
-        db_sync()
+        db_sync(args)
     else:
         if args.scrape:
             scrape_peptides(args)
         if args.sync:
-            db_sync()
+            db_sync(args)
         if args.sync_v2:
-            db_sync_v2()
+            db_sync_v2(args)
 
 if __name__ == "__main__":
     main()

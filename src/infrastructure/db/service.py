@@ -113,9 +113,9 @@ class DbService:
         
         return protocol_id
 
-    def delete_peptide_full(self, slug: str):
+    def delete_peptide_full(self, slug: str) -> bool:
         """Delete a peptide and all its related data."""
-        self.peptide.delete_peptide_cascading(slug)
+        return self.peptide.delete_peptide_cascading(slug)
 
 
 # Legacy DbManager compatibility wrapper
@@ -212,8 +212,8 @@ class DbManager:
         """Fetch all existing peptide slugs and lowercase names for pre-filtering."""
         return self.service.peptide.get_all_identifiers()
 
-    def delete_peptide_data(self, slug: str):
-        self.service.delete_peptide_full(slug)
+    def delete_peptide_data(self, slug: str) -> bool:
+        return self.service.delete_peptide_full(slug)
 
 
 class DbPool:

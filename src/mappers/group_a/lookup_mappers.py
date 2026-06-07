@@ -120,7 +120,7 @@ class DosageMapper(BaseMapper):
                 amount, unit = parse_dosage_string(dose)
                 dosages.append({"amount": amount, "unit": unit})
                 
-        print(f"  [MAP_DOSAGE] Extracted {len(dosages)} dosages", dosages)
+
         return dosages
 
 
