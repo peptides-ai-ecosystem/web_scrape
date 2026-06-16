@@ -73,6 +73,20 @@ class DbImportOrchestrator:
             existing_peptides = db.get_all_peptide_identifiers()
             print(f"[INFO] Found {len(existing_peptides)} existing peptide identifiers in DB")
 
+            # Pre-fetch all existing administration methods from DB
+            db_admin_methods = db.get_all_administration_methods()
+            existing_method_names = {m["name"] for m in db_admin_methods}
+            print(f"[INFO] Found {len(existing_method_names)} administration methods in DB: {existing_method_names}")
+
+            # Keyword-to-DB-name mapping rules
+            METHOD_KEYWORD_MAP = {
+                "nasal": "Nasal Spray",
+                "intranasal": "Nasal Spray",
+                "topical": "Topical Cream",
+                "oral": "Capsule",
+                "injectable": "Injectable",
+            }
+
             skipped_count = 0
             total = len(rows)
             synced_count = 0
@@ -87,10 +101,35 @@ class DbImportOrchestrator:
                 if row_slug not in existing_peptides and raw_name.lower() not in existing_peptides:
                     skipped_count += 1
                     print(f"\n{raw_name}")
-                    print(f"  → Skipped: not found in DB")
+                    print(f"  → Skipped: not found in Peptides table")
                     continue
 
-                print(f"\n{raw_name}")
+                # Stage 0.5: Map Administrative Method and filter
+                raw_method = str(row.get("Method") or "").strip()
+                # If multiple methods, only take the first one
+                first_method_part = raw_method.split(",")[0].strip().lower()
+                
+                # Resolve CSV keyword to a DB method name
+                mapped_method = None
+                for keyword, method_name in METHOD_KEYWORD_MAP.items():
+                    if keyword in first_method_part:
+                        mapped_method = method_name
+                        break
+                
+                # Skip if keyword didn't match or mapped method doesn't exist in DB
+                if not mapped_method or mapped_method not in existing_method_names:
+                    skipped_count += 1
+                    print(f"\n{raw_name}")
+                    if mapped_method and mapped_method not in existing_method_names:
+                        print(f"  → Skipped: mapped method '{mapped_method}' does not exist in  administrative method table")
+                    else:
+                        print(f"  → Skipped: administrative method '{raw_method}' has no mapping")
+                    continue
+                
+                # Overwrite the row's method so downstream mappers use the DB method name
+                row["Method"] = mapped_method
+
+                print(f"\n{raw_name} : {mapped_method}")
 
                 # Stage 1: Map raw row to payload
                 print(f"  Stage 1: Mapping raw row to structured payload")
