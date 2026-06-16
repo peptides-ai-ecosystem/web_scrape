@@ -14,6 +14,7 @@ from src.mappers.group_d.protocol_mapper import ProtocolMapper
 from src.mappers.group_d.graph_mapper import GraphMapper
 from src.infrastructure.db import DbManager
 from src.utils.error_tracker import ErrorTracker
+from src.config import log_debug, log_error
 
 class DbImportOrchestrator:
     """
@@ -69,6 +70,7 @@ class DbImportOrchestrator:
         """
         db = DbManager(db_url)
         try:
+            log_debug(f"Starting database sync for {len(rows)} rows", "db_import_orchestrator")
             # Pre-fetch all existing peptide identifiers (slugs + lowercase names)
             existing_peptides = db.get_all_peptide_identifiers()
             print(f"[INFO] Found {len(existing_peptides)} existing peptide identifiers in DB")
@@ -100,8 +102,7 @@ class DbImportOrchestrator:
                 # Skip if this peptide doesn't exist in DB
                 if row_slug not in existing_peptides and raw_name.lower() not in existing_peptides:
                     skipped_count += 1
-                    print(f"\n{raw_name}")
-                    print(f"  → Skipped: not found in Peptides table")
+                    log_debug(f"Skipped: {raw_name} - not found in Peptides table", "db_import_orchestrator")
                     continue
 
                 # Stage 0.5: Map Administrative Method and filter
@@ -119,17 +120,17 @@ class DbImportOrchestrator:
                 # Skip if keyword didn't match or mapped method doesn't exist in DB
                 if not mapped_method or mapped_method not in existing_method_names:
                     skipped_count += 1
-                    print(f"\n{raw_name}")
                     if mapped_method and mapped_method not in existing_method_names:
-                        print(f"  → Skipped: mapped method '{mapped_method}' does not exist in  administrative method table")
+                        log_debug(f"Skipped: {raw_name} - mapped method '{mapped_method}' does not exist in administrative method table", "db_import_orchestrator")
                     else:
-                        print(f"  → Skipped: administrative method '{raw_method}' has no mapping")
+                        log_debug(f"Skipped: {raw_name} - administrative method '{raw_method}' has no mapping", "db_import_orchestrator")
                     continue
                 
                 # Overwrite the row's method so downstream mappers use the DB method name
                 row["Method"] = mapped_method
 
                 print(f"\n{raw_name} : {mapped_method}")
+                log_debug(f"Processing peptide: {raw_name} with method: {mapped_method}", "db_import_orchestrator")
 
                 # Stage 1: Map raw row to payload
                 print(f"  Stage 1: Mapping raw row to structured payload")
@@ -198,7 +199,9 @@ class DbImportOrchestrator:
 
             if skipped_count > 0:
                 print(f"[INFO] Skipped {skipped_count} peptide(s) not found in DB")
+                log_debug(f"Skipped {skipped_count} peptides during sync", "db_import_orchestrator")
             print(f"[INFO] Synced {synced_count} peptide(s) successfully")
+            log_debug(f"Successfully synced {synced_count} peptides", "db_import_orchestrator")
         finally:
             db.close()
 

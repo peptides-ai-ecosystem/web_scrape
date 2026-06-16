@@ -61,7 +61,9 @@ def db_sync(args) -> None:
     tracker = ErrorTracker()
     orchestrator = DbImportOrchestrator()
     print("Starting sync...")
+    log_debug("Starting database sync (v1)", MODULE_NAME)
     orchestrator.sync_to_db(os.getenv("DATABASE_URL"), rows, tracker=tracker)
+    log_debug("Database sync (v1) completed", MODULE_NAME)
     print("Sync completed.")
     if tracker.has_errors():
         report_path = tracker.save(OUTPUT_DIR / "tracker_report.json")
