@@ -14,6 +14,7 @@ from src.mappers.group_d.protocol_mapper import ProtocolMapper
 from src.mappers.group_d.graph_mapper import GraphMapper
 from src.infrastructure.db import DbManager
 from src.utils.error_tracker import ErrorTracker
+from src.utils.peptide_utils import get_peptide_candidates, extract_essence, normalize_to_slug
 from src.config import log_debug, log_error
 
 class DbImportOrchestrator:
@@ -71,9 +72,10 @@ class DbImportOrchestrator:
         db = DbManager(db_url)
         try:
             log_debug(f"Starting database sync for {len(rows)} rows", "db_import_orchestrator")
-            # Pre-fetch all existing peptide identifiers (slugs + lowercase names)
-            existing_peptides = db.get_all_peptide_identifiers()
-            print(f"[INFO] Found {len(existing_peptides)} existing peptide identifiers in DB")
+            # Pre-fetch all existing peptide identifiers and their essences
+            db_identifiers = db.get_all_peptide_identifiers()
+            db_essences = {extract_essence(ident): ident for ident in db_identifiers}
+            print(f"[INFO] Found {len(db_identifiers)} peptides in DB, {len(db_essences)} unique essences")
 
             # Pre-fetch all existing administration methods from DB
             db_admin_methods = db.get_all_administration_methods()
@@ -95,15 +97,28 @@ class DbImportOrchestrator:
             for idx, row in enumerate(rows, start=1):
                 row_id = row.get("name") or row.get("peptide_name") or str(list(row.values())[:1])
 
-                # Extract peptide name from CSV row and generate slug for matching
+                # Extract peptide name from CSV row and generate candidate slugs
                 raw_name = (row.get("Peptide_Name") or row.get("name") or "").strip()
-                row_slug = re.sub(r'[^a-z0-9]+', '-', raw_name.lower()).strip('-')
+                candidates = get_peptide_candidates(raw_name)
+                
+                # Match candidates against DB identifiers or essences
+                matched_identifier = None
+                for cand in candidates:
+                    if cand in db_identifiers:
+                        matched_identifier = cand
+                        break
+                    if cand in db_essences:
+                        matched_identifier = db_essences[cand]
+                        break
 
                 # Skip if this peptide doesn't exist in DB
-                if row_slug not in existing_peptides and raw_name.lower() not in existing_peptides:
+                if not matched_identifier:
                     skipped_count += 1
-                    log_debug(f"Skipped: {raw_name} - not found in Peptides table", "db_import_orchestrator")
+                    log_debug(f"Skipped: {raw_name} - no match found in Peptides table (candidates: {candidates})", "db_import_orchestrator")
                     continue
+
+                # Use the matched identifier for slug-based lookups
+                row_slug = matched_identifier
 
                 # Stage 0.5: Map Administrative Method and filter
                 raw_method = str(row.get("Method") or "").strip()

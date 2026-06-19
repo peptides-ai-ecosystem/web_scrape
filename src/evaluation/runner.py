@@ -17,6 +17,8 @@ from src.evaluation.csv_expectation_builder import CsvExpectationBuilder
 from src.evaluation.db_actual_fetcher import DbActualFetcher
 from src.evaluation.evaluation_engine import EvaluationEngine
 from src.evaluation.reporter import EvaluationReporter
+from src.infrastructure.db.service import DbManager
+from src.utils.peptide_utils import find_best_match, extract_essence
 
 
 def run_evaluation(
@@ -64,13 +66,21 @@ def run_evaluation(
     engine   = EvaluationEngine()
     reporter = EvaluationReporter()
 
-    results = []
-    skipped = 0
-
+    # Pre-fetch all existing peptide identifiers and their essences for matching
+    db_manager = DbManager(db_url)
     try:
+        db_identifiers = db_manager.get_all_peptide_identifiers()
+        db_essences = {extract_essence(ident): ident for ident in db_identifiers}
+
+        results = []
+        skipped = 0
+
         for row in rows:
             raw_name = (row.get("Peptide_Name") or row.get("name") or "").strip()
 
+            # Use robust matching to find the peptide in DB
+            matched_identifier = find_best_match(raw_name, db_identifiers, db_essences)
+            
             # Build expected payload (mirrors orchestrator filter logic)
             expected = builder.build(row)
             if expected is None:
@@ -78,6 +88,10 @@ def run_evaluation(
                 skipped += 1
                 continue
 
+            # If we matched a different identifier, update the expected slug
+            if matched_identifier:
+                expected["slug"] = matched_identifier
+            
             slug = expected["slug"]
             print(f"[EVAL] Checking {raw_name!r} (slug: {slug})")
 
@@ -90,6 +104,7 @@ def run_evaluation(
 
     finally:
         fetcher.close()
+        db_manager.close()
 
     if skipped:
         print(f"\n[EVAL] Skipped {skipped} row(s) with unmappable methods")
