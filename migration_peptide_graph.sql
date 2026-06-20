@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS peptide_graph (
     id SERIAL PRIMARY KEY,
     peptide_id INTEGER REFERENCES peptides(id) ON DELETE CASCADE,
     administration_method_id INTEGER REFERENCES administration_methods(id),
+    action_type VARCHAR(20) NOT NULL DEFAULT 'scraped' CHECK (action_type IN ('scraped', 'manual')),
     time_range VARCHAR(50),
     peak_concentration VARCHAR(255),
     half_life VARCHAR(255),
