@@ -11,7 +11,6 @@ from src.mappers.group_a.lookup_mappers import (
 from src.mappers.group_b.peptide_mapper import PeptideMapper
 from src.mappers.group_c.relation_mappers import RelationMapper
 from src.mappers.group_d.protocol_mapper import ProtocolMapper
-from src.mappers.group_d.graph_mapper import GraphMapper
 from src.infrastructure.db import DbManager
 from src.utils.error_tracker import ErrorTracker
 from src.utils.peptide_utils import get_peptide_candidates, extract_essence, normalize_to_slug
@@ -37,7 +36,6 @@ class DbImportOrchestrator:
         # Groups C-F
         self.relation_mapper = RelationMapper()
         self.protocol_mapper = ProtocolMapper()
-        self.graph_mapper = GraphMapper()
 
     def map_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -60,8 +58,7 @@ class DbImportOrchestrator:
                 "peptide": self.peptide_mapper.map(row)
             },
             "relations": self.relation_mapper.map(row),
-            "protocols": protocols,
-            "graph_data": self.graph_mapper.map(row)
+            "protocols": protocols
         }
 
     def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None):
@@ -200,10 +197,10 @@ class DbImportOrchestrator:
                     print(f"  ✗ Stage 3 failed: {e}")
                     continue
 
-                # Stage 4: Link relations, protocols, graph data
-                print(f"  Stage 4: Linking relations, protocols, and graph data")
+                # Stage 4: Link relations, protocols
+                print(f"  Stage 4: Linking relations and protocols")
                 try:
-                    r_count = self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], payload["graph_data"])
+                    r_count = self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"])
                     print(f"         → {r_count} relation record(s) processed")
                 except Exception as e:
                     if tracker:
@@ -249,7 +246,7 @@ class DbImportOrchestrator:
         parts = [f"{v} {k}" for k, v in counts.items() if v]
         return ", ".join(parts) if parts else "nothing to sync"
 
-    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]], graph_data: List[Dict[str, Any]]) -> int:
+    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]]) -> int:
         """Sync relations and return total count of records processed."""
         # Link Benefits (Group C)
         for b in relations["benefits"]:
@@ -299,14 +296,3 @@ class DbImportOrchestrator:
             for dose in p["dosages"]:
                 # Dose already has 'notes' formatted
                 db.upsert_protocol_dosage(protocol_id, dose)
-        
-        # Link Graph Data (Group D)
-        for gd in graph_data:
-            method_name = gd.get("method", "Injectable")
-            # Ensure the method name is normalized to match lookup table (Injectable, Oral, etc.)
-            am_id = db.get_lookup_id("administration_methods", method_name)
-            if am_id:
-                db.upsert_graph_data(peptide_id, am_id, gd)
-            else:
-                # Fallback to 'Injectable' (ID 1) if lookup fails
-                db.upsert_graph_data(peptide_id, 1, gd)

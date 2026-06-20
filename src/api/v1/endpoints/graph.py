@@ -14,7 +14,7 @@ if project_root not in sys.path:
 
 from src.infrastructure.db import DbPool
 
-router = APIRouter(prefix="/api")
+router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,39 @@
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from pydantic import BaseModel
+from typing import Optional
+import os
+
+from src.evaluation.runner import run_evaluation
+from src.config import MASTER_CSV, log_debug, log_error
+
+router = APIRouter()
+
+class EvaluationRequest(BaseModel):
+    limit: Optional[int] = None
+    output_json: Optional[str] = None
+
+
+def run_core_evaluation_task(limit: Optional[int], output_json: Optional[str], db_url: str, csv_path: str):
+    try:
+        run_evaluation(db_url, csv_path, limit=limit, output_json=output_json)
+    except Exception as e:
+        log_error(f"Fatal error during core evaluation task: {e}", "evaluation_endpoint")
+
+
+@router.post("/core")
+async def start_core_evaluation(request: EvaluationRequest, background_tasks: BackgroundTasks):
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not configured.")
+        
+    csv_path = str(MASTER_CSV)
+    background_tasks.add_task(run_core_evaluation_task, request.limit, request.output_json, db_url, csv_path)
+    return {"message": "Core Database Evaluation started in the background", "limit": request.limit, "output_json": request.output_json}
+
+@router.post("/graph")
+async def start_graph_evaluation(request: EvaluationRequest, background_tasks: BackgroundTasks):
+    """
+    To be fully implemented natively as Graph Evaluation is required.
+    For now, return a placeholder as the evaluation pipeline is focused on core mappings.
+    """
+    return {"message": "Graph Database Evaluation pipeline isolated. Feature pending full evaluation mapping."}
