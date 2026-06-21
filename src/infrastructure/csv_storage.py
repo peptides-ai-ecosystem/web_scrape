@@ -57,15 +57,10 @@ class CSVStorage(IStorage):
             
             if rows:
                 df = pd.DataFrame(rows)
-                # Append to existing CSV if it exists, otherwise create new
-                if os.path.exists(MASTER_CSV):
-                    df.to_csv(MASTER_CSV, mode='a', header=False, index=False)
-                    log_debug(f"Successfully appended {len(rows)} rows to {MASTER_CSV}", "csv_storage.py")
-                    print(f"[INFO] Appended {len(rows)} rows to {MASTER_CSV}")
-                else:
-                    df.to_csv(MASTER_CSV, index=False)
-                    log_debug(f"Successfully created and saved {len(rows)} rows to {MASTER_CSV}", "csv_storage.py")
-                    print(f"[INFO] Data saved to {MASTER_CSV}")
+                # Overwrite existing CSV on each save.
+                df.to_csv(MASTER_CSV, index=False)
+                log_debug(f"Successfully saved {len(rows)} rows to {MASTER_CSV} (overwrote previous)", "csv_storage.py")
+                print(f"[INFO] Data overwrote {MASTER_CSV} with {len(rows)} rows")
         except Exception as e:
             error_msg = f"Failed to save CSV: {str(e)}"
             print(f"[ERROR] {error_msg}")
