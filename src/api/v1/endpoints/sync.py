@@ -179,6 +179,69 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
             tracker.print_summary()
 
 
+def run_graph_sync_missing_task(job_id: str, requested_urls: Optional[List[str]], limit: Optional[int], db_url: str):
+    """
+    Background task: discover/resolve URLs → scrape → sync to graph DB tables (only if missing).
+    """
+    queue = get_job_queue()
+    job = queue.get_job(job_id)
+    if not job:
+        return
+
+    job.start()
+    tracker = ErrorTracker()
+
+    try:
+        # Step 1: Resolve URLs
+        urls = _resolve_urls(requested_urls, limit)
+        if not urls:
+            job.fail("No URLs discovered or provided. Sync aborted.")
+            return
+
+        log_debug(f"Graph Missing sync starting scrape for {len(urls)} URLs", "sync_endpoint")
+
+        # Step 2: Scrape → writes to MASTER_CSV
+        manager = ScraperManager()
+        manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED)
+
+        if job.status == JobStatus.CANCELLED:
+            log_debug("Job cancelled during scraping. Aborting DB sync.", "sync_endpoint")
+            return
+
+        # Step 3: Read scraped data from CSV
+        csv_store = CSVStorage()
+        rows = csv_store.read()
+
+        if not rows:
+            log_debug("Scrape produced no rows. Completing with 0 rows processed.", "sync_endpoint")
+            job.complete({
+                "urls_scraped": len(urls),
+                "rows_processed": 0,
+                "scrape_errors": len(tracker.scrape_errors) if tracker.has_errors() else 0,
+                "db_errors": 0,
+            })
+            return
+
+        # Step 4: Sync to graph DB tables
+        orchestrator = GraphImportOrchestrator()
+        orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker)
+
+        job.complete({
+            "urls_scraped": len(urls),
+            "rows_processed": len(rows),
+            "scrape_errors": len(tracker.scrape_errors) if tracker.has_errors() else 0,
+            "db_errors": len(tracker.db_errors) if tracker.has_errors() else 0,
+        })
+
+    except Exception as e:
+        log_error(f"Fatal error during graph missing sync task: {e}", "sync_endpoint")
+        job.fail(str(e))
+    finally:
+        if tracker.has_errors():
+            tracker.save(OUTPUT_DIR / "tracker_report_graph_missing_sync.json")
+            tracker.print_summary()
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -233,5 +296,33 @@ async def start_graph_sync(request: SyncRequest, background_tasks: BackgroundTas
         "mode": "targeted" if request.urls else "auto-discover",
     })
     background_tasks.add_task(run_graph_sync_task, job.job_id, request.urls, request.limit, db_url)
+
+    return job.to_dict()
+
+
+@router.post("/graph-missing")
+async def start_graph_sync_missing(request: SyncRequest, background_tasks: BackgroundTasks):
+    """
+    Scrape peptide data then sync to graph DB tables only if missing.
+
+    Only syncs graph data for peptides already present in the database 
+    AND where the specific administration method graph data is missing.
+
+    - **urls**: Optional list of specific URLs to scrape.
+    - **limit**: Optional cap on the number of URLs to scrape.
+
+    Returns a `job_id` for tracking progress via `/operations/job/{job_id}`.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not configured.")
+
+    queue = get_job_queue()
+    job = queue.create_job("/sync/graph-missing", {
+        "limit": request.limit,
+        "urls_provided": len(request.urls) if request.urls else 0,
+        "mode": "targeted" if request.urls else "auto-discover",
+    })
+    background_tasks.add_task(run_graph_sync_missing_task, job.job_id, request.urls, request.limit, db_url)
 
     return job.to_dict()
