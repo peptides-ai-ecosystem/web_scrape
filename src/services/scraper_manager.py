@@ -20,20 +20,38 @@ class ScraperManager:
         self.max_processes = max_processes or min(cpu_count(), 4)
         log_debug(f"ScraperManager initialized with {self.max_processes} processes", "scraper_manager.py")
 
-    def run(self, urls: List[str], tracker: ErrorTracker = None):
+    def run(self, urls: List[str], tracker: ErrorTracker = None, cancel_check=None):
         all_results = []
 
         log_debug(f"Starting scrape batch with {len(urls)} URLs", "scraper_manager.py")
 
         with Pool(processes=self.max_processes) as pool:
-            results = list(tqdm(pool.imap_unordered(scrape_url_wrapper, urls), total=len(urls), desc="Scraping URLs", unit="url"))
-
-            for url, p_data_list, errors in results:
-                if p_data_list:
-                    all_results.extend(p_data_list)
-                if errors and tracker:
-                    for err in errors:
-                        tracker.record_scrape_error(err["url"], err["error"], err.get("category"))
+            iterator = pool.imap_unordered(scrape_url_wrapper, urls)
+            
+            with tqdm(total=len(urls), desc="Scraping URLs", unit="url") as pbar:
+                processed_count = 0
+                while processed_count < len(urls):
+                    if cancel_check and cancel_check():
+                        log_debug("Cancellation detected. Terminating scraper pool.", "scraper_manager.py")
+                        pool.terminate()
+                        break
+                    
+                    try:
+                        # Wait up to 2 seconds for a result so we can check cancellation frequently
+                        url, p_data_list, errors = iterator.next(timeout=2.0)
+                        
+                        if p_data_list:
+                            all_results.extend(p_data_list)
+                        if errors and tracker:
+                            for err in errors:
+                                tracker.record_scrape_error(err["url"], err["error"], err.get("category"))
+                                
+                        processed_count += 1
+                        pbar.update(1)
+                    except __import__('multiprocessing').TimeoutError:
+                        continue
+                    except StopIteration:
+                        break
 
         if all_results:
             log_debug(f"Saving {len(all_results)} records to {MASTER_CSV}", "scraper_manager.py")

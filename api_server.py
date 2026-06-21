@@ -58,8 +58,7 @@ async def home():
                 <p>Welcome to the consolidated Pharmacokinetics API & visualization engine.</p>
                 <h3>System Capabilities:</h3>
                 <ul>
-                    <li><strong>Scraping:</strong> Trigger URL crawling and extraction</li>
-                    <li><strong>Syncing:</strong> Core logic mapping and isolated graph syncing</li>
+                    <li><strong>Syncing:</strong> Scrape URLs (auto-discover or targeted) then sync to core or graph DB tables</li>
                     <li><strong>Evaluation:</strong> Testing ingestion robustness</li>
                     <li><strong>Visualization:</strong> Render Pharmacokinetics charts</li>
                 </ul>
