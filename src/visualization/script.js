@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Fetch from API endpoint
-            const apiUrl = `/api/graph/${peptideId}?method=${encodeURIComponent(method)}`;
+            const apiUrl = `/api/v1/graph/${peptideId}?method=${encodeURIComponent(method)}`;
             console.log('Fetching:', apiUrl);
             const response = await fetch(apiUrl);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -409,7 +409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load peptide list on page load
     async function loadPeptidesList() {
         try {
-            const response = await fetch('/api/peptides');
+            const response = await fetch('/api/v1/peptides');
             if (!response.ok) throw new Error('Failed to load peptides list');
             const peptides = await response.json();
             peptideSelect.innerHTML = '<option value="">-- Select a peptide --</option>';
@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            const response = await fetch(`/api/peptide/${peptideId}/methods`);
+            const response = await fetch(`/api/v1/peptide/${peptideId}/methods`);
             if (!response.ok) throw new Error('Failed to load methods');
             const methods = await response.json();
 
@@ -467,7 +467,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load and render graph
     async function loadAndRenderGraph(peptideId, method) {
         try {
-            const response = await fetch(`/api/graph/${peptideId}?method=${encodeURIComponent(method)}`);
+            const response = await fetch(`/api/v1/graph/${peptideId}?method=${encodeURIComponent(method)}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             graphData = await response.json();
             console.log('API Response:', graphData);
