@@ -7,12 +7,22 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.v1.routers import api_router
 
+from src.core.scheduler import start_scheduler, shutdown_scheduler
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Warm up the pool on startup so the first request isn't slow
     from src.api.v1.endpoints.graph import get_pool
     get_pool()
+    
+    # Start the automated scheduler for background sync tasks
+    start_scheduler()
+    
     yield
+    
+    # Stop the automated scheduler cleanly on shutdown
+    shutdown_scheduler()
+    
     # Close all pool connections cleanly on shutdown
     from src.api.v1.endpoints.graph import _pool
     if _pool is not None:

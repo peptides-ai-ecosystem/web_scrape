@@ -3,6 +3,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 
+from src.core.scheduler import start_scheduler, pause_scheduler, resume_scheduler, get_scheduler_status
+from typing import List, Optional
+import os
+
 from src.utils.crawl_peptide_urls import crawl_peptide_urls
 from src.services.scraper_manager import ScraperManager
 from src.infrastructure.csv_storage import CSVStorage
@@ -326,3 +330,42 @@ async def start_graph_sync_missing(request: SyncRequest, background_tasks: Backg
     background_tasks.add_task(run_graph_sync_missing_task, job.job_id, request.urls, request.limit, db_url)
 
     return job.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Scheduler Config Endpoints
+# ---------------------------------------------------------------------------
+
+class SchedulerConfigRequest(BaseModel):
+    interval_hours: Optional[float] = 24.0
+
+@router.get("/scheduler/status")
+async def get_sync_scheduler_status():
+    """
+    Get the status of the combined background sync scheduler.
+    """
+    return get_scheduler_status()
+
+@router.post("/scheduler/start")
+async def start_sync_scheduler(config: SchedulerConfigRequest):
+    """
+    Start or re-configure the combined background sync scheduler.
+    """
+    start_scheduler(interval_hours=config.interval_hours)
+    return {"message": "Scheduler started/configured", "interval_hours": config.interval_hours}
+
+@router.post("/scheduler/pause")
+async def pause_sync_scheduler():
+    """
+    Pause the background sync scheduler.
+    """
+    pause_scheduler()
+    return {"message": "Scheduler paused"}
+
+@router.post("/scheduler/resume")
+async def resume_sync_scheduler():
+    """
+    Resume the background sync scheduler.
+    """
+    resume_scheduler()
+    return {"message": "Scheduler resumed"}
