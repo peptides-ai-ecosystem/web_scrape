@@ -9,7 +9,6 @@ load_dotenv()
 from src.utils.crawl_peptide_urls import crawl_peptide_urls
 from src.services.scraper_manager import ScraperManager
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
-from src.mappers.db_import_orchestrator_v2 import DbImportOrchestratorV2
 from src.infrastructure.db.service import DbManager
 from src.infrastructure.csv_storage import CSVStorage
 from src.evaluation.runner import run_evaluation
@@ -73,26 +72,6 @@ def db_sync(args) -> None:
     else:
         print("Sync completed successfully with no errors.")
 
-
-def db_sync_v2(args) -> None:
-    """Sync CSV data to database (v2 — optimized: single tx per row, ON CONFLICT upserts)."""
-    csv_store = CSVStorage()
-    rows = csv_store.read()
-    if getattr(args, "limit", None) is not None:
-        rows = rows[:args.limit]
-
-    tracker = ErrorTracker()
-    orchestrator = DbImportOrchestratorV2()
-    print("Starting sync (v2 optimized)...")
-    orchestrator.sync_to_db(os.getenv("DATABASE_URL"), rows, tracker=tracker)
-    print("Sync v2 completed.")
-    if tracker.has_errors():
-        report_path = tracker.save(OUTPUT_DIR / "tracker_report.json")
-        tracker.print_summary()
-        print(f"[TRACKER] Report saved to {report_path}")
-    else:
-        print("Sync v2 completed successfully with no errors.")
-
 def delete_peptide(slug: str) -> None:
     """Delete a peptide and its related data by slug."""
     db = DbManager(os.getenv("DATABASE_URL"))
@@ -124,14 +103,12 @@ def setup_argument_parser() -> argparse.ArgumentParser:
     """Configure and return argument parser."""
     parser = argparse.ArgumentParser(
         description="Scrape peptide data and sync to PostgreSQL. "
-                    "By default, runs both scrape and sync (v2). "
+                    "By default, runs both scrape and sync. "
                     "Use flags to run individual steps."
     )
     parser.add_argument("--delete", metavar="SLUG", help="Delete a peptide and its related data by slug")
     parser.add_argument("--scrape", action="store_true", help="Run scraper only (no sync)")
-    parser.add_argument("--sync", action="store_true", help="Run sync only — v1 original (no scraping)")
-    parser.add_argument("--sync-v2", action="store_true", dest="sync_v2",
-                        help="Run sync only — v2 optimized: single tx/row, ON CONFLICT upserts (no scraping)")
+    parser.add_argument("--sync", action="store_true", help="Run sync only (no scraping)")
     parser.add_argument("--evaluate", action="store_true",
                         help="Evaluate sync completeness: compare CSV expectations vs live DB")
     parser.add_argument("--eval-output", metavar="PATH", dest="eval_output",
@@ -146,12 +123,10 @@ def setup_argument_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """Main entry point.
 
-    Default (no flags): runs scrape then sync (v2).
     Individual flags run only that step:
       --scrape     → scrape only
       --sync       → sync v1 only
-      --sync-v2    → sync v2 only
-    """
+   """
     parser = setup_argument_parser()
     args = parser.parse_args()
 
@@ -159,7 +134,7 @@ def main() -> None:
         delete_peptide(args.delete)
         return
 
-    any_flag = args.scrape or args.sync or args.sync_v2 or args.evaluate
+    any_flag = args.scrape or args.sync or args.evaluate
 
     if not any_flag:
         # Default: run full pipeline
@@ -170,8 +145,6 @@ def main() -> None:
             scrape_peptides(args)
         if args.sync:
             db_sync(args)
-        if args.sync_v2:
-            db_sync_v2(args)
         if args.evaluate:
             evaluate_sync(args)
 
