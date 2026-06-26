@@ -72,7 +72,8 @@ class DbActualFetcher:
             "indications": self._fetch_indications(conn, pid),
             "protocols": self._fetch_protocols(conn, pid),
             "references_count": self._count_references(conn, pid),
-            "graph_data_count": self._count_graph_data(conn, pid),
+            # NOTE: graph_data_count removed — graph evaluation is handled
+            # by GraphEvaluator via /evaluation/graph
         }
 
     # ------------------------------------------------------------------
@@ -190,14 +191,6 @@ class DbActualFetcher:
     def _count_references(self, conn, peptide_id: int) -> int:
         rows = self._q(conn,
             "SELECT COUNT(*) AS cnt FROM peptide_references "
-            "WHERE peptide_id = %s",
-            (peptide_id,)
-        )
-        return rows[0]["cnt"] if rows else 0
-
-    def _count_graph_data(self, conn, peptide_id: int) -> int:
-        rows = self._q(conn,
-            "SELECT COUNT(*) AS cnt FROM peptide_graph "
             "WHERE peptide_id = %s",
             (peptide_id,)
         )

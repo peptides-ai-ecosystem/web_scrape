@@ -166,25 +166,8 @@ class EvaluationEngine:
             detail="" if status == "PASS" else f"Expected ≥{len(exp_refs)}, got {act_ref_count}",
         ))
 
-        # ── Check 14: Graph data exists ─────────────────────────────────────
-        act_gd = actual.get("graph_data_count", 0)
-        exp_gd = len(expected.get("graph_data", []))
-        if exp_gd == 0:
-            gd_status = "SKIP"
-            gd_detail = "No graph data expected from CSV"
-        elif act_gd > 0:
-            gd_status = "PASS"
-            gd_detail = ""
-        else:
-            gd_status = "FAIL"
-            gd_detail = "Expected graph data but found none in DB"
-        result.checks.append(CheckResult(
-            name="graph_data_exists",
-            status=gd_status,
-            expected=f"{exp_gd} row(s)",
-            actual=f"{act_gd} row(s)",
-            detail=gd_detail,
-        ))
+        # NOTE: Graph data checks moved to GraphEvaluator (src/evaluation/graph_evaluator.py).
+        # Use the /evaluation/graph endpoint to evaluate graph data separately.
 
         return result
 

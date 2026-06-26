@@ -97,10 +97,14 @@ class DbImportOrchestrator:
                 # Extract peptide name from CSV row and generate candidate slugs
                 raw_name = (row.get("Peptide_Name") or row.get("name") or "").strip()
                 candidates = get_peptide_candidates(raw_name)
+                # Sort longest-first to prefer more specific slugs (e.g.
+                # "hexarelin-examorelin" over "hexarelin") and avoid false
+                # matches when a shorter slug belongs to a different peptide.
+                sorted_candidates = sorted(candidates, key=len, reverse=True)
                 
                 # Match candidates against DB identifiers or essences
                 matched_identifier = None
-                for cand in candidates:
+                for cand in sorted_candidates:
                     if cand in db_identifiers:
                         matched_identifier = cand
                         break

@@ -63,11 +63,16 @@ def get_peptide_candidates(raw_name: str) -> Set[str]:
 def find_best_match(raw_name: str, db_identifiers: Set[str], db_essences: Dict[str, str]) -> Optional[str]:
     """
     Finds the best matching identifier in the DB for a given raw name.
-    1. Try candidates against exact DB identifiers.
+    1. Try candidates against exact DB identifiers (preferring longest/full match first).
     2. Try candidates against DB essences.
     """
     candidates = get_peptide_candidates(raw_name)
-    for cand in candidates:
+    # Sort candidates by length descending so longer/more-specific slugs
+    # (e.g. "hexarelin-examorelin") are checked before shorter ones
+    # (e.g. "hexarelin").  This avoids false matches when a shorter slug
+    # happens to exist as a *different* peptide in the database.
+    sorted_candidates = sorted(candidates, key=len, reverse=True)
+    for cand in sorted_candidates:
         if cand in db_identifiers:
             return cand
         if cand in db_essences:
