@@ -7,7 +7,7 @@ import json
 class GraphRepository(BaseRepository):
     """Repository for peptide graph data (pharmacokinetics) operations."""
 
-    def upsert(self, peptide_id: int, am_id: int, graph_data: Dict[str, Any]):
+    def upsert(self, peptide_id: int, am_id: int, graph_data: Dict[str, Any], action_type: str = 'manual'):
         """Upserts pharmacokinetics graph data."""
         with self.get_cursor() as cur:
             cur.execute(
@@ -31,15 +31,15 @@ class GraphRepository(BaseRepository):
             if row:
                 graph_id = row['id']
                 set_clause = ", ".join([f"{col} = %s" for col in fields.keys()])
-                set_clause += ", updated_at = NOW()"
-                params = list(fields.values()) + [graph_id]
+                set_clause += ", action_type = %s, updated_at = NOW()"
+                params = list(fields.values()) + [action_type, graph_id]
                 cur.execute(f"UPDATE peptide_graph SET {set_clause} WHERE id = %s", params)
                 self._commit()
                 self.log_operation("UPDATE_GRAPH", "peptide_graph", 
                     f"Peptide {peptide_id}: '{graph_data['time_range']}'")
             else:
-                cols = ["peptide_id", "administration_method_id", "time_range"] + list(fields.keys())
-                vals = [peptide_id, am_id, graph_data['time_range']] + list(fields.values())
+                cols = ["peptide_id", "administration_method_id", "time_range", "action_type"] + list(fields.keys())
+                vals = [peptide_id, am_id, graph_data['time_range'], action_type] + list(fields.values())
                 placeholders = ", ".join(["%s"] * len(vals))
                 cur.execute(
                     f"INSERT INTO peptide_graph ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",

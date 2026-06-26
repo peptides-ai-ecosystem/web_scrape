@@ -15,7 +15,7 @@ from src.config import log_debug, log_error, OUTPUT_DIR
 scheduler = AsyncIOScheduler()
 SYNC_JOB_ID = "scheduled_combined_sync"
 
-def run_combined_sync_job():
+def run_combined_sync_job(limit: int | None = None):
     """
     The background task that performs discovery, scraping, core sync, and graph missing sync.
     Runs in a separate thread so it won't block the FastAPI event loop.
@@ -35,6 +35,10 @@ def run_combined_sync_job():
             log_debug("No URLs discovered during scheduled sync.", "scheduler")
             return
             
+        if limit and limit > 0:
+            urls = urls[:limit]
+            log_debug(f"Limited scheduled sync to {limit} URLs.", "scheduler")
+            
         # 2. Scrape CSV
         manager = ScraperManager()
         # Scheduled job runs till completion
@@ -53,7 +57,7 @@ def run_combined_sync_job():
         
         # 5. Graph Missing Sync
         graph_orchestrator = GraphImportOrchestrator()
-        graph_orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker)
+        graph_orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker, action_type="scraped")
         
         log_debug("Completed scheduled combined sync successfully.", "scheduler")
         
@@ -65,18 +69,19 @@ def run_combined_sync_job():
             tracker.print_summary()
 
 
-def start_scheduler(interval_hours: float = 24.0):
+def start_scheduler(interval_hours: float = 12.0, interval_minutes: float = 0.0, limit: int | None = None):
     if not scheduler.running:
         scheduler.start()
     
     # Try to add or replace the job
     scheduler.add_job(
         run_combined_sync_job,
-        trigger=IntervalTrigger(hours=interval_hours),
+        trigger=IntervalTrigger(hours=interval_hours, minutes=interval_minutes),
+        args=[limit],
         id=SYNC_JOB_ID,
         replace_existing=True
     )
-    log_debug(f"Scheduler started/updated with interval {interval_hours} hours.", "scheduler")
+    log_debug(f"Scheduler started/updated: {interval_hours}h {interval_minutes}m interval, limit: {limit}.", "scheduler")
     
 
 def pause_scheduler():
@@ -96,12 +101,22 @@ def resume_scheduler():
 def get_scheduler_status() -> dict:
     job = scheduler.get_job(SYNC_JOB_ID)
     if job:
-        interval_hours = getattr(job.trigger, 'interval', None)
-        hours = interval_hours.total_seconds() / 3600.0 if interval_hours else 0
+        interval_td = getattr(job.trigger, 'interval', None)
+        if interval_td:
+            total_seconds = interval_td.total_seconds()
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) / 60.0
+        else:
+            hours = 0
+            minutes = 0
+            
+        limit = job.args[0] if job.args else None
         next_run = job.next_run_time.isoformat() if job.next_run_time else None
         return {
             "status": "running" if job.next_run_time else "paused", 
             "interval_hours": hours, 
+            "interval_minutes": minutes,
+            "limit": limit,
             "next_run_time": next_run
         }
     else:

@@ -165,7 +165,7 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
 
         # Step 4: Sync to graph DB tables
         orchestrator = GraphImportOrchestrator()
-        orchestrator.sync_graph_data(db_url, rows, tracker=tracker)
+        orchestrator.sync_graph_data(db_url, rows, tracker=tracker, action_type="manual")
 
         job.complete({
             "urls_scraped": len(urls),
@@ -228,7 +228,7 @@ def run_graph_sync_missing_task(job_id: str, requested_urls: Optional[List[str]]
 
         # Step 4: Sync to graph DB tables
         orchestrator = GraphImportOrchestrator()
-        orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker)
+        orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker, action_type="manual")
 
         job.complete({
             "urls_scraped": len(urls),
@@ -337,7 +337,9 @@ async def start_graph_sync_missing(request: SyncRequest, background_tasks: Backg
 # ---------------------------------------------------------------------------
 
 class SchedulerConfigRequest(BaseModel):
-    interval_hours: Optional[float] = 24.0
+    interval_hours: Optional[float] = 12.0
+    interval_minutes: Optional[float] = 0.0
+    limit: Optional[int] = None
 
 @router.get("/scheduler/status")
 async def get_sync_scheduler_status():
@@ -351,8 +353,17 @@ async def start_sync_scheduler(config: SchedulerConfigRequest):
     """
     Start or re-configure the combined background sync scheduler.
     """
-    start_scheduler(interval_hours=config.interval_hours)
-    return {"message": "Scheduler started/configured", "interval_hours": config.interval_hours}
+    start_scheduler(
+        interval_hours=config.interval_hours, 
+        interval_minutes=config.interval_minutes, 
+        limit=config.limit
+    )
+    return {
+        "message": "Scheduler started/configured", 
+        "interval_hours": config.interval_hours,
+        "interval_minutes": config.interval_minutes,
+        "limit": config.limit
+    }
 
 @router.post("/scheduler/pause")
 async def pause_sync_scheduler():

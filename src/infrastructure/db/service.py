@@ -196,8 +196,8 @@ class DbManager:
     def _get_or_create_dosage_id(self, amount_str: str, create: bool = True) -> Optional[int]:
         return self.service.dosage.get_or_create_dosage_id(amount_str, create)
 
-    def upsert_graph_data(self, peptide_id: int, am_id: int, graph_data: Dict[str, Any]):
-        self.service.graph.upsert(peptide_id, am_id, graph_data)
+    def upsert_graph_data(self, peptide_id: int, am_id: int, graph_data: Dict[str, Any], action_type: str = 'manual'):
+        self.service.graph.upsert(peptide_id, am_id, graph_data, action_type)
 
     def get_methods_for_peptide(self, peptide_id: int) -> List[Dict[str, Any]]:
         return self.service.graph.get_methods_for_peptide(peptide_id)

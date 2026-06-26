@@ -13,7 +13,7 @@ class GraphImportOrchestrator:
     def __init__(self):
         self.graph_mapper = GraphMapper()
 
-    def sync_graph_data(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None):
+    def sync_graph_data(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, action_type: str = 'manual'):
         """
         Main entry point to sync graph logic separately based on raw CSV data.
         Only processes graph data for peptides that already exist in the database.
@@ -60,9 +60,9 @@ class GraphImportOrchestrator:
                         method_name = gd.get("method", "Injectable")
                         am_id = db.get_lookup_id("administration_methods", method_name)
                         if am_id:
-                            db.upsert_graph_data(peptide_id, am_id, gd)
+                            db.upsert_graph_data(peptide_id, am_id, gd, action_type)
                         else:
-                            db.upsert_graph_data(peptide_id, 1, gd) # fallback to Injectable
+                            db.upsert_graph_data(peptide_id, 1, gd, action_type) # fallback to Injectable
                     synced_count += 1
                 except Exception as e:
                     if tracker:
@@ -74,7 +74,7 @@ class GraphImportOrchestrator:
             
         print(f"[INFO] Graph Sync complete. Synced: {synced_count}, Skipped: {skipped_count}")
 
-    def sync_graph_missing_data(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None):
+    def sync_graph_missing_data(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, action_type: str = 'manual'):
         """
         Syncs graph data only if it is missing for the given peptide and administration method.
         """
@@ -127,9 +127,8 @@ class GraphImportOrchestrator:
                         if not am_id:
                             am_id = 1 # fallback to Injectable
                             
-                        # Only insert if this exact am_id is missing for this peptide
                         if am_id not in existing_am_ids:
-                            db.upsert_graph_data(peptide_id, am_id, gd)
+                            db.upsert_graph_data(peptide_id, am_id, gd, action_type)
                             has_synced = True
                             
                     if has_synced:
