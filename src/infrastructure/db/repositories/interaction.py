@@ -3,6 +3,30 @@ from typing import Dict, Any, Optional
 from src.infrastructure.db.base_repository import BaseRepository
 
 
+# Exact mapping from raw CSV interaction keywords to PostgreSQL
+# interaction_type enum values (synergistic, antagonistic, neutral, caution).
+_INTERACTION_TYPE_MAP = {
+    "synergistic": "synergistic",
+    "antagonistic": "antagonistic",
+    "neutral": "neutral",
+    "caution": "caution",
+    "use_caution": "caution",
+    "compatible": "caution",
+    "combination": "caution",
+    "avoid_combination": "caution",
+    "monitor_combination": "caution",
+}
+
+
+def map_interaction_type(raw_type: str) -> str:
+    """Map a raw CSV interaction type to a valid DB enum value.
+
+    Uses exact lookup in ``_INTERACTION_TYPE_MAP`` — no substring matching.
+    Unknown types fall back to ``"neutral"``.
+    """
+    return _INTERACTION_TYPE_MAP.get(str(raw_type).lower().strip(), "neutral")
+
+
 class InteractionRepository(BaseRepository):
     """Repository for peptide interaction operations."""
 
@@ -38,14 +62,7 @@ class InteractionRepository(BaseRepository):
 
     def _map_interaction_type(self, raw_type: str) -> str:
         """Maps raw interaction strings to DB enum values: synergistic, antagonistic, neutral, caution."""
-        raw = str(raw_type).lower().strip()
-        if any(x in raw for x in ["synergy", "increase", "boost", "positive", "complement"]):
-            return "synergistic"
-        if any(x in raw for x in ["antagon", "decrease", "block", "negative", "competit"]):
-            return "antagonistic"
-        if any(x in raw for x in ["caution", "danger", "warning", "risk", "monitor", "combinat", "compatib"]):
-            return "caution"
-        return "neutral"
+        return map_interaction_type(raw_type)
 
     def get_by_peptide_id(self, peptide_id: int) -> list:
         """Get all interactions for a peptide."""

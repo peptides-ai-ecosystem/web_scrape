@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from src.infrastructure.db.repositories.interaction import map_interaction_type
+
 
 # ---------------------------------------------------------------------------
 # Result dataclasses
@@ -308,23 +310,62 @@ class EvaluationEngine:
             return CheckResult(name="interactions", status="SKIP",
                 detail="No interactions expected from CSV")
 
+        # Build set of (secondary_name, mapped_type) from DB
         act_keys = {
             (i.get("secondary_peptide_name", "").lower(),
              i.get("interaction_type", "").lower())
             for i in act_ints
         }
-        missing = [
-            f"{i['secondary_peptide_name']} ({i['interaction_type']})"
-            for i in exp_ints
-            if (i.get("secondary_peptide_name", "").lower(),
-                i.get("interaction_type", "").lower()) not in act_keys
-        ]
+
+        # Map expected types through the same function used by the sync pipeline
+        # so comparison is apples-to-apples against DB stored values.
+        missing = []
+        type_changes = []
+        for i in exp_ints:
+            raw_type = i.get("interaction_type", "")
+            mapped_type = map_interaction_type(raw_type)
+            key = (i.get("secondary_peptide_name", "").lower(), mapped_type)
+            if key not in act_keys:
+                missing.append(
+                    f"{i['secondary_peptide_name']} ({raw_type})"
+                )
+            if raw_type.lower().strip() != mapped_type:
+                type_changes.append(
+                    f"{i['secondary_peptide_name']}: '{raw_type}' → '{mapped_type}'"
+                )
+
         if not missing:
+            detail = ""
+            if type_changes:
+                detail = f"Types remapped: {', '.join(type_changes)}"
             return CheckResult(name="interactions", status="PASS",
-                expected=len(exp_ints), actual=len(act_ints))
+                expected=len(exp_ints), actual=len(act_ints),
+                detail=detail if type_changes else "")
+
+        # ── Build CSV vs DB comparison detail ──────────────────────
+        csv_list = "\n".join(
+            f"    {i['secondary_peptide_name']} ({i['interaction_type']})"
+            for i in exp_ints
+        )
+        db_list = "\n".join(
+            f"    {i['secondary_peptide_name']} ({i['interaction_type']})"
+            for i in act_ints
+        ) if act_ints else "    (none)"
+        comparison = (
+            f"\n  CSV expects ({len(exp_ints)}):\n{csv_list}"
+            f"\n  DB has ({len(act_ints)}):\n{db_list}"
+            f"\n  Missing:\n"
+        )
+        for m in missing:
+            comparison += f"    {m}\n"
+        # if type_changes:
+            #comparison += "  Types remapped:\n"
+            # for tc in type_changes:
+            #     comparison += f"    {tc}\n"
+
         return CheckResult(name="interactions", status="FAIL",
             expected=len(exp_ints), actual=len(act_ints),
-            detail=f"Missing: {missing}")
+            detail=comparison.strip())
 
     def _check_indications(self, expected: Dict, actual: Dict) -> CheckResult:
         exp_inds = expected.get("indications", [])
