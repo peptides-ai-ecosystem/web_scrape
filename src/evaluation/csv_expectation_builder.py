@@ -8,6 +8,7 @@ import re
 from typing import Any, Dict, Optional
 
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
+from src.mappers.group_d.graph_mapper import GraphMapper
 
 
 # Mirror of the METHOD_KEYWORD_MAP defined in DbImportOrchestrator.sync_to_db
@@ -32,6 +33,7 @@ class CsvExpectationBuilder:
 
     def __init__(self):
         self._orchestrator = DbImportOrchestrator()
+        self._graph_mapper = GraphMapper()
 
     def resolve_method(self, row: Dict[str, Any]) -> Optional[str]:
         """Return the canonical DB method name or None if unmappable."""
@@ -81,6 +83,10 @@ class CsvExpectationBuilder:
         ga = payload["group_a"]
         relations = payload["relations"]
 
+        # Graph data is handled separately (GraphImportOrchestrator) — call
+        # the mapper directly so the expected payload includes it for evaluation.
+        graph_data = self._graph_mapper.map(patched_row)
+
         return {
             "peptide_name": raw_name,
             "slug": slug,
@@ -99,5 +105,5 @@ class CsvExpectationBuilder:
             "indications": relations["indications"],
             # groups d-f
             "protocols": payload["protocols"],
-            "graph_data": payload["graph_data"],
+            "graph_data": graph_data,
         }

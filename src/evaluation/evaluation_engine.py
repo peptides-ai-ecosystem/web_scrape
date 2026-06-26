@@ -33,6 +33,7 @@ class PeptideEvalResult:
     """All check results for one peptide."""
     peptide_name: str
     slug: str
+    administration_method: str = ""
     checks: List[CheckResult] = field(default_factory=list)
 
     @property
@@ -79,6 +80,7 @@ class EvaluationEngine:
         result = PeptideEvalResult(
             peptide_name=expected["peptide_name"],
             slug=expected["slug"],
+            administration_method=expected.get("administration_method", ""),
         )
 
         # ── Check 1: Peptide existence ──────────────────────────────────────
@@ -90,16 +92,7 @@ class EvaluationEngine:
                 actual="not found",
                 detail="Peptide row is missing from the peptides table",
             ))
-            # All remaining checks are meaningless without the row
-            for name in [
-                "peptide_fields", "benefits_count", "benefits_names",
-                "side_effects_count", "side_effects_names", "dosages",
-                "schedules", "administration_method", "interactions",
-                "indications", "protocols_count", "references_count",
-                "graph_data_exists",
-            ]:
-                result.checks.append(CheckResult(name=name, status="SKIP",
-                    detail="Skipped because peptide_existence failed"))
+            # Remaining checks are meaningless without the row — return early
             return result
 
         result.checks.append(CheckResult(

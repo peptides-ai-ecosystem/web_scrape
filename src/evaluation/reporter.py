@@ -53,10 +53,12 @@ class EvaluationReporter:
         bar = "━" * 50
         header_colour = self._GREEN if res.passed else self._RED
         verdict = "✓ ALL PASSED" if res.passed else f"✗ {res.fail_count} FAILED"
+        method_tag = f" [{res.administration_method}]" if res.administration_method else ""
 
         print(f"\n{self._BOLD}{bar}{self._RESET}")
         print(
             f" {self._colour(self._BOLD + res.peptide_name + self._RESET, header_colour)}"
+            f"{self._colour(method_tag, self._GREY)}"
             f"  {self._colour(verdict, header_colour)}"
             f"  ({res.pass_count}/{res.total} checks)"
         )
@@ -110,6 +112,7 @@ class EvaluationReporter:
         return {
             "peptide_name": res.peptide_name,
             "slug": res.slug,
+            "administration_method": res.administration_method,
             "passed": res.passed,
             "pass_count": res.pass_count,
             "fail_count": res.fail_count,
