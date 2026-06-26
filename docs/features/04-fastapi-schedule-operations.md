@@ -261,6 +261,29 @@ GET /api/v1/operations/job/sync_core_1687765432_a1b2c3d4
 }
 ```
 
+#### Scheduler Endpoints (`/api/v1/scheduler/`)
+
+**File**: `src/api/v1/endpoints/scheduler.py`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/scheduler/status` | Check if scheduler is running, paused, or stopped |
+| `POST` | `/scheduler/start` | Start or re-configure scheduler (body: `SchedulerConfigRequest`) |
+| `POST` | `/scheduler/pause` | Pause scheduler (job preserved, won't fire) |
+| `POST` | `/scheduler/resume` | Resume a paused scheduler |
+
+**Request Body** (`SchedulerConfigRequest`):
+```json
+{
+  "interval_hours": 12.0,
+  "interval_minutes": 0.0,
+  "limit": null
+}
+```
+- `interval_hours`: Hours between sync runs (default 12).
+- `interval_minutes`: Additional minutes for finer control (default 0, max 59).
+- `limit`: Max URLs per scheduled run (`null` = unlimited).
+
 ### 3.3 Scheduler
 
 **File**: `src/core/scheduler.py`
@@ -280,15 +303,15 @@ flowchart TD
     Step5 --> Run
 ```
 
-**Scheduler API**:
+**Core Python API** (used internally by REST endpoints):
 
-| Function | Description |
-|----------|-------------|
-| `start_scheduler(interval_hours, interval_minutes, limit)` | Start or update the scheduler |
-| `pause_scheduler()` | Pause without removing the job |
-| `resume_scheduler()` | Resume paused job |
-| `get_scheduler_status()` | Get current interval, next run time, status |
-| `shutdown_scheduler()` | Stop scheduler completely |
+| Function | REST Endpoint | Description |
+|----------|---------------|-------------|
+| `start_scheduler(hours, minutes, limit)` | `POST /api/v1/scheduler/start` | Start or update the scheduler |
+| `pause_scheduler()` | `POST /api/v1/scheduler/pause` | Pause without removing the job |
+| `resume_scheduler()` | `POST /api/v1/scheduler/resume` | Resume paused job |
+| `get_scheduler_status()` | `GET /api/v1/scheduler/status` | Get current interval, next run time, status |
+| `shutdown_scheduler()` | _(lifespan only)_ | Stop scheduler completely |
 
 **Scheduler Status Response**:
 ```json
@@ -370,8 +393,9 @@ app.mount("/visualization", StaticFiles(directory=visualization_path, html=True)
 api_router = APIRouter()
 api_router.include_router(sync.router,        prefix="/sync",        tags=["Syncing"])
 api_router.include_router(evaluation.router,  prefix="/evaluation",  tags=["Evaluation"])
-api_router.include_router(graph.router,                            tags=["Graph"])
-api_router.include_router(operations.router,  prefix="/operations", tags=["Operations"])
+api_router.include_router(graph.router,                              tags=["Graph"])
+api_router.include_router(operations.router,  prefix="/operations",  tags=["Operations"])
+api_router.include_router(scheduler.router,   prefix="/scheduler",   tags=["Scheduler"])
 ```
 
 Final URL structure:
@@ -389,6 +413,10 @@ Final URL structure:
 /api/v1/operations/jobs
 /api/v1/operations/job/{id}
 /api/v1/operations/health
+/api/v1/scheduler/status
+/api/v1/scheduler/start
+/api/v1/scheduler/pause
+/api/v1/scheduler/resume
 /visualization/
 /docs                (Swagger UI, auto-generated)
 ```

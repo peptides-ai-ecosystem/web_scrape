@@ -158,7 +158,10 @@ uv run api_server.py
 | | `GET /api/v1/operations/job/{id}` — track job progress |
 | | `DELETE /api/v1/operations/job/{id}` — cancel a running job |
 | | `GET /api/v1/operations/health` — system health & stats |
-| **Scheduler** | Automated sync every 12 hours (configurable) |
+| **Scheduler** | `GET /api/v1/scheduler/status` — check scheduler state |
+| | `POST /api/v1/scheduler/start` — start / re-configure scheduler |
+| | `POST /api/v1/scheduler/pause` — pause scheduler |
+| | `POST /api/v1/scheduler/resume` — resume paused scheduler |
 | **Dashboard** | `/visualization/` — interactive graph viewer |
 | **Swagger UI** | `/docs` — auto-generated API explorer |
 
@@ -301,10 +304,11 @@ graph TB
 │   │   └── v1/
 │   │       ├── routers.py      #   Router aggregation
 │   │       └── endpoints/
-│   │           ├── sync.py     #   POST /sync/* — scrape + DB sync
-│   │           ├── evaluation.py  # POST /evaluation/* — run evaluations
-│   │           ├── graph.py    #   GET /graph/* — graph data API
-│   │           └── operations.py # GET /operations/* — job tracking, health
+│   │           ├── sync.py        #   POST /sync/* — scrape + DB sync
+│   │           ├── evaluation.py  #   POST /evaluation/* — run evaluations
+│   │           ├── graph.py       #   GET /graph/* — graph data API
+│   │           ├── operations.py  #   GET /operations/* — job tracking, health
+│   │           └── scheduler.py   #   /scheduler/* — start/pause/resume sync scheduler
 │   │
 │   ├── utils/
 │   │   ├── crawl_peptide_urls.py  # Auto-discover peptide URLs via Selenium
