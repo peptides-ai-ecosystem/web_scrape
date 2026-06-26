@@ -1,9 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
-from typing import List, Optional
-import os
-
-from src.core.scheduler import start_scheduler, pause_scheduler, resume_scheduler, get_scheduler_status
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 import os
 
@@ -20,8 +16,41 @@ router = APIRouter()
 
 
 class SyncRequest(BaseModel):
-    limit: Optional[int] = None
-    urls: Optional[List[str]] = None  # If None or empty → auto-discover via URL crawl
+    """
+    Request body for triggering a sync operation (core, graph, or graph-missing).
+
+    - Omit `urls` (or pass `null`) to **auto-discover** peptide URLs via the crawler.
+    - Provide a specific `urls` list for **targeted scraping** of known pages.
+    - Use `limit` to cap the number of URLs processed (useful for testing).
+    """
+    limit: Optional[int] = Field(
+        None,
+        description="Maximum number of URLs to scrape & sync. `null` means unlimited (process all discovered or provided URLs).",
+        ge=1,
+        examples=[5, 10, 50],
+    )
+    urls: Optional[List[str]] = Field(
+        None,
+        description="Specific peptide page URLs to scrape. When `null` or empty, URLs are auto-discovered via the peptide URL crawler.",
+        examples=[None, ["https://pep-pedia.org/peptide/1", "https://pep-pedia.org/peptide/2"]],
+    )
+
+    @field_validator("limit")
+    @classmethod
+    def validate_limit(cls, v):
+        if v is not None and v < 1:
+            raise ValueError("limit must be a positive integer (≥1) if provided.")
+        return v
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"limit": 5, "urls": None},
+                {"limit": 10, "urls": ["https://pep-pedia.org/peptide/1"]},
+                {"limit": None, "urls": ["https://pep-pedia.org/peptide/1", "https://pep-pedia.org/peptide/2"]},
+            ]
+        }
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -250,16 +279,32 @@ def run_graph_sync_missing_task(job_id: str, requested_urls: Optional[List[str]]
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/core")
+@router.post("/core", status_code=202)
 async def start_core_sync(request: SyncRequest, background_tasks: BackgroundTasks):
     """
-    Scrape peptide data (auto-discover or targeted URLs) then sync to core DB tables.
+    🕷️ Scrape → Sync to **core** database tables.
 
-    - **urls**: Optional list of specific URLs to scrape. If omitted, URLs are
-      auto-discovered via the peptide URL crawler.
-    - **limit**: Optional cap on the number of URLs to scrape.
+    Triggers a background pipeline that:
 
-    Returns a `job_id` for tracking progress via `/operations/job/{job_id}`.
+    1. **Resolves URLs** — uses provided `urls` or auto-discovers via the peptide URL crawler
+    2. **Scrapes** each page with Selenium (hero, quick-guide, community, section extractors)
+    3. **Writes** scraped data to the master CSV
+    4. **Reads** CSV rows and syncs to **core DB tables** (peptides, benefits, side_effects,
+       dosages, schedules, administration methods, interactions, indications, protocols, references)
+
+    ### Request Body
+    - `urls`: explicit list of pep-pedia URLs, or `null` for auto-discovery
+    - `limit`: cap the number of URLs (useful for testing)
+
+    ### Responses
+    - **202** → Accepted. Returns a `job_id` — poll `/api/v1/operations/job/{job_id}` for status.
+    - **422** → Validation error (e.g., `limit` ≤ 0, invalid types)
+    - **500** → `DATABASE_URL` environment variable not configured on the server.
+
+    ### Example
+    ```json
+    {"limit": 5, "urls": null}
+    ```
     """
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
@@ -276,18 +321,27 @@ async def start_core_sync(request: SyncRequest, background_tasks: BackgroundTask
     return job.to_dict()
 
 
-@router.post("/graph")
+@router.post("/graph", status_code=202)
 async def start_graph_sync(request: SyncRequest, background_tasks: BackgroundTasks):
     """
-    Scrape peptide data (auto-discover or targeted URLs) then sync to graph DB tables.
+    🕷️ Scrape → Sync to **graph** database tables.
 
-    Only syncs graph data for peptides already present in the database.
+    Triggers a background pipeline that:
+    1. Resolves URLs (provided or auto-discovered)
+    2. Scrapes each page with Selenium
+    3. Syncs pharmacokinetics graph data to `peptide_graph` table
 
-    - **urls**: Optional list of specific URLs to scrape. If omitted, URLs are
-      auto-discovered via the peptide URL crawler.
-    - **limit**: Optional cap on the number of URLs to scrape.
+    **Only syncs graph data for peptides already present** in the core `peptides` table.
 
-    Returns a `job_id` for tracking progress via `/operations/job/{job_id}`.
+    ### Responses
+    - **202** → Accepted. Returns a `job_id` for polling.
+    - **422** → Validation error (invalid `limit` or `urls`).
+    - **500** → `DATABASE_URL` not configured.
+
+    ### Example
+    ```json
+    {"urls": ["https://pep-pedia.org/peptide/1"], "limit": null}
+    ```
     """
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
@@ -304,18 +358,27 @@ async def start_graph_sync(request: SyncRequest, background_tasks: BackgroundTas
     return job.to_dict()
 
 
-@router.post("/graph-missing")
+@router.post("/graph-missing", status_code=202)
 async def start_graph_sync_missing(request: SyncRequest, background_tasks: BackgroundTasks):
     """
-    Scrape peptide data then sync to graph DB tables only if missing.
+    🕷️ Scrape → Sync **only missing** graph data.
 
-    Only syncs graph data for peptides already present in the database 
-    AND where the specific administration method graph data is missing.
+    Same as `/graph` but **only inserts administration methods that don't yet exist**
+    in the `peptide_graph` table. Idempotent — safe to run repeatedly.
 
-    - **urls**: Optional list of specific URLs to scrape.
-    - **limit**: Optional cap on the number of URLs to scrape.
+    ### Use Case
+    After a full graph sync, run this periodically to pick up any new administration
+    methods without re-processing existing data.
 
-    Returns a `job_id` for tracking progress via `/operations/job/{job_id}`.
+    ### Responses
+    - **202** → Accepted. Returns a `job_id` for polling.
+    - **422** → Validation error.
+    - **500** → `DATABASE_URL` not configured.
+
+    ### Example
+    ```json
+    {"limit": 10, "urls": null}
+    ```
     """
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
@@ -332,51 +395,4 @@ async def start_graph_sync_missing(request: SyncRequest, background_tasks: Backg
     return job.to_dict()
 
 
-# ---------------------------------------------------------------------------
-# Scheduler Config Endpoints
-# ---------------------------------------------------------------------------
 
-class SchedulerConfigRequest(BaseModel):
-    interval_hours: Optional[float] = 12.0
-    interval_minutes: Optional[float] = 0.0
-    limit: Optional[int] = None
-
-@router.get("/scheduler/status")
-async def get_sync_scheduler_status():
-    """
-    Get the status of the combined background sync scheduler.
-    """
-    return get_scheduler_status()
-
-@router.post("/scheduler/start")
-async def start_sync_scheduler(config: SchedulerConfigRequest):
-    """
-    Start or re-configure the combined background sync scheduler.
-    """
-    start_scheduler(
-        interval_hours=config.interval_hours, 
-        interval_minutes=config.interval_minutes, 
-        limit=config.limit
-    )
-    return {
-        "message": "Scheduler started/configured", 
-        "interval_hours": config.interval_hours,
-        "interval_minutes": config.interval_minutes,
-        "limit": config.limit
-    }
-
-@router.post("/scheduler/pause")
-async def pause_sync_scheduler():
-    """
-    Pause the background sync scheduler.
-    """
-    pause_scheduler()
-    return {"message": "Scheduler paused"}
-
-@router.post("/scheduler/resume")
-async def resume_sync_scheduler():
-    """
-    Resume the background sync scheduler.
-    """
-    resume_scheduler()
-    return {"message": "Scheduler resumed"}

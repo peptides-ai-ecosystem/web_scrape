@@ -28,7 +28,85 @@ async def lifespan(app: FastAPI):
     if _pool is not None:
         _pool.close()
 
-app = FastAPI(title="Peptide Pipeline API and Graph Visualization", lifespan=lifespan)
+app = FastAPI(
+    title="Peptide Pipeline API & Graph Visualization",
+    description="""
+    **End-to-end peptide data pipeline** — scrape pharmacokinetics data from pep-pedia.org,
+    synchronize to PostgreSQL, evaluate sync quality, and serve interactive graph visualizations.
+
+    ## 🔄 Pipeline Capabilities
+
+    ### 🕷️ Sync (Scrape → Database)
+    | Endpoint | Description |
+    |---|---|
+    | `POST /api/v1/sync/core` | Scrape URLs → Sync to **core** DB tables (peptides, benefits, side-effects, dosages, protocols, interactions, indications, references) |
+    | `POST /api/v1/sync/graph` | Scrape URLs → Sync to **graph** DB tables (pharmacokinetics SVG paths, markers, points) |
+    | `POST /api/v1/sync/graph-missing` | Same as graph sync, but **only inserts missing** administration methods (idempotent) |
+
+    ### 📊 Evaluation (CSV vs DB Comparison)
+    | Endpoint | Description |
+    |---|---|
+    | `POST /api/v1/evaluation/core` | **13 checks** per peptide — existence, core fields, benefits, side-effects, dosages, schedules, admin methods, interactions, indications, protocols, references |
+    | `POST /api/v1/evaluation/graph` | **5 checks** per peptide — graph rows exist, time-range coverage, SVG path populated, points populated, markers populated |
+
+    ### 📈 Graph Data API
+    | Endpoint | Description |
+    |---|---|
+    | `GET /api/v1/graph/peptides` | List all peptides that have graph data available |
+    | `GET /api/v1/graph/peptide/{id}/methods` | List administration methods for a given peptide |
+    | `GET /api/v1/graph/graph/{id}?method=` | Full graph coordinates, SVG paths, markers, axis labels for rendering |
+
+    ### ⚙️ Operations & Job Management
+    | Endpoint | Description |
+    |---|---|
+    | `GET /api/v1/operations/jobs?status=` | List all background jobs (optionally filtered) |
+    | `GET /api/v1/operations/job/{id}` | Track a specific job's progress, result, or error |
+    | `DELETE /api/v1/operations/job/{id}` | Cancel a pending or running job |
+    | `GET /api/v1/operations/health` | System health check + job queue statistics |
+
+    ### ⏰ Automated Scheduler
+    | Endpoint | Description |
+    |---|---|
+    | `GET /api/v1/scheduler/status` | Check if the scheduler is running, its interval, and next run time |
+    | `POST /api/v1/scheduler/start` | Start or reconfigure the background sync scheduler |
+    | `POST /api/v1/scheduler/pause` | Pause the scheduler (without removing the job) |
+    | `POST /api/v1/scheduler/resume` | Resume a paused scheduler |
+
+    > **Note**: All long-running operations (sync, evaluation) run as **background tasks** and return a `job_id` immediately. Poll `/operations/job/{job_id}` to track progress.
+    """,
+    version="2.0.0",
+    lifespan=lifespan,
+    contact={
+        "name": "Peptide Pipeline Team",
+        "url": "https://github.com/sazzad1779-dev/web_scrape",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    openapi_tags=[
+        {
+            "name": "Syncing",
+            "description": "🕷️ Scrape peptide data from pep-pedia.org and sync to PostgreSQL database tables.",
+        },
+        {
+            "name": "Evaluation",
+            "description": "📊 Compare CSV expectations vs actual database state to measure sync quality.",
+        },
+        {
+            "name": "Graph",
+            "description": "📈 Retrieve pharmacokinetics graph data (SVG paths, markers, coordinates) for visualization.",
+        },
+        {
+            "name": "Operations",
+            "description": "⚙️ Track background jobs, cancel operations, and monitor system health.",
+        },
+        {
+            "name": "Scheduler",
+            "description": "⏰ Manage the automated background sync scheduler (start, pause, resume, status).",
+        },
+    ],
+)
 
 # Get project root for static file path
 project_root = os.path.dirname(os.path.abspath(__file__))
