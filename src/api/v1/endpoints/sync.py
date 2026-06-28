@@ -126,11 +126,15 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
 
         # Step 4: Sync to core DB tables
         orchestrator = DbImportOrchestrator()
-        orchestrator.sync_to_db(db_url, rows, tracker=tracker)
+        result = orchestrator.sync_to_db(db_url, rows, tracker=tracker) or {}
 
         job.complete({
             "urls_scraped": len(urls),
-            "rows_synced": len(rows),
+            "rows_processed": len(rows),
+            "synced_count": result.get("synced_count", 0),
+            "skipped_count": result.get("skipped_count", 0),
+            "synced_peptides": result.get("synced_peptides", []),
+            "skipped_peptides": result.get("skipped_peptides", []),
             "scrape_errors": len(tracker.scrape_errors) if tracker.has_errors() else 0,
             "db_errors": len(tracker.db_errors) if tracker.has_errors() else 0,
         })
@@ -170,9 +174,11 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
 
         log_debug(f"Graph sync starting scrape for {len(urls)} URLs", "sync_endpoint")
 
-        # Step 2: Scrape → writes to MASTER_CSV
+        # Step 2: Scrape → writes to MASTER_CSV (overwrites previous CSV content)
+        log_debug(f"Scraping {len(urls)} URL(s) and saving to CSV (will overwrite any existing CSV data)", "sync_endpoint")
         manager = ScraperManager()
         manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED)
+        log_debug(f"Scrape completed. CSV has been overwritten with latest scraped data", "sync_endpoint")
 
         if job.status == JobStatus.CANCELLED:
             log_debug("Job cancelled during scraping. Aborting DB sync.", "sync_endpoint")
@@ -192,13 +198,18 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
             })
             return
 
-        # Step 4: Sync to graph DB tables
+        # Step 4: Sync graph data to DB (only peptide_graph table, NOT core tables)
+        log_debug(f"Starting DB injection for {len(rows)} row(s) into peptide_graph table", "sync_endpoint")
         orchestrator = GraphImportOrchestrator()
-        orchestrator.sync_graph_data(db_url, rows, tracker=tracker, action_type="manual")
+        result = orchestrator.sync_graph_data(db_url, rows, tracker=tracker, action_type="manual") or {}
 
         job.complete({
             "urls_scraped": len(urls),
             "rows_processed": len(rows),
+            "synced_count": result.get("synced_count", 0),
+            "skipped_count": result.get("skipped_count", 0),
+            "synced_peptides": result.get("synced_peptides", []),
+            "skipped_peptides": result.get("skipped_peptides", []),
             "scrape_errors": len(tracker.scrape_errors) if tracker.has_errors() else 0,
             "db_errors": len(tracker.db_errors) if tracker.has_errors() else 0,
         })
@@ -257,11 +268,15 @@ def run_graph_sync_missing_task(job_id: str, requested_urls: Optional[List[str]]
 
         # Step 4: Sync to graph DB tables
         orchestrator = GraphImportOrchestrator()
-        orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker, action_type="manual")
+        result = orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker, action_type="manual") or {}
 
         job.complete({
             "urls_scraped": len(urls),
             "rows_processed": len(rows),
+            "synced_count": result.get("synced_count", 0),
+            "skipped_count": result.get("skipped_count", 0),
+            "synced_peptides": result.get("synced_peptides", []),
+            "skipped_peptides": result.get("skipped_peptides", []),
             "scrape_errors": len(tracker.scrape_errors) if tracker.has_errors() else 0,
             "db_errors": len(tracker.db_errors) if tracker.has_errors() else 0,
         })

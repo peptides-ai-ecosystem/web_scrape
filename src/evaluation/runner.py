@@ -26,7 +26,7 @@ def run_evaluation(
     csv_path: str,
     limit: Optional[int] = None,
     output_json: Optional[str] = None,
-) -> None:
+) -> dict:
     """
     Main entry point for the evaluation step.
 
@@ -36,6 +36,10 @@ def run_evaluation(
     csv_path    : Path to the master CSV file
     limit       : Process at most this many CSV rows (None = all)
     output_json : If set, write the full JSON report to this file path
+
+    Returns
+    -------
+    dict with keys: total, evaluated_count, skipped_count, evaluated_peptides, skipped_peptides
     """
     print(f"\n{'='*60}")
     print("  CSV SYNC EVALUATION")
@@ -49,7 +53,13 @@ def run_evaluation(
     # ── Step 1: Read CSV ────────────────────────────────────────────────────
     if not os.path.exists(csv_path):
         print(f"[ERROR] CSV file not found: {csv_path}")
-        return
+        return {
+            "total": 0,
+            "evaluated_count": 0,
+            "skipped_count": 0,
+            "evaluated_peptides": [],
+            "skipped_peptides": [f"CSV not found: {csv_path}"],
+        }
 
     rows = []
     with open(csv_path, mode="r", encoding="utf-8") as f:
@@ -66,6 +76,9 @@ def run_evaluation(
     engine   = EvaluationEngine()
     reporter = EvaluationReporter()
 
+    evaluated_peptides = []
+    skipped_peptides = []
+
     # Pre-fetch all existing peptide identifiers and their essences for matching
     db_manager = DbManager(db_url)
     try:
@@ -73,7 +86,6 @@ def run_evaluation(
         db_essences = {extract_essence(ident): ident for ident in db_identifiers}
 
         results = []
-        skipped = 0
 
         for row in rows:
             raw_name = (row.get("Peptide_Name") or row.get("name") or "").strip()
@@ -85,7 +97,7 @@ def run_evaluation(
             expected = builder.build(row)
             if expected is None:
                 print(f"[EVAL] SKIP {raw_name!r} — administration method not mappable")
-                skipped += 1
+                skipped_peptides.append(f"{raw_name} (method not mappable)")
                 continue
 
             # If we matched a different identifier, update the expected slug
@@ -101,20 +113,35 @@ def run_evaluation(
             # Compare
             result = engine.evaluate(expected, actual)
             results.append(result)
+            evaluated_peptides.append({"name": raw_name, "slug": slug})
 
     finally:
         fetcher.close()
         db_manager.close()
 
-    if skipped:
-        print(f"\n[EVAL] Skipped {skipped} row(s) with unmappable methods")
+    if skipped_peptides:
+        print(f"\n[EVAL] Skipped {len(skipped_peptides)} row(s) with unmappable methods")
 
     if not results:
         print("[EVAL] No peptides to evaluate.")
-        return
+        return {
+            "total": len(rows),
+            "evaluated_count": 0,
+            "skipped_count": len(skipped_peptides),
+            "evaluated_peptides": [],
+            "skipped_peptides": skipped_peptides,
+        }
 
     # ── Step 5: Report ──────────────────────────────────────────────────────
     reporter.print_console(results)
 
     if output_json:
         reporter.save_json(results, output_json)
+
+    return {
+        "total": len(rows),
+        "evaluated_count": len(results),
+        "skipped_count": len(skipped_peptides),
+        "evaluated_peptides": evaluated_peptides,
+        "skipped_peptides": skipped_peptides,
+    }

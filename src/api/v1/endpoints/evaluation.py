@@ -61,10 +61,15 @@ def run_core_evaluation_task(job_id: str, limit: Optional[int], output_json: Opt
 
     job.start()
     try:
-        run_evaluation(db_url, csv_path, limit=limit, output_json=output_json)
+        result = run_evaluation(db_url, csv_path, limit=limit, output_json=output_json) or {}
         job.complete({
             "limit": limit,
             "output_file": output_json,
+            "total": result.get("total", 0),
+            "evaluated_count": result.get("evaluated_count", 0),
+            "skipped_count": result.get("skipped_count", 0),
+            "evaluated_peptides": result.get("evaluated_peptides", []),
+            "skipped_peptides": result.get("skipped_peptides", []),
         })
     except Exception as e:
         log_error(f"Fatal error during core evaluation task: {e}", "evaluation_endpoint")
@@ -132,10 +137,15 @@ def run_graph_evaluation_task(job_id: str, limit: Optional[int], output_json: Op
 
     job.start()
     try:
-        run_graph_evaluation(db_url, csv_path, limit=limit, output_json=output_json)
+        result = run_graph_evaluation(db_url, csv_path, limit=limit, output_json=output_json) or {}
         job.complete({
             "limit": limit,
             "output_file": output_json,
+            "total": result.get("total", 0),
+            "evaluated_count": result.get("evaluated_count", 0),
+            "skipped_count": result.get("skipped_count", 0),
+            "evaluated_peptides": result.get("evaluated_peptides", []),
+            "skipped_peptides": result.get("skipped_peptides", []),
         })
     except Exception as e:
         log_error(f"Fatal error during graph evaluation task: {e}", "evaluation_endpoint")

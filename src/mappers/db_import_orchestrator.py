@@ -61,7 +61,7 @@ class DbImportOrchestrator:
             "protocols": protocols
         }
 
-    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None):
+    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None) -> Dict[str, Any]:
         """
         Main entry point to sync rows using the grouped logic.
         Only processes peptides that already exist in the database.
@@ -91,6 +91,9 @@ class DbImportOrchestrator:
             skipped_count = 0
             total = len(rows)
             synced_count = 0
+            skipped_peptides = []
+            synced_peptides = []
+
             for idx, row in enumerate(rows, start=1):
                 row_id = row.get("name") or row.get("peptide_name") or str(list(row.values())[:1])
 
@@ -101,21 +104,26 @@ class DbImportOrchestrator:
                 # "hexarelin-examorelin" over "hexarelin") and avoid false
                 # matches when a shorter slug belongs to a different peptide.
                 sorted_candidates = sorted(candidates, key=len, reverse=True)
-                
+
+                log_debug(f"[{idx}/{len(rows)}] Processing: '{raw_name}' - candidates: {sorted_candidates}", "db_import_orchestrator")
+
                 # Match candidates against DB identifiers or essences
                 matched_identifier = None
                 for cand in sorted_candidates:
                     if cand in db_identifiers:
                         matched_identifier = cand
+                        log_debug(f"  Match found: '{raw_name}' → DB slug '{cand}' (direct match)", "db_import_orchestrator")
                         break
                     if cand in db_essences:
                         matched_identifier = db_essences[cand]
+                        log_debug(f"  Match found: '{raw_name}' → DB slug '{db_essences[cand]}' (via essence '{cand}')", "db_import_orchestrator")
                         break
 
                 # Skip if this peptide doesn't exist in DB
                 if not matched_identifier:
                     skipped_count += 1
-                    log_debug(f"Skipped: {raw_name} - no match found in Peptides table (candidates: {candidates})", "db_import_orchestrator")
+                    skipped_peptides.append(f"{raw_name} (no DB match)")
+                    log_debug(f"  ✗ SKIPPED: '{raw_name}' - no match found in Peptides table (candidates: {candidates})", "db_import_orchestrator")
                     continue
 
                 # Use the matched identifier for slug-based lookups
@@ -125,28 +133,31 @@ class DbImportOrchestrator:
                 raw_method = str(row.get("Method") or "").strip()
                 # If multiple methods, only take the first one
                 first_method_part = raw_method.split(",")[0].strip().lower()
-                
+
                 # Resolve CSV keyword to a DB method name
                 mapped_method = None
                 for keyword, method_name in METHOD_KEYWORD_MAP.items():
                     if keyword in first_method_part:
                         mapped_method = method_name
                         break
-                
+
                 # Skip if keyword didn't match or mapped method doesn't exist in DB
                 if not mapped_method or mapped_method not in existing_method_names:
                     skipped_count += 1
                     if mapped_method and mapped_method not in existing_method_names:
-                        log_debug(f"Skipped: {raw_name} - mapped method '{mapped_method}' does not exist in administrative method table", "db_import_orchestrator")
+                        reason = f"mapped method '{mapped_method}' not in DB"
+                        log_debug(f"  ✗ SKIPPED: '{raw_name}' - mapped method '{mapped_method}' does not exist in administrative method table", "db_import_orchestrator")
                     else:
-                        log_debug(f"Skipped: {raw_name} - administrative method '{raw_method}' has no mapping", "db_import_orchestrator")
+                        reason = f"admin method '{raw_method}' has no mapping"
+                        log_debug(f"  ✗ SKIPPED: '{raw_name}' - administrative method '{raw_method}' has no mapping", "db_import_orchestrator")
+                    skipped_peptides.append(f"{raw_name} ({reason})")
                     continue
-                
+
                 # Overwrite the row's method so downstream mappers use the DB method name
                 row["Method"] = mapped_method
 
                 print(f"\n{raw_name} : {mapped_method}")
-                log_debug(f"Processing peptide: {raw_name} with method: {mapped_method}", "db_import_orchestrator")
+                log_debug(f"  ✓ MATCHED: '{raw_name}' → method='{mapped_method}', slug='{row_slug}'", "db_import_orchestrator")
 
                 # Stage 1: Map raw row to payload
                 print(f"  Stage 1: Mapping raw row to structured payload")
@@ -165,6 +176,9 @@ class DbImportOrchestrator:
                     if tracker:
                         tracker.record_db_error(row_id, "map_row", e)
                     print(f"  ✗ Stage 1 failed: {e}")
+                    skipped_count += 1
+                    skipped_peptides.append(f"{raw_name} (Stage 1 mapping failed: {e})")
+                    log_debug(f"  ✗ SKIPPED: '{raw_name}' - Stage 1 mapping failed: {e}", "db_import_orchestrator")
                     continue
 
                 # Stage 2: Sync Group A lookup tables
@@ -199,6 +213,9 @@ class DbImportOrchestrator:
                     if tracker:
                         tracker.record_db_error(row_id, "group_b", e)
                     print(f"  ✗ Stage 3 failed: {e}")
+                    skipped_count += 1
+                    skipped_peptides.append(f"{raw_name} (Stage 3 upsert failed: {e})")
+                    log_debug(f"  ✗ SKIPPED: '{raw_name}' - Stage 3 upsert failed: {e}", "db_import_orchestrator")
                     continue
 
                 # Stage 4: Link relations, protocols
@@ -211,13 +228,45 @@ class DbImportOrchestrator:
                         tracker.record_db_error(row_id, "relations", e)
 
                 synced_count += 1
-                print(f"  ✓ Done")
+                synced_peptides.append({"name": raw_name, "slug": row_slug, "method": mapped_method})
+                print(f"  ✓ SYNCED: '{raw_name}' (slug: {row_slug})")
+                log_debug(f"  ✓ SYNCED: '{raw_name}' (slug: {row_slug}, method: {mapped_method})", "db_import_orchestrator")
 
-            if skipped_count > 0:
-                print(f"[INFO] Skipped {skipped_count} peptide(s) not found in DB")
-                log_debug(f"Skipped {skipped_count} peptides during sync", "db_import_orchestrator")
-            print(f"[INFO] Synced {synced_count} peptide(s) successfully")
-            log_debug(f"Successfully synced {synced_count} peptides", "db_import_orchestrator")
+            # Summary section
+            summary_lines = [
+                f"\n{'='*60}",
+                f"  CORE DB SYNC SUMMARY",
+                f"{'='*60}",
+                f"  Total rows processed: {len(rows)}",
+                f"  ✅ Synced: {synced_count}",
+                f"  ❌ Skipped: {skipped_count}",
+            ]
+            if synced_peptides:
+                summary_lines.append(f"\n  --- Synced Peptides ---")
+                for p in synced_peptides:
+                    summary_lines.append(f"  ✅ {p['name']} (slug: {p['slug']}) → method: {p['method']}")
+            if skipped_peptides:
+                summary_lines.append(f"\n  --- Skipped Peptides ---")
+                for name in skipped_peptides:
+                    summary_lines.append(f"  ❌ {name}")
+            summary_lines.append(f"{'='*60}\n")
+
+            summary = "\n".join(summary_lines)
+            print(summary)
+            log_debug(summary, "db_import_orchestrator")
+
+            for p in synced_peptides:
+                log_debug(f"SYNCED: {p['name']} (slug: {p['slug']}, method: {p['method']})", "db_import_orchestrator")
+            for name in skipped_peptides:
+                log_debug(f"SKIPPED: {name}", "db_import_orchestrator")
+
+            return {
+                "synced_count": synced_count,
+                "skipped_count": skipped_count,
+                "synced_peptides": synced_peptides,
+                "skipped_peptides": skipped_peptides,
+            }
+
         finally:
             db.close()
 

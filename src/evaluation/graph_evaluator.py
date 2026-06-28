@@ -237,7 +237,7 @@ def run_graph_evaluation(
     csv_path: str,
     limit: Optional[int] = None,
     output_json: Optional[str] = None,
-) -> None:
+) -> dict:
     """
     Main entry point for graph evaluation.
 
@@ -247,6 +247,10 @@ def run_graph_evaluation(
     csv_path    : Path to the master CSV file
     limit       : Process at most this many CSV rows (None = all)
     output_json : If set, write the full JSON report to this file path
+
+    Returns
+    -------
+    dict with keys: total, evaluated_count, skipped_count, evaluated_peptides, skipped_peptides
     """
     print(f"\n{'='*60}")
     print("  GRAPH DATA EVALUATION")
@@ -260,7 +264,13 @@ def run_graph_evaluation(
     # ── Step 1: Read CSV ──────────────────────────────────────────────────
     if not os.path.exists(csv_path):
         print(f"[ERROR] CSV file not found: {csv_path}")
-        return
+        return {
+            "total": 0,
+            "evaluated_count": 0,
+            "skipped_count": 0,
+            "evaluated_peptides": [],
+            "skipped_peptides": [f"CSV not found: {csv_path}"],
+        }
 
     rows: List[Dict[str, Any]] = []
     with open(csv_path, mode="r", encoding="utf-8") as f:
@@ -276,13 +286,15 @@ def run_graph_evaluation(
     evaluator = GraphEvaluator()
     db = DbManager(db_url)
 
+    evaluated_peptides = []
+    skipped_peptides = []
+
     try:
         db.connect()
         db_identifiers = db.get_all_peptide_identifiers()
         db_essences = {extract_essence(ident): ident for ident in db_identifiers}
 
         results: List[GraphPeptideEvalResult] = []
-        skipped = 0
 
         for row in rows:
             raw_name = (row.get("Peptide_Name") or row.get("name") or "").strip()
@@ -291,7 +303,7 @@ def run_graph_evaluation(
             expected_graph = graph_mapper.map(row)
             if not expected_graph:
                 print(f"[GRAPH-EVAL] SKIP {raw_name!r} — no graph_data_json in CSV")
-                skipped += 1
+                skipped_peptides.append(f"{raw_name} (no graph_data_json in CSV)")
                 continue
 
             method = expected_graph[0].get("method", "Injectable") if expected_graph else "Injectable"
@@ -300,7 +312,7 @@ def run_graph_evaluation(
             matched_slug = find_best_match(raw_name, db_identifiers, db_essences)
             if not matched_slug:
                 print(f"[GRAPH-EVAL] SKIP {raw_name!r} — not found in DB")
-                skipped += 1
+                skipped_peptides.append(f"{raw_name} (not found in DB)")
                 continue
 
             print(f"[GRAPH-EVAL] Checking {raw_name!r} (slug: {matched_slug})")
@@ -308,7 +320,7 @@ def run_graph_evaluation(
             # Fetch peptide record
             peptide_record = db.get_peptide_by_slug(matched_slug)
             if not peptide_record:
-                skipped += 1
+                skipped_peptides.append(f"{raw_name} (slug {matched_slug} not in peptides table)")
                 continue
 
             peptide_id = peptide_record["id"]
@@ -325,22 +337,37 @@ def run_graph_evaluation(
                 method=method,
             )
             results.append(result)
+            evaluated_peptides.append({"name": raw_name, "slug": matched_slug, "method": method})
 
     finally:
         db.close()
 
-    if skipped:
-        print(f"\n[GRAPH-EVAL] Skipped {skipped} row(s)")
+    if skipped_peptides:
+        print(f"\n[GRAPH-EVAL] Skipped {len(skipped_peptides)} row(s)")
 
     if not results:
         print("[GRAPH-EVAL] No peptides to evaluate.")
-        return
+        return {
+            "total": len(rows),
+            "evaluated_count": 0,
+            "skipped_count": len(skipped_peptides),
+            "evaluated_peptides": [],
+            "skipped_peptides": skipped_peptides,
+        }
 
     # ── Step 3: Report ────────────────────────────────────────────────────
     _print_graph_console(results)
 
     if output_json:
         _save_graph_json(results, output_json)
+
+    return {
+        "total": len(rows),
+        "evaluated_count": len(results),
+        "skipped_count": len(skipped_peptides),
+        "evaluated_peptides": evaluated_peptides,
+        "skipped_peptides": skipped_peptides,
+    }
 
 
 # ---------------------------------------------------------------------------
