@@ -1,3 +1,4 @@
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
@@ -9,7 +10,8 @@ from src.infrastructure.csv_storage import CSVStorage
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
 from src.mappers.graph_import_orchestrator import GraphImportOrchestrator
 from src.utils.error_tracker import ErrorTracker
-from src.config import log_debug, log_error, OUTPUT_DIR
+from src.core.models import ScrapeMode
+from src.config import log_debug, log_error, OUTPUT_DIR, MASTER_CSV, GRAPH_CSV
 from src.core.job_queue import get_job_queue, JobStatus
 
 router = APIRouter()
@@ -102,9 +104,11 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
 
         log_debug(f"Core sync starting scrape for {len(urls)} URLs", "sync_endpoint")
 
-        # Step 2: Scrape → writes to MASTER_CSV
-        manager = ScraperManager()
-        manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED)
+        # Step 2: Scrape → writes to MASTER_CSV (core-only: skip graph extractor)
+        log_debug(f"Core sync: scraping with mode=CORE_ONLY to {MASTER_CSV}", "sync_endpoint")
+        manager = ScraperManager(csv_path=Path(MASTER_CSV))
+        manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED,
+                    scrape_mode=ScrapeMode.CORE_ONLY)
 
         if job.status == JobStatus.CANCELLED:
             log_debug("Job cancelled during scraping. Aborting DB sync.", "sync_endpoint")
@@ -174,18 +178,19 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
 
         log_debug(f"Graph sync starting scrape for {len(urls)} URLs", "sync_endpoint")
 
-        # Step 2: Scrape → writes to MASTER_CSV (overwrites previous CSV content)
-        log_debug(f"Scraping {len(urls)} URL(s) and saving to CSV (will overwrite any existing CSV data)", "sync_endpoint")
-        manager = ScraperManager()
-        manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED)
-        log_debug(f"Scrape completed. CSV has been overwritten with latest scraped data", "sync_endpoint")
+        # Step 2: Scrape → writes to GRAPH_CSV (graph-only fields)
+        log_debug(f"Graph sync: scraping {len(urls)} URL(s) to {GRAPH_CSV}", "sync_endpoint")
+        manager = ScraperManager(csv_path=Path(GRAPH_CSV))
+        manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED,
+                    scrape_mode=ScrapeMode.GRAPH_ONLY)
+        log_debug(f"Scrape completed. Graph data saved to {GRAPH_CSV}", "sync_endpoint")
 
         if job.status == JobStatus.CANCELLED:
             log_debug("Job cancelled during scraping. Aborting DB sync.", "sync_endpoint")
             return
 
         # Step 3: Read scraped data from CSV
-        csv_store = CSVStorage()
+        csv_store = CSVStorage(csv_path=Path(GRAPH_CSV))
         rows = csv_store.read()
 
         if not rows:
@@ -244,16 +249,17 @@ def run_graph_sync_missing_task(job_id: str, requested_urls: Optional[List[str]]
 
         log_debug(f"Graph Missing sync starting scrape for {len(urls)} URLs", "sync_endpoint")
 
-        # Step 2: Scrape → writes to MASTER_CSV
-        manager = ScraperManager()
-        manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED)
+        # Step 2: Scrape → writes to GRAPH_CSV (graph-only fields)
+        manager = ScraperManager(csv_path=Path(GRAPH_CSV))
+        manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED,
+                    scrape_mode=ScrapeMode.GRAPH_ONLY)
 
         if job.status == JobStatus.CANCELLED:
             log_debug("Job cancelled during scraping. Aborting DB sync.", "sync_endpoint")
             return
 
         # Step 3: Read scraped data from CSV
-        csv_store = CSVStorage()
+        csv_store = CSVStorage(csv_path=Path(GRAPH_CSV))
         rows = csv_store.read()
 
         if not rows:

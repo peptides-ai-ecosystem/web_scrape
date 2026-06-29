@@ -1,5 +1,5 @@
 from selenium.webdriver.common.by import By
-from src.core.models import PeptideData
+from src.core.models import PeptideData, ScrapeMode
 from src.core.interfaces import IScraper
 from src.extractors.hero import HeroExtractor
 from src.extractors.quick_guide import QuickGuideExtractor
@@ -13,7 +13,8 @@ from tqdm import tqdm
 import time
 
 class PageScraper(IScraper):
-    def __init__(self):
+    def __init__(self, scrape_mode: ScrapeMode = ScrapeMode.FULL):
+        self.scrape_mode = scrape_mode
         self.hero_extractor = HeroExtractor()
         self.quick_guide_extractor = QuickGuideExtractor()
         self.community_extractor = CommunityExtractor()
@@ -26,7 +27,7 @@ class PageScraper(IScraper):
         errors: List[dict] = []
         try:
             print(f"[INFO] Processing: {url}")
-            log_debug(f"Starting scrape for URL: {url}", "page_scraper.py")
+            log_debug(f"Starting scrape for URL: {url} (mode={self.scrape_mode.value})", "page_scraper.py")
             driver.get(url)
             time.sleep(1)
 
@@ -41,11 +42,22 @@ class PageScraper(IScraper):
                     self._click_category(driver, wait, cat)
                     log_debug(f"Processing category '{cat}' for {url}", "page_scraper.py")
 
+                    # Hero always runs (provides name, subtitle needed in all modes)
                     hero_data = self.hero_extractor.extract(driver, wait)
-                    quick_guide = self.quick_guide_extractor.extract(driver, wait)
-                    community = self.community_extractor.extract(driver, wait)
-                    sections = self.section_extractor.extract(driver, wait)
-                    graph_data = self.graph_extractor.extract(driver, wait)
+
+                    # QuickGuide, Community, Section — only in FULL or CORE_ONLY
+                    quick_guide = {}
+                    community = {"insights": {}, "polls": {}}
+                    sections = []
+                    if self.scrape_mode in (ScrapeMode.FULL, ScrapeMode.CORE_ONLY):
+                        quick_guide = self.quick_guide_extractor.extract(driver, wait)
+                        community = self.community_extractor.extract(driver, wait)
+                        sections = self.section_extractor.extract(driver, wait)
+
+                    # Graph — only in FULL or GRAPH_ONLY
+                    graph_data = {}
+                    if self.scrape_mode in (ScrapeMode.FULL, ScrapeMode.GRAPH_ONLY):
+                        graph_data = self.graph_extractor.extract(driver, wait)
 
                     results.append(PeptideData(
                         name=hero_data.name,

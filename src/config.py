@@ -26,6 +26,7 @@ class Settings:
     
     # File paths
     MASTER_CSV: Path = OUTPUT_DIR / "pep_pedia_master.csv"
+    GRAPH_CSV: Path = OUTPUT_DIR / "pep_pedia_graph_master.csv"
     ERROR_LOG: Path = LOG_DIR / "error_log.txt"
     DEBUG_LOG: Path = LOG_DIR / "debug_log.txt"
     
@@ -47,6 +48,7 @@ DATABASE_URL = settings.DATABASE_URL
 TIMEOUT = settings.TIMEOUT
 OUTPUT_DIR = settings.OUTPUT_DIR
 MASTER_CSV = settings.MASTER_CSV
+GRAPH_CSV = settings.GRAPH_CSV
 ERROR_LOG = settings.ERROR_LOG
 DEBUG_LOG = settings.DEBUG_LOG
 TIME_RANGES = settings.TIME_RANGES

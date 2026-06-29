@@ -1,5 +1,19 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Dict, Optional
+
+
+class ScrapeMode(Enum):
+    """Controls which extractors run during a scrape.
+
+    - FULL:       All extractors (Hero, QuickGuide, Community, Section, Graph)
+    - CORE_ONLY:  Skip GraphExtractor (graph data not needed for core sync)
+    - GRAPH_ONLY: Skip QuickGuide, Community, Section (only graph data needed)
+    """
+    FULL = "full"
+    CORE_ONLY = "core"
+    GRAPH_ONLY = "graph"
+
 
 @dataclass
 class HeroFact:
