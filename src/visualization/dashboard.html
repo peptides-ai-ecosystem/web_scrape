@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operations Dashboard — Peptide Pipeline</title>
+    <meta name="description" content="Trigger sync, evaluation, operations and scheduler endpoints. Watch jobs in real time.">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="app-nav" aria-label="Primary">
+        <div class="app-nav-inner">
+            <span class="app-nav-brand">Peptide Pipeline</span>
+            <a href="/visualization/index.html" class="app-nav-link">Pharmacokinetics</a>
+            <a href="/visualization/core.html" class="app-nav-link">Core Data</a>
+            <a href="/visualization/dashboard.html" class="app-nav-link" aria-current="page">Operations</a>
+            <a href="/docs" class="app-nav-link app-nav-link--secondary" target="_blank" rel="noopener">API Docs</a>
+        </div>
+    </nav>
+
+    <div class="page-container">
+        <div class="page-header">
+            <h1>Operations Dashboard</h1>
+            <p>Fire any write endpoint and watch the response. Long-running tasks are polled automatically until they complete.</p>
+        </div>
+
+        <!-- Syncing -->
+        <section class="panel-card">
+            <div class="panel-card-head">
+                <h2>Syncing <span class="method-pill">POST</span></h2>
+                <span class="panel-card-subtle">Scrape pep-pedia.org and write into the database.</span>
+            </div>
+            <div class="form-grid" id="sync-forms">
+                <!-- populated by JS -->
+            </div>
+            <div id="sync-result" style="margin-top: 14px;"></div>
+        </section>
+
+        <!-- Evaluation -->
+        <section class="panel-card">
+            <div class="panel-card-head">
+                <h2>Evaluation <span class="method-pill">POST</span></h2>
+                <span class="panel-card-subtle">Compare CSV expectations against DB state.</span>
+            </div>
+            <div class="form-grid" id="eval-forms"></div>
+            <div id="eval-result" style="margin-top: 14px;"></div>
+        </section>
+
+        <!-- Operations -->
+        <section class="panel-card">
+            <div class="panel-card-head">
+                <h2>Operations <span class="method-pill">GET / DELETE</span></h2>
+                <span class="panel-card-subtle">Track or cancel jobs. Auto-refreshes when jobs are active.</span>
+            </div>
+            <div class="health-ribbon" id="health-ribbon">Loading health…</div>
+            <div class="toolbar">
+                <div class="filter-pills" id="job-filters" role="tablist">
+                    <button class="filter-pill active" data-status="">all</button>
+                    <button class="filter-pill" data-status="pending">pending</button>
+                    <button class="filter-pill" data-status="running">running</button>
+                    <button class="filter-pill" data-status="completed">completed</button>
+                    <button class="filter-pill" data-status="failed">failed</button>
+                    <button class="filter-pill" data-status="cancelled">cancelled</button>
+                </div>
+                <button id="refresh-jobs-btn" class="btn btn-ghost" type="button">Refresh</button>
+            </div>
+            <table class="ops-table" id="jobs-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Endpoint</th>
+                        <th>Job ID</th>
+                        <th>Created</th>
+                        <th>Progress</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="jobs-tbody">
+                    <tr><td colspan="6" class="empty-state">Loading jobs…</td></tr>
+                </tbody>
+            </table>
+            <details style="margin-top: 14px;">
+                <summary class="panel-card-subtle" style="cursor: pointer;">Selected job details</summary>
+                <pre class="json-block" id="job-detail">Click a job's Open button to see the full response.</pre>
+            </details>
+        </section>
+
+        <!-- Scheduler -->
+        <section class="panel-card">
+            <div class="panel-card-head">
+                <h2>Scheduler <span class="method-pill">GET / POST</span></h2>
+                <span class="panel-card-subtle">Automated recurring core sync.</span>
+            </div>
+            <div id="scheduler-status" class="health-ribbon">Loading scheduler status…</div>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="sched-hours">Interval (hours)</label>
+                    <input id="sched-hours" type="number" min="0" step="0.5" value="12">
+                </div>
+                <div class="field">
+                    <label for="sched-minutes">Interval (minutes)</label>
+                    <input id="sched-minutes" type="number" min="0" max="59" step="1" value="0">
+                </div>
+                <div class="field">
+                    <label for="sched-limit">Limit per run</label>
+                    <input id="sched-limit" type="number" min="1" placeholder="unlimited">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button id="sched-start"  class="btn" type="button">Start / Reconfigure</button>
+                <button id="sched-pause"  class="btn btn-secondary" type="button">Pause</button>
+                <button id="sched-resume" class="btn btn-secondary" type="button">Resume</button>
+                <button id="sched-refresh" class="btn btn-ghost" type="button">Refresh status</button>
+            </div>
+        </section>
+
+        <!-- Raw log -->
+        <section class="panel-card">
+            <div class="panel-card-head">
+                <h2>Activity log</h2>
+                <div class="log-controls">
+                    <label class="toggle">
+                        <input id="log-show-polls" type="checkbox">
+                        <span>Show polls</span>
+                    </label>
+                    <button id="log-clear" class="btn btn-ghost" type="button">Clear</button>
+                </div>
+            </div>
+            <div class="panel-card-subtle" style="margin-bottom: 10px;">
+                Captures user actions, job state transitions, and every non-routine API call from this page.
+                Routine background polls (<code>/operations/jobs</code>, <code>/operations/health</code>,
+                <code>/scheduler/status</code>, in-flight job polling) are hidden by default — flip
+                “Show polls” to surface them.
+            </div>
+            <div class="log-stream" id="log-stream">
+                <div class="empty-state">No activity yet.</div>
+            </div>
+        </section>
+    </div>
+
+    <script src="dashboard.js?v=2"></script>
+</body>
+</html>

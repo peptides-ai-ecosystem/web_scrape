@@ -52,9 +52,24 @@ app = FastAPI(
     ### 📈 Graph Data API
     | Endpoint | Description |
     |---|---|
-    | `GET /api/v1/graph/peptides` | List all peptides that have graph data available |
-    | `GET /api/v1/graph/peptide/{id}/methods` | List administration methods for a given peptide |
-    | `GET /api/v1/graph/graph/{id}?method=` | Full graph coordinates, SVG paths, markers, axis labels for rendering |
+    | `GET /api/v1/peptides` | List all peptides that have graph data available |
+    | `GET /api/v1/peptide/{id}/methods` | List administration methods for a given peptide |
+    | `GET /api/v1/graph/{id}?method=` | Full graph coordinates, SVG paths, markers, axis labels for rendering |
+
+    ### 🧬 Core Data Inspector (DB read API)
+    | Endpoint | Description |
+    |---|---|
+    | `GET /api/v1/core/peptides` | List all peptides currently in the database |
+    | `GET /api/v1/core/peptide/{id}` | Fully normalized peptide record (benefits, side-effects, protocols, indications, references, graph summary) |
+    | `GET /api/v1/core/peptide/by-slug/{slug}` | Same payload, keyed by slug — used to join CSV scrape against DB |
+    | `GET /api/v1/core/lookups` | Every lookup catalog in one round-trip (administration_methods, benefits, side_effects, dosages, schedules, application_places, categories) |
+
+    ### 📄 CSV Inspector (scrape read API)
+    | Endpoint | Description |
+    |---|---|
+    | `GET /api/v1/csv/peptides` | Distinct `(name, method)` rows from `output/pep_pedia_master.csv` |
+    | `GET /api/v1/csv/peptide?name=&method=` | Grouped, non-empty cells for one CSV row (parses embedded `graph_data_json`) |
+    | `GET /api/v1/csv/columns` | All 2,400+ CSV columns bucketed by entity group |
 
     ### ⚙️ Operations & Job Management
     | Endpoint | Description |
@@ -96,6 +111,14 @@ app = FastAPI(
         {
             "name": "Graph",
             "description": "📈 Retrieve pharmacokinetics graph data (SVG paths, markers, coordinates) for visualization.",
+        },
+        {
+            "name": "Core Data",
+            "description": "🧬 Read-only DB inspector — fetch every entity injected from the scrape (benefits, side-effects, protocols, indications, references, ...).",
+        },
+        {
+            "name": "CSV Inspector",
+            "description": "📄 Read-only CSV inspector — surface the raw scraped data in `output/pep_pedia_master.csv` grouped by entity.",
         },
         {
             "name": "Operations",
@@ -153,7 +176,9 @@ async def home():
                 <h3>Quick Links:</h3>
                 <ul>
                     <li><strong>API Docs:</strong> <a href="/docs">Swagger UI / API Reference</a></li>
-                    <li><strong>Viewer:</strong> <a href="/visualization/">Open Visualization Dashboard</a></li>
+                    <li><strong>Pharmacokinetics:</strong> <a href="/visualization/">PK graph viewer</a></li>
+                    <li><strong>Core data:</strong> <a href="/visualization/core.html">CSV vs DB inspector</a></li>
+                    <li><strong>Operations:</strong> <a href="/visualization/dashboard.html">Sync / evaluation / scheduler dashboard</a></li>
                 </ul>
             </div>
         </div>

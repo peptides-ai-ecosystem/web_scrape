@@ -48,19 +48,17 @@ class PeptideItem(BaseModel):
 
 
 class MethodItem(BaseModel):
-    administration_method: str = Field(..., description="Administration method name (e.g. 'Injectable', 'Oral').")
+    id: int = Field(..., description="Administration method database ID.")
+    name: str = Field(..., description="Administration method name (e.g. 'Injectable', 'Oral').")
 
 
-class GraphDataResponse(BaseModel):
-    peptide_name: str = Field(..., description="Peptide display name.")
-    administration_method: str = Field(..., description="Administration method for this graph.")
-    time_ranges: List[str] = Field(..., description="X-axis time range labels (e.g. ['0h', '1h', '2h', '4h', '8h', '12h', '24h']).")
-    concentration_values: List[float] = Field(..., description="Y-axis concentration values matching each time range.")
-    svg_path: str = Field(..., description="SVG path string (M/L/C commands) for the concentration curve.")
-    points: List[Dict[str, float]] = Field(..., description="Coordinate points on the curve as [{{'x': ..., 'y': ...}}].")
-    markers: List[Dict[str, Any]] = Field(..., description="Marker annotations for notable data points.")
-    x_label: str = Field("Time", description="X-axis label.")
-    y_label: str = Field("Concentration", description="Y-axis label.")
+# NOTE: Intentionally not declared as a strict Pydantic response_model.
+# The repository (`GraphRepository.get_visualization_data`) returns a
+# time-range nested dict — `{peptide_name, administration_method, "24h": {...},
+# "7d": {...}, "14d": {...}, "30d": {...}}` — and the frontend in
+# `script.js` indexes into `graphData[currentRange]` directly. Pydantic
+# rejects this dynamic schema, so we document it via the `responses` block
+# and return the raw dict.
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +121,9 @@ async def get_peptides():
             "content": {
                 "application/json": {
                     "example": [
-                        {"administration_method": "Injectable"},
-                        {"administration_method": "Oral"},
-                        {"administration_method": "Sublingual"},
+                        {"id": 1, "name": "Injectable"},
+                        {"id": 2, "name": "Oral"},
+                        {"id": 3, "name": "Sublingual"},
                     ]
                 }
             },
@@ -145,7 +143,7 @@ async def get_peptide_methods(peptide_id: int):
     - `peptide_id` — numeric ID of the peptide (from `/peptides`).
 
     ### Response
-    Array of `{{"administration_method": "<string>"}}`.
+    Array of `{{"id": <int>, "name": "<string>"}}`.
 
     ### Errors
     - **404** → Peptide not found or has no graph data.
@@ -169,29 +167,26 @@ async def get_peptide_methods(peptide_id: int):
 
 @router.get(
     "/graph/{peptide_id}",
-    response_model=GraphDataResponse,
     responses={
         200: {
-            "description": "Full pharmacokinetics graph data for rendering a concentration—time curve.",
+            "description": "Pharmacokinetics graph data keyed by time range.",
             "content": {
                 "application/json": {
                     "example": {
-                        "peptide_name": "Semaglutide",
+                        "peptide_name": "BPC-157",
                         "administration_method": "Injectable",
-                        "time_ranges": ["0h", "1h", "2h", "4h", "8h", "12h", "24h"],
-                        "concentration_values": [0.0, 1.2, 2.8, 4.1, 3.5, 1.8, 0.3],
-                        "svg_path": "M0,100 L50,80 L100,40 L200,20 L300,10 L400,30 L500,70",
-                        "points": [
-                            {"x": 0, "y": 100},
-                            {"x": 50, "y": 80},
-                            {"x": 100, "y": 40},
-                        ],
-                        "markers": [
-                            {"label": "Tmax", "x": 200, "y": 20},
-                            {"label": "Cmax", "x": 200, "y": 20},
-                        ],
-                        "x_label": "Time (hours)",
-                        "y_label": "Concentration (ng/mL)",
+                        "24h": {
+                            "metadata": {"peak": "48 min", "half_life": "8 hrs", "cleared": "~1.7 days"},
+                            "path_data": "M 10 35 C 10.258 35, ...",
+                            "markers": [{"r": 0.7, "cx": 41.82, "cy": 20.60, "fill": "#f59e0b"}],
+                            "points":  [{"x": 10.0, "y": 35.0}, {"x": 10.86, "y": 26.3}],
+                            "x_labels": [{"pos": 10.0, "label": "Dose"}, {"pos": 96.0, "label": "1d"}],
+                            "y_labels": [{"pos": 8.0,  "label": "100%"}, {"pos": 21.3, "label": "50%"}],
+                            "legend":   {"peak": "rgb(34, 197, 94)", "half-life": "rgb(245, 158, 11)"},
+                        },
+                        "7d":  {"metadata": {}, "path_data": "...", "markers": [], "points": [], "x_labels": [], "y_labels": [], "legend": {}},
+                        "14d": {"metadata": {}, "path_data": "...", "markers": [], "points": [], "x_labels": [], "y_labels": [], "legend": {}},
+                        "30d": {"metadata": {}, "path_data": "...", "markers": [], "points": [], "x_labels": [], "y_labels": [], "legend": {}},
                     }
                 }
             },
@@ -215,18 +210,17 @@ async def get_graph_data(
     """
     📈 Fetch **pharmacokinetics graph data** for a peptide and administration method.
 
-    Returns everything needed to render an interactive concentration—time curve:
-    SVG path, coordinate points, time-range/concentration arrays, and markers.
+    The response is keyed by time range (`24h`, `7d`, `14d`, `30d`) — each one
+    contains `path_data` (SVG curve), `points`, `markers`, axis labels, legend
+    color map, and a `metadata` block with peak / half-life / cleared values.
+    The frontend in `script.js` switches the rendered curve by indexing into
+    `graphData[currentRange]`.
 
     ### Path Parameters
     - `peptide_id` — numeric ID from `/peptides`.
 
     ### Query Parameters
     - `method` — administration method (default: `"Injectable"`).
-
-    ### Response
-    JSON with `svg_path`, `points`, `markers`, `time_ranges`, `concentration_values`,
-    and axis labels. See the schema for full details.
 
     ### Errors
     - **404** → No graph data for this peptide + method combination.

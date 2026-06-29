@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core Data Inspector — Peptide Pipeline</title>
+    <meta name="description" content="Side-by-side viewer comparing what was scraped (CSV) vs what was injected (DB) for any peptide.">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="app-nav" aria-label="Primary">
+        <div class="app-nav-inner">
+            <span class="app-nav-brand">Peptide Pipeline</span>
+            <a href="/visualization/index.html" class="app-nav-link">Pharmacokinetics</a>
+            <a href="/visualization/core.html" class="app-nav-link" aria-current="page">Core Data</a>
+            <a href="/visualization/dashboard.html" class="app-nav-link">Operations</a>
+            <a href="/docs" class="app-nav-link app-nav-link--secondary" target="_blank" rel="noopener">API Docs</a>
+        </div>
+    </nav>
+
+    <div class="page-container">
+        <div class="page-header">
+            <h1>Core Data Inspector</h1>
+            <p>Pick a peptide to compare the <strong>scraped CSV</strong> against the <strong>database</strong>. Each section flags whether data is missing on either side.</p>
+        </div>
+
+        <div class="panel-card">
+            <div class="toolbar">
+                <div class="field" style="flex: 2; min-width: 240px;">
+                    <label for="search-input">Search peptide</label>
+                    <input id="search-input" type="search" placeholder="Filter by name or slug (e.g. BPC, mk-677)" autocomplete="off">
+                </div>
+                <div class="field" style="flex: 3; min-width: 280px;">
+                    <label for="peptide-select">Peptide</label>
+                    <select id="peptide-select">
+                        <option value="">Loading…</option>
+                    </select>
+                </div>
+                <div class="field" style="flex: 1; min-width: 160px;">
+                    <label for="method-select">Method (CSV side)</label>
+                    <select id="method-select">
+                        <option value="">— Any —</option>
+                    </select>
+                </div>
+                <div style="flex: 1; min-width: 140px; align-self: end;">
+                    <button id="reload-btn" class="btn btn-secondary" type="button">Reload</button>
+                </div>
+            </div>
+            <div id="picker-status" class="panel-card-subtle"></div>
+        </div>
+
+        <div class="panel-card">
+            <div class="panel-card-head">
+                <h2 id="inspector-title">Pick a peptide to begin</h2>
+                <div class="panel-card-subtle" id="inspector-links"></div>
+            </div>
+            <div class="inspector-grid">
+                <div class="inspector-column">
+                    <h3>CSV (Scraped)</h3>
+                    <div id="csv-pane">
+                        <div class="empty-state">No peptide selected.</div>
+                    </div>
+                </div>
+                <div class="inspector-column">
+                    <h3>DB (Injected)</h3>
+                    <div id="db-pane">
+                        <div class="empty-state">No peptide selected.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="core.js?v=1"></script>
+</body>
+</html>

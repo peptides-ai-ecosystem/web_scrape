@@ -1,10 +1,51 @@
+# --- Python ---
 .venv
-.git
-.gitignore
 __pycache__
 *.pyc
 *.pyo
 *.pyd
-.db
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# --- Secrets / local config (NEVER bake into image — set in Railway dashboard) ---
+.env
+.env.*
+!.env.example
+
+# --- Source control / IDE noise ---
+.git
+.gitignore
+.graphifyignore
+.cursor
 .DS_Store
-output_v6
+.vscode
+.idea
+
+# --- Local runtime artefacts (Railway should use a Volume mount instead) ---
+output/
+log/
+output_1/
+output_2/
+output_v2/
+output_v3/
+output_v4/
+output_v5/
+output_v6/
+graphify-out/
+peptides_temp/
+graph_html/
+
+# --- Local-only assets ---
+*.sql
+*.csv
+sync_supabase.sh
+viz_server.py
+docker-compose.yml
+
+# --- Docs (not needed at runtime) ---
+README.md
+execution_guide.md
+docs/
+*.md
+!RAILWAY_DEPLOY.md
