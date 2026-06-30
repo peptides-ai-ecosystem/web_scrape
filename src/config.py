@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -21,7 +20,7 @@ class Settings:
     # Directory settings
     OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "output"))
     OUTPUT_DIR.mkdir(exist_ok=True)
-    LOG_DIR: Path = Path(os.getenv("LOG_DIR", "output"))
+    LOG_DIR: Path = Path(os.getenv("LOG_DIR", "log"))
     LOG_DIR.mkdir(exist_ok=True)
     
     # File paths — manual sync flows use dedicated files to avoid race conditions
@@ -61,48 +60,37 @@ BUTTON_SKIP_LIST = settings.BUTTON_SKIP_LIST
 
 
 # -------------------- LOGGING FUNCTIONS -------------------- #
+# Backward-compatible wrappers so existing callers (log_debug, log_error)
+# continue to work without any changes.  Under the hood they delegate to
+# Python's standard logging module which writes to rotating files +
+# console.  See ``src/log_setup.py`` for configuration details.
+
+from src.log_setup import get_logger  # noqa: E402
+
+_log = get_logger("config")  # module-level logger for config.py itself
+
 
 def log_error(message: str, filename: Optional[str] = None) -> None:
+    """Log an error message (backward-compatible wrapper).
+
+    Delegates to ``logging.error()`` under the hood.
     """
-    Log an error message to ERROR_LOG with timestamp.
-    
-    Args:
-        message: Error message to log
-        filename: Optional filename prefix for per-file tracking
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] {f'[{filename}] ' if filename else ''}{message}"
-    
-    try:
-        with open(ERROR_LOG, "a", encoding="utf-8") as f:
-            f.write(log_entry + "\n")
-    except Exception as e:
-        print(f"[WARNING] Failed to write to error log: {e}")
+    get_logger(filename or "app").error(message)
 
 
 def log_debug(message: str, filename: Optional[str] = None) -> None:
+    """Log a debug message (backward-compatible wrapper).
+
+    Delegates to ``logging.debug()`` under the hood.
     """
-    Log a debug message to DEBUG_LOG with timestamp.
-    
-    Args:
-        message: Debug message to log
-        filename: Optional filename prefix for per-file tracking
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] {f'[{filename}] ' if filename else ''}{message}"
-    
-    try:
-        with open(DEBUG_LOG, "a", encoding="utf-8") as f:
-            f.write(log_entry + "\n")
-    except Exception as e:
-        print(f"[WARNING] Failed to write to debug log: {e}")
+    get_logger(filename or "app").debug(message)
 
 
 def clear_logs() -> None:
-    """Clear both error and debug logs (useful at start of execution)."""
-    try:
-        ERROR_LOG.write_text("")
-        DEBUG_LOG.write_text("")
-        print(f"[INFO] Logs cleared at {ERROR_LOG} and {DEBUG_LOG}")
-    except Exception as e:
-        print(f"[WARNING] Failed to clear logs: {e}")
+    """Clear both error and debug logs (no-op, kept for backward compat).
+
+    Old behaviour wrote directly to ``error_log.txt`` / ``debug_log.txt``.
+    The new rotating-file handlers manage this automatically, so this is now
+    a no-op.
+    """
+    _log.info("clear_logs() called — rotating log files self-manage, ignoring.")

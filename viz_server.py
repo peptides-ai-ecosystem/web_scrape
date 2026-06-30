@@ -6,6 +6,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from src.routes.graph import router as graph_router, get_pool
 
+from src.log_setup import setup_logging
+setup_logging(log_dir=os.getenv("LOG_DIR", "log"))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

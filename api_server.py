@@ -9,6 +9,13 @@ from src.api.v1.routers import api_router
 
 from src.core.scheduler import start_scheduler, shutdown_scheduler
 
+# ---------------------------------------------------------------------------
+# Bootstrap logging before anything else
+# ---------------------------------------------------------------------------
+from src.log_setup import setup_logging
+
+setup_logging(log_dir=os.getenv("LOG_DIR", "log"))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Warm up the pool on startup so the first request isn't slow
