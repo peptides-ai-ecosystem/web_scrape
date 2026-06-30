@@ -7,7 +7,7 @@ from src.config import TIME_RANGES
 from typing import Dict, List, Optional
 import re
 import time
-from src.config import log_debug, log_error
+from src.config import log_debug, log_error, log_info, log_success
 class GraphExtractor(BaseExtractor):
     """Extracts pharmacokinetics graph data for the currently active delivery method.
     
@@ -21,6 +21,7 @@ class GraphExtractor(BaseExtractor):
 
         # Guard: skip if graph section doesn't exist for this method
         if not self._has_graph(driver):
+            log_debug("No graph section found for this method — skipping", "graph_extractor.py")
             return all_graph_data
 
         try:
@@ -40,37 +41,40 @@ class GraphExtractor(BaseExtractor):
             # Track the current path data to detect changes between tabs
             current_d = None
 
+            log_info(f"Starting graph extraction — {len(time_buttons)} time-range tab(s) found", "graph_extractor.py")
+
             for btn in time_buttons:
                 btn_text = btn.text.strip()
                 if btn_text not in TIME_RANGES:
                     continue
 
-                # Get old path data before clicking
                 old_d = current_d
 
                 try:
-                    print(f"[DEBUG] Clicking tab: {btn_text}")
+                    log_debug(f"Clicking tab: {btn_text}", "graph_extractor.py")
                     self.safe_click(driver, wait, btn)
 
                     # Wait for graph to actually change (not just exist)
                     self._wait_for_graph_update(graph_container, wait, old_d=old_d)
-                    time.sleep(1)  # Increased from 0.5s to give more time for animation
+                    time.sleep(1)
 
                     data, new_d = self._scrape_current_view(driver, graph_container, btn_text)
                     if data:
-                        log_debug(f"[DEBUG] Successfully extracted {btn_text}", "graph_extractor.py")
+                        log_success(f"Extracted graph data for {btn_text}", "graph_extractor.py")
                         all_graph_data[btn_text] = data
                         current_d = new_d
                     else:
-                        log_debug(f"[WARNING] No data for {btn_text}", "graph_extractor.py")
+                        log_debug(f"No data for {btn_text}", "graph_extractor.py")
                 except Exception as e:
-                    log_error(f"[ERROR] Failed to scrape tab {btn_text}: {e}", "graph_extractor.py")
+                    log_error(f"Failed to scrape tab {btn_text}: {e}", "graph_extractor.py")
                     continue
 
+            log_success(f"Graph extraction complete — {len(all_graph_data)} time-range(s) captured", "graph_extractor.py")
+
         except TimeoutException:
-            log_debug("[WARNING] Graph container not found within timeout.", "graph_extractor.py")
+            log_debug("Graph container not found within timeout.", "graph_extractor.py")
         except Exception as e:
-            log_error(f"[ERROR] Graph extraction failed: {e}", "graph_extractor.py")
+            log_error(f"Graph extraction failed: {e}", "graph_extractor.py")
 
         return all_graph_data
 
@@ -99,17 +103,17 @@ class GraphExtractor(BaseExtractor):
                 d = path.get_attribute("d")
                 is_ready = bool(d and len(d) > 10)
                 if is_ready:
-                    log_debug(f"[DEBUG] Graph ready with path of {len(d)} chars", "graph_extractor.py" )
+                    log_debug(f"Graph ready — path: {len(d)} chars", "graph_extractor.py")
                 return is_ready
             except Exception as e:
-                log_debug(f"[DEBUG] Graph not ready yet: {e}", "graph_extractor.py")
+                log_debug(f"Graph not ready yet: {e}", "graph_extractor.py")
                 return False
 
         try:
             wait.until(_svg_path_loaded)
         except TimeoutException:
             # If it never loads, continue — _scrape_current_view will handle the error
-            log_debug("[WARNING] Graph path readiness timeout", "graph_extractor.py")
+            log_debug("Graph path readiness timeout — continuing anyway", "graph_extractor.py")
             pass
 
     def _wait_for_graph_update(self, container, wait, old_d=None):
@@ -138,7 +142,7 @@ class GraphExtractor(BaseExtractor):
         try:
             wait.until(_graph_updated)
         except TimeoutException:
-            log_debug("[WARNING] Graph update wait timed out", "graph_extractor.py")
+            log_debug("Graph update wait timed out — continuing anyway", "graph_extractor.py")
             pass
 
     # ------------------------------------------------------------------
@@ -160,7 +164,7 @@ class GraphExtractor(BaseExtractor):
 
             # Check if there's actually a graph path extracted
             if not path_data or len(path_data) < 5:
-                log_debug(f"[WARNING] No valid graph path data found for {time_range}, skipping.", "graph_extractor.py")
+                log_debug(f"No valid graph path data for {time_range} — skipping", "graph_extractor.py")
                 return None, None
 
             # Extract markers (circle elements in SVG)
@@ -183,12 +187,12 @@ class GraphExtractor(BaseExtractor):
             )
 
             # Debug logging
-            log_debug(f"[DEBUG] {time_range}: peak={bool(peak)}, path_data={len(path_data) if path_data else 0}B, "
+            log_debug(f"{time_range}: peak={bool(peak)}, path_data={len(path_data) if path_data else 0}B, "
                       f"markers={len(markers)}, legend={len(legend)}, labels_x={len(x_labels)}, labels_y={len(y_labels)}", "graph_extractor.py")
 
             return graph_data, path_data
         except Exception as e:
-            log_error(f"[ERROR] Graph view scraping failed for {time_range}: {e}", "graph_extractor.py")
+            log_error(f"Graph view scraping failed for {time_range}: {e}", "graph_extractor.py")
             import traceback
             traceback.print_exc()
             return None, None

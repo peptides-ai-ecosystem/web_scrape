@@ -3,7 +3,7 @@ from src.mappers.group_d.graph_mapper import GraphMapper
 from src.infrastructure.db import DbManager
 from src.utils.error_tracker import ErrorTracker
 from src.utils.peptide_utils import get_peptide_candidates, extract_essence
-from src.config import log_debug, log_error
+from src.config import log_debug, log_error, log_info, log_success
 
 class GraphImportOrchestrator:
     """
@@ -36,7 +36,7 @@ class GraphImportOrchestrator:
         """
         db = DbManager(db_url)
         try:
-            log_debug(f"Starting database sync for {len(rows)} graph rows", "graph_import_orchestrator")
+            log_info(f"GRAPH SYNC STARTED — {len(rows)} row(s) to inject", "graph_import_orchestrator")
             db_identifiers = db.get_all_peptide_identifiers()
             log_debug(f"Found {len(db_identifiers)} existing peptide identifiers in DB", "graph_import_orchestrator")
             db_essences = {extract_essence(ident): ident for ident in db_identifiers}
@@ -110,12 +110,12 @@ class GraphImportOrchestrator:
                     
                     synced_count += 1
                     synced_peptides.append({"name": raw_name, "slug": matched_identifier, "methods": list(set(injected_methods))})
-                    log_debug(f"  ✓ SYNCED: '{raw_name}' - graph data injected for methods: {list(set(injected_methods))}", "graph_import_orchestrator")
+                    log_success(f"Graph sync — '{raw_name}' methods: {list(set(injected_methods))}", "graph_import_orchestrator")
                     
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "graph_sync", e)
-                    log_debug(f"  ✗ ERROR: '{raw_name}' - failed to map/inject graph data: {e}", "graph_import_orchestrator")
+                    log_error(f"Graph sync — '{raw_name}' failed: {e}", "graph_import_orchestrator")
                     continue
                     
         finally:
@@ -146,9 +146,11 @@ class GraphImportOrchestrator:
         
         # Also log separately for easy reading
         for p in synced_peptides:
-            log_debug(f"SYNCED: {p['name']} (slug: {p['slug']}, methods: {p['methods']})", "graph_import_orchestrator")
+            log_success(f"Graph sync — {p['name']} (slug: {p['slug']}, methods: {p['methods']})", "graph_import_orchestrator")
         for name in skipped_peptides:
-            log_debug(f"SKIPPED: {name}", "graph_import_orchestrator")
+            log_debug(f"Skipped — {name}", "graph_import_orchestrator")
+
+        log_info(f"GRAPH SYNC COMPLETED — {synced_count} synced, {skipped_count} skipped", "graph_import_orchestrator")
         
         # Return summary for API job result enrichment
         return {
@@ -164,7 +166,7 @@ class GraphImportOrchestrator:
         """
         db = DbManager(db_url)
         try:
-            log_debug(f"Starting missing database sync for {len(rows)} graph rows", "graph_import_orchestrator")
+            log_info(f"GRAPH MISSING SYNC STARTED — {len(rows)} row(s) to check", "graph_import_orchestrator")
             db_identifiers = db.get_all_peptide_identifiers()
             log_debug(f"Found {len(db_identifiers)} existing peptide identifiers in DB", "graph_import_orchestrator")
             db_essences = {extract_essence(ident): ident for ident in db_identifiers}
@@ -283,9 +285,11 @@ class GraphImportOrchestrator:
         log_debug(summary, "graph_import_orchestrator")
         
         for p in synced_peptides:
-            log_debug(f"SYNCED: {p['name']} (slug: {p['slug']}, new methods: {p['methods']})", "graph_import_orchestrator")
+            log_success(f"Graph missing sync — {p['name']} (slug: {p['slug']}, new methods: {p['methods']})", "graph_import_orchestrator")
         for name in skipped_peptides:
-            log_debug(f"SKIPPED: {name}", "graph_import_orchestrator")
+            log_debug(f"Skipped — {name}", "graph_import_orchestrator")
+
+        log_info(f"GRAPH MISSING SYNC COMPLETED — {synced_count} injected, {skipped_count} skipped", "graph_import_orchestrator")
         
         return {
             "synced_count": synced_count,

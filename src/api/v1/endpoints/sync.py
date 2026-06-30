@@ -11,7 +11,7 @@ from src.mappers.db_import_orchestrator import DbImportOrchestrator
 from src.mappers.graph_import_orchestrator import GraphImportOrchestrator
 from src.utils.error_tracker import ErrorTracker
 from src.core.models import ScrapeMode
-from src.config import log_debug, log_error, OUTPUT_DIR, ENHANCED_CSV, GRAPH_CSV, FULL_CSV
+from src.config import log_debug, log_error, log_info, log_success, OUTPUT_DIR, ENHANCED_CSV, GRAPH_CSV, FULL_CSV
 from src.core.job_queue import get_job_queue, JobStatus
 
 router = APIRouter()
@@ -95,14 +95,17 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
     job.start()
     tracker = ErrorTracker()
 
+    log_info(f"CORE PIPELINE STARTED — job={job_id}, limit={limit}, urls_provided={len(requested_urls) if requested_urls else 'auto'}", "sync_endpoint")
+
     try:
         # Step 1: Resolve URLs
         urls = _resolve_urls(requested_urls, limit)
         if not urls:
+            log_error("No URLs discovered or provided. Sync aborted.", "sync_endpoint")
             job.fail("No URLs discovered or provided. Sync aborted.")
             return
 
-        log_debug(f"Core sync starting scrape for {len(urls)} URLs", "sync_endpoint")
+        log_info(f"Core sync — scraping {len(urls)} URLs", "sync_endpoint")
 
         # Step 2: Scrape → writes to ENHANCED_CSV (core-only: skip graph extractor)
         log_debug(f"Core sync: scraping with mode=CORE_ONLY to {ENHANCED_CSV}", "sync_endpoint")
@@ -143,8 +146,10 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
             "db_errors": len(tracker.db_errors) if tracker.has_errors() else 0,
         })
 
+        log_success(f"CORE PIPELINE COMPLETED — job={job_id} | {result.get('synced_count', 0)} synced, {result.get('skipped_count', 0)} skipped, {len(tracker.scrape_errors) if tracker.has_errors() else 0} scrape errors", "sync_endpoint")
+
     except Exception as e:
-        log_error(f"Fatal error during core sync task: {e}", "sync_endpoint")
+        log_error(f"CORE PIPELINE FAILED — job={job_id}: {e}", "sync_endpoint")
         job.fail(str(e))
     finally:
         if tracker.has_errors():
@@ -169,14 +174,17 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
     job.start()
     tracker = ErrorTracker()
 
+    log_info(f"GRAPH PIPELINE STARTED — job={job_id}, limit={limit}, urls_provided={len(requested_urls) if requested_urls else 'auto'}", "sync_endpoint")
+
     try:
         # Step 1: Resolve URLs
         urls = _resolve_urls(requested_urls, limit)
         if not urls:
+            log_error("No URLs discovered or provided. Sync aborted.", "sync_endpoint")
             job.fail("No URLs discovered or provided. Sync aborted.")
             return
 
-        log_debug(f"Graph sync starting scrape for {len(urls)} URLs", "sync_endpoint")
+        log_info(f"Graph sync — scraping {len(urls)} URLs", "sync_endpoint")
 
         # Step 2: Scrape → writes to GRAPH_CSV (graph-only fields)
         log_debug(f"Graph sync: scraping {len(urls)} URL(s) to {GRAPH_CSV}", "sync_endpoint")
@@ -219,8 +227,10 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
             "db_errors": len(tracker.db_errors) if tracker.has_errors() else 0,
         })
 
+        log_success(f"GRAPH PIPELINE COMPLETED — job={job_id} | {result.get('synced_count', 0)} synced, {result.get('skipped_count', 0)} skipped", "sync_endpoint")
+
     except Exception as e:
-        log_error(f"Fatal error during graph sync task: {e}", "sync_endpoint")
+        log_error(f"GRAPH PIPELINE FAILED — job={job_id}: {e}", "sync_endpoint")
         job.fail(str(e))
     finally:
         if tracker.has_errors():
@@ -240,14 +250,17 @@ def run_graph_sync_missing_task(job_id: str, requested_urls: Optional[List[str]]
     job.start()
     tracker = ErrorTracker()
 
+    log_info(f"GRAPH MISSING PIPELINE STARTED — job={job_id}, limit={limit}, urls_provided={len(requested_urls) if requested_urls else 'auto'}", "sync_endpoint")
+
     try:
         # Step 1: Resolve URLs
         urls = _resolve_urls(requested_urls, limit)
         if not urls:
+            log_error("No URLs discovered or provided. Sync aborted.", "sync_endpoint")
             job.fail("No URLs discovered or provided. Sync aborted.")
             return
 
-        log_debug(f"Graph Missing sync starting scrape for {len(urls)} URLs", "sync_endpoint")
+        log_info(f"Graph missing sync — scraping {len(urls)} URLs", "sync_endpoint")
 
         # Step 2: Scrape → writes to GRAPH_CSV (graph-only fields)
         manager = ScraperManager(csv_path=Path(GRAPH_CSV))
@@ -287,8 +300,10 @@ def run_graph_sync_missing_task(job_id: str, requested_urls: Optional[List[str]]
             "db_errors": len(tracker.db_errors) if tracker.has_errors() else 0,
         })
 
+        log_success(f"GRAPH MISSING PIPELINE COMPLETED — job={job_id} | {result.get('synced_count', 0)} synced, {result.get('skipped_count', 0)} skipped", "sync_endpoint")
+
     except Exception as e:
-        log_error(f"Fatal error during graph missing sync task: {e}", "sync_endpoint")
+        log_error(f"GRAPH MISSING PIPELINE FAILED — job={job_id}: {e}", "sync_endpoint")
         job.fail(str(e))
     finally:
         if tracker.has_errors():

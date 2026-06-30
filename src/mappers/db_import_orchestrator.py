@@ -14,7 +14,7 @@ from src.mappers.group_d.protocol_mapper import ProtocolMapper
 from src.infrastructure.db import DbManager
 from src.utils.error_tracker import ErrorTracker
 from src.utils.peptide_utils import get_peptide_candidates, extract_essence, normalize_to_slug
-from src.config import log_debug, log_error
+from src.config import log_debug, log_error, log_info, log_success
 
 class DbImportOrchestrator:
     """
@@ -68,16 +68,16 @@ class DbImportOrchestrator:
         """
         db = DbManager(db_url)
         try:
-            log_debug(f"Starting database sync for {len(rows)} rows", "db_import_orchestrator")
+            log_info(f"CORE SYNC STARTED — {len(rows)} row(s) to process", "db_import_orchestrator")
             # Pre-fetch all existing peptide identifiers and their essences
             db_identifiers = db.get_all_peptide_identifiers()
             db_essences = {extract_essence(ident): ident for ident in db_identifiers}
-            print(f"[INFO] Found {len(db_identifiers)} peptides in DB, {len(db_essences)} unique essences")
+            log_info(f"Found {len(db_identifiers)} peptides in DB, {len(db_essences)} unique essences", "db_import_orchestrator")
 
             # Pre-fetch all existing administration methods from DB
             db_admin_methods = db.get_all_administration_methods()
             existing_method_names = {m["name"] for m in db_admin_methods}
-            print(f"[INFO] Found {len(existing_method_names)} administration methods in DB: {existing_method_names}")
+            log_info(f"Found {len(existing_method_names)} administration methods in DB: {existing_method_names}", "db_import_orchestrator")
 
             # Keyword-to-DB-name mapping rules
             METHOD_KEYWORD_MAP = {
@@ -230,7 +230,7 @@ class DbImportOrchestrator:
                 synced_count += 1
                 synced_peptides.append({"name": raw_name, "slug": row_slug, "method": mapped_method})
                 print(f"  ✓ SYNCED: '{raw_name}' (slug: {row_slug})")
-                log_debug(f"  ✓ SYNCED: '{raw_name}' (slug: {row_slug}, method: {mapped_method})", "db_import_orchestrator")
+                log_success(f"Core sync — '{raw_name}' (slug: {row_slug}, method: {mapped_method})", "db_import_orchestrator")
 
             # Summary section
             summary_lines = [
@@ -256,9 +256,11 @@ class DbImportOrchestrator:
             log_debug(summary, "db_import_orchestrator")
 
             for p in synced_peptides:
-                log_debug(f"SYNCED: {p['name']} (slug: {p['slug']}, method: {p['method']})", "db_import_orchestrator")
+                log_success(f"Core sync — {p['name']} (slug: {p['slug']}, method: {p['method']})", "db_import_orchestrator")
             for name in skipped_peptides:
-                log_debug(f"SKIPPED: {name}", "db_import_orchestrator")
+                log_debug(f"Skipped — {name}", "db_import_orchestrator")
+
+            log_info(f"CORE SYNC COMPLETED — {synced_count} synced, {skipped_count} skipped", "db_import_orchestrator")
 
             return {
                 "synced_count": synced_count,

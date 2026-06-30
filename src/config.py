@@ -71,19 +71,28 @@ _log = get_logger("config")  # module-level logger for config.py itself
 
 
 def log_error(message: str, filename: Optional[str] = None) -> None:
-    """Log an error message (backward-compatible wrapper).
-
-    Delegates to ``logging.error()`` under the hood.
-    """
+    """Log an error message (backward-compatible wrapper)."""
     get_logger(filename or "app").error(message)
 
 
-def log_debug(message: str, filename: Optional[str] = None) -> None:
-    """Log a debug message (backward-compatible wrapper).
+def log_warning(message: str, filename: Optional[str] = None) -> None:
+    """Log a warning message."""
+    get_logger(filename or "app").warning(message)
 
-    Delegates to ``logging.debug()`` under the hood.
-    """
+
+def log_info(message: str, filename: Optional[str] = None) -> None:
+    """Log an info message."""
+    get_logger(filename or "app").info(message)
+
+
+def log_debug(message: str, filename: Optional[str] = None) -> None:
+    """Log a debug message (backward-compatible wrapper)."""
     get_logger(filename or "app").debug(message)
+
+
+def log_success(message: str, filename: Optional[str] = None) -> None:
+    """Log a success signal at INFO level with a ✓ prefix."""
+    get_logger(filename or "app").info(f"✓ {message}")
 
 
 def clear_logs() -> None:
