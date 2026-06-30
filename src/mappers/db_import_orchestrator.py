@@ -283,7 +283,13 @@ class DbImportOrchestrator:
             db.insert_lookup("side_effects", se["name"], description=se.get("description"))
             counts["side_effects"] += 1
         for d in group_a["dosages"]:
-            db._get_or_create_dosage_id(d["amount"])
+            # Reconstruct full dose string (amount + unit) so _get_or_create_dosage_id
+            # stores it with the correct unit, matching what upsert_protocol_dosage
+            # looks up later (e.g. "1.75mg" not just "1.75").
+            amount_str = d["amount"]
+            unit = d.get("unit", "")
+            full_str = f"{amount_str}{unit}" if unit else amount_str
+            db._get_or_create_dosage_id(full_str)
             counts["dosages"] += 1
         for s in group_a["schedules"]:
             db.insert_lookup("schedules", s["name"], frequency=s.get("frequency"))

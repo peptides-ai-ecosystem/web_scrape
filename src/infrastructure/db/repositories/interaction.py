@@ -32,33 +32,35 @@ class InteractionRepository(BaseRepository):
 
     def upsert(self, peptide_id: int, interaction: Dict[str, Any]):
         """Upserts a peptide interaction."""
+        secondary_name = interaction['secondary_peptide_name']
         with self.get_cursor() as cur:
+            # Check by name first
             cur.execute(
                 "SELECT 1 FROM peptide_interactions WHERE peptide_id_1 = %s AND LOWER(peptide_name_2) = LOWER(%s)",
-                (peptide_id, interaction['secondary_peptide_name'])
+                (peptide_id, secondary_name)
             )
-            row = cur.fetchone()
-            if row:
+            if cur.fetchone():
                 self.log_operation("EXIST_RELATION", "peptide_interactions", 
-                    f"Peptide {peptide_id} <-> {interaction['secondary_peptide_name']}")
+                    f"Peptide {peptide_id} <-> {secondary_name}")
                 return
-            else:
-                try:
-                    itype = self._map_interaction_type(interaction.get('interaction_type', 'neutral'))
-                    cur.execute(
-                        "INSERT INTO peptide_interactions (peptide_id_1, peptide_name_2, interaction_type, description) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
-                        (peptide_id, interaction['secondary_peptide_name'], itype, interaction['description'])
-                    )
-                    self._commit()
-                    if cur.rowcount > 0:
-                        self.log_operation("INSERT_RELATION", "peptide_interactions", 
-                            f"Peptide {peptide_id} <-> {interaction['secondary_peptide_name']} ({itype})")
-                    else:
-                        self.log_operation("EXIST_RELATION", "peptide_interactions (by index)", 
-                            f"Peptide {peptide_id} <-> {interaction['secondary_peptide_name']}")
-                except Exception as e:
-                    self._rollback()
-                    self.log_operation("ERROR_RELATION", "peptide_interactions", str(e))
+
+            try:
+                itype = self._map_interaction_type(interaction.get('interaction_type', 'neutral'))
+                # Remove ON CONFLICT DO NOTHING — the unique constraint on
+                # (peptide_id_1, peptide_id_2) causes ALL rows with NULL
+                # peptide_id_2 to share the same key, silently dropping all
+                # but the first interaction per peptide.  We rely on the
+                # SELECT check above and a partial unique index instead.
+                cur.execute(
+                    "INSERT INTO peptide_interactions (peptide_id_1, peptide_name_2, interaction_type, description) VALUES (%s, %s, %s, %s)",
+                    (peptide_id, secondary_name, itype, interaction['description'])
+                )
+                self._commit()
+                self.log_operation("INSERT_RELATION", "peptide_interactions", 
+                    f"Peptide {peptide_id} <-> {secondary_name} ({itype})")
+            except Exception as e:
+                self._rollback()
+                self.log_operation("ERROR_RELATION", "peptide_interactions", str(e))
 
     def _map_interaction_type(self, raw_type: str) -> str:
         """Maps raw interaction strings to DB enum values: synergistic, antagonistic, neutral, caution."""

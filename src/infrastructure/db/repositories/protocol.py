@@ -9,19 +9,20 @@ class ProtocolRepository(BaseRepository):
     def upsert(self, peptide_id: int, am_id: int, protocol: Dict[str, Any]) -> int:
         """
         Upserts a peptide protocol.
-        Matches by peptide and method to avoid duplicate constraint violation.
+        Matches by peptide, method, and name so different goals
+        produce distinct protocols (e.g. "Female HSDD" vs "Male ED").
         Returns the protocol ID.
         """
+        # Truncate name to fit VARCHAR(100) constraint
+        protocol_name = (protocol.get('name') or '')[:100]
+        
         with self.get_cursor() as cur:
             # Check if protocol exists
             cur.execute(
-                "SELECT * FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s",
-                (peptide_id, am_id)
+                "SELECT * FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s AND name = %s",
+                (peptide_id, am_id, protocol_name)
             )
             row = cur.fetchone()
-            
-            # Truncate name to fit VARCHAR(100) constraint
-            protocol_name = (protocol.get('name') or '')[:100]
             
             new_fields = {
                 'description': protocol.get('description', ''),
