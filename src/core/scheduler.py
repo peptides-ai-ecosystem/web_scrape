@@ -9,7 +9,8 @@ from src.infrastructure.csv_storage import CSVStorage
 from src.mappers.db_import_orchestrator import DbImportOrchestrator
 from src.mappers.graph_import_orchestrator import GraphImportOrchestrator
 from src.utils.error_tracker import ErrorTracker
-from src.config import log_debug, log_error, OUTPUT_DIR
+from pathlib import Path
+from src.config import log_debug, log_error, OUTPUT_DIR, FULL_CSV
 
 # Keep a global instance of the scheduler
 scheduler = AsyncIOScheduler()
@@ -39,13 +40,13 @@ def run_combined_sync_job(limit: int | None = None):
             urls = urls[:limit]
             log_debug(f"Limited scheduled sync to {limit} URLs.", "scheduler")
             
-        # 2. Scrape CSV
-        manager = ScraperManager()
+        # 2. Scrape CSV (full mode — all extractors)
+        manager = ScraperManager(csv_path=Path(FULL_CSV))
         # Scheduled job runs till completion
         manager.run(urls, tracker=tracker)
         
         # 3. Read Data
-        csv_store = CSVStorage()
+        csv_store = CSVStorage(csv_path=Path(FULL_CSV))
         rows = csv_store.read()
         if not rows:
             log_debug("No scraped rows during scheduled sync.", "scheduler")

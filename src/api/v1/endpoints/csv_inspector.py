@@ -1,8 +1,8 @@
 """
 CSV inspector endpoints.
 
-Read-only endpoints that surface what was **scraped** into the master CSV at
-`output/pep_pedia_master.csv` (default path comes from `src.config.MASTER_CSV`).
+Read-only endpoints that surface what was **scraped** into the enhanced CSV at
+`output/pep_pedia_enhanced.csv` (path comes from `src.config.ENHANCED_CSV`).
 The Core Data Inspector page renders these alongside the `/core/*` endpoints
 so the operator can spot ingestion gaps between scrape and DB injection.
 
@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from src.config import MASTER_CSV
+from src.config import ENHANCED_CSV as MASTER_CSV
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

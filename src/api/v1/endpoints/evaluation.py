@@ -5,7 +5,7 @@ import os
 
 from src.evaluation.runner import run_evaluation
 from src.evaluation.graph_evaluator import run_graph_evaluation
-from src.config import MASTER_CSV, GRAPH_CSV, log_debug, log_error
+from src.config import ENHANCED_CSV, GRAPH_CSV, log_debug, log_error
 from src.core.job_queue import get_job_queue
 
 router = APIRouter()
@@ -113,9 +113,9 @@ async def start_core_evaluation(request: EvaluationRequest, background_tasks: Ba
     if not db_url:
         raise HTTPException(status_code=500, detail="DATABASE_URL not configured.")
 
-    csv_path = str(MASTER_CSV)
+    csv_path = str(ENHANCED_CSV)
     if not os.path.exists(csv_path):
-        raise HTTPException(status_code=500, detail=f"Master CSV not found at {csv_path}. Run a sync first.")
+        raise HTTPException(status_code=500, detail=f"Enhanced CSV not found at {csv_path}. Run a core sync first.")
 
     queue = get_job_queue()
     job = queue.create_job("/evaluation/core", {"limit": request.limit, "output_json": request.output_json})

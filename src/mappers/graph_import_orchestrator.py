@@ -10,8 +10,24 @@ class GraphImportOrchestrator:
     Orchestrates the conversion of a raw data row into structured graph payloads.
     Dedicated purely to syncing graph data separately from table parameters.
     """
+
+    # Keyword-to-DB-name mapping for administration methods.
+    # Scraped website values differ from canonical DB names (e.g. "Nasal" → "Nasal Spray").
+    METHOD_KEYWORD_MAP = {
+        "nasal": "Nasal Spray",
+        "intranasal": "Nasal Spray",
+        "topical": "Topical Cream",
+        "oral": "Capsule",
+        "injectable": "Injectable",
+    }
+
     def __init__(self):
         self.graph_mapper = GraphMapper()
+
+    @staticmethod
+    def _normalize_method(method_name: str) -> str:
+        """Map a scraped keyword to the canonical DB administration method name."""
+        return GraphImportOrchestrator.METHOD_KEYWORD_MAP.get(method_name.strip().lower(), method_name.strip())
 
     def sync_graph_data(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, action_type: str = 'manual'):
         """
@@ -80,7 +96,8 @@ class GraphImportOrchestrator:
                     
                     injected_methods = []
                     for gd in graph_data:
-                        method_name = gd.get("method", "Injectable")
+                        raw_method = gd.get("method", "Injectable")
+                        method_name = self._normalize_method(raw_method)
                         time_range = gd.get("time_range", "N/A")
                         am_id = db.get_lookup_id("administration_methods", method_name)
                         if am_id:
@@ -209,7 +226,8 @@ class GraphImportOrchestrator:
                     has_synced = False
                     injected_methods = []
                     for gd in graph_data:
-                        method_name = gd.get("method", "Injectable")
+                        raw_method = gd.get("method", "Injectable")
+                        method_name = self._normalize_method(raw_method)
                         time_range = gd.get("time_range", "N/A")
                         am_id = db.get_lookup_id("administration_methods", method_name)
                         if not am_id:

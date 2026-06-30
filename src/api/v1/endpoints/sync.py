@@ -11,7 +11,7 @@ from src.mappers.db_import_orchestrator import DbImportOrchestrator
 from src.mappers.graph_import_orchestrator import GraphImportOrchestrator
 from src.utils.error_tracker import ErrorTracker
 from src.core.models import ScrapeMode
-from src.config import log_debug, log_error, OUTPUT_DIR, MASTER_CSV, GRAPH_CSV
+from src.config import log_debug, log_error, OUTPUT_DIR, ENHANCED_CSV, GRAPH_CSV, FULL_CSV
 from src.core.job_queue import get_job_queue, JobStatus
 
 router = APIRouter()
@@ -104,9 +104,9 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
 
         log_debug(f"Core sync starting scrape for {len(urls)} URLs", "sync_endpoint")
 
-        # Step 2: Scrape → writes to MASTER_CSV (core-only: skip graph extractor)
-        log_debug(f"Core sync: scraping with mode=CORE_ONLY to {MASTER_CSV}", "sync_endpoint")
-        manager = ScraperManager(csv_path=Path(MASTER_CSV))
+        # Step 2: Scrape → writes to ENHANCED_CSV (core-only: skip graph extractor)
+        log_debug(f"Core sync: scraping with mode=CORE_ONLY to {ENHANCED_CSV}", "sync_endpoint")
+        manager = ScraperManager(csv_path=Path(ENHANCED_CSV))
         manager.run(urls, tracker=tracker, cancel_check=lambda: job.status == JobStatus.CANCELLED,
                     scrape_mode=ScrapeMode.CORE_ONLY)
 
@@ -115,7 +115,7 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
             return
 
         # Step 3: Read scraped data from CSV
-        csv_store = CSVStorage()
+        csv_store = CSVStorage(csv_path=Path(ENHANCED_CSV))
         rows = csv_store.read()
 
         if not rows:

@@ -24,9 +24,12 @@ class Settings:
     LOG_DIR: Path = Path(os.getenv("LOG_DIR", "output"))
     LOG_DIR.mkdir(exist_ok=True)
     
-    # File paths
-    MASTER_CSV: Path = OUTPUT_DIR / "pep_pedia_master.csv"
-    GRAPH_CSV: Path = OUTPUT_DIR / "pep_pedia_graph_master.csv"
+    # File paths — manual sync flows use dedicated files to avoid race conditions
+    ENHANCED_CSV: Path = OUTPUT_DIR / "pep_pedia_enhanced.csv"
+    GRAPH_CSV: Path = OUTPUT_DIR / "pep_pedia_graph.csv"
+    FULL_CSV: Path = OUTPUT_DIR / "pep_pedia_full.csv"
+    # MASTER_CSV retained as alias for backward compat (data_summary.py, read_data.py)
+    MASTER_CSV: Path = ENHANCED_CSV
     ERROR_LOG: Path = LOG_DIR / "error_log.txt"
     DEBUG_LOG: Path = LOG_DIR / "debug_log.txt"
     
@@ -47,8 +50,10 @@ settings = Settings()
 DATABASE_URL = settings.DATABASE_URL
 TIMEOUT = settings.TIMEOUT
 OUTPUT_DIR = settings.OUTPUT_DIR
-MASTER_CSV = settings.MASTER_CSV
+ENHANCED_CSV = settings.ENHANCED_CSV
 GRAPH_CSV = settings.GRAPH_CSV
+FULL_CSV = settings.FULL_CSV
+MASTER_CSV = settings.MASTER_CSV  # alias for ENHANCED_CSV (backward compat)
 ERROR_LOG = settings.ERROR_LOG
 DEBUG_LOG = settings.DEBUG_LOG
 TIME_RANGES = settings.TIME_RANGES
