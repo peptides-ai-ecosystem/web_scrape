@@ -69,6 +69,37 @@ class PeptideRepository(BaseRepository):
             
             return peptide_id
 
+    def update_activity_type(self, peptide_id: int, activity_type: str) -> bool:
+        """
+        Update the activity_type of a peptide.
+
+        Args:
+            peptide_id: The peptide ID.
+            activity_type: Must be 'automatic' or 'manual'.
+
+        Returns:
+            True if the peptide was updated, False if not found.
+        """
+        VALID_TYPES = {'automatic', 'manual'}
+        if activity_type not in VALID_TYPES:
+            raise ValueError(
+                f"Invalid activity_type '{activity_type}'. Must be one of: {', '.join(sorted(VALID_TYPES))}"
+            )
+
+        with self.get_cursor() as cur:
+            cur.execute(
+                "UPDATE peptides SET activity_type = %s, updated_at = NOW() WHERE id = %s",
+                (activity_type, peptide_id)
+            )
+            self._commit()
+            updated = cur.rowcount > 0
+            if updated:
+                self.log_operation("UPDATE_ACTIVITY_TYPE", "peptides",
+                    f"ID: {peptide_id} → activity_type='{activity_type}'")
+            else:
+                self.log_operation("NOT_FOUND", "peptides", f"ID: {peptide_id}")
+            return updated
+
     def delete_peptide_cascading(self, slug: str) -> bool:
         """
         Deletes a peptide and ALL its related data (full cascade).

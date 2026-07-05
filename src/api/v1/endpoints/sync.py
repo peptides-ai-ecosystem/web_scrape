@@ -133,7 +133,7 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
 
         # Step 4: Sync to core DB tables
         orchestrator = DbImportOrchestrator()
-        result = orchestrator.sync_to_db(db_url, rows, tracker=tracker) or {}
+        result = orchestrator.sync_to_db(db_url, rows, tracker=tracker, activity_type="manual") or {}
 
         job.complete({
             "urls_scraped": len(urls),

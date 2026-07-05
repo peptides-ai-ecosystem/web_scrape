@@ -61,10 +61,20 @@ class DbImportOrchestrator:
             "protocols": protocols
         }
 
-    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None) -> Dict[str, Any]:
+    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, activity_type: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point to sync rows using the grouped logic.
         Only processes peptides that already exist in the database.
+
+        Args:
+            db_url: Database connection URL.
+            rows: List of raw data rows to sync.
+            tracker: Optional error tracker.
+            activity_type: If set (e.g. 'manual'), marks each synced peptide's
+                           activity_type after upsert. When called from an API
+                           endpoint, pass 'manual' so the peptide is flagged as
+                           endpoint-triggered. When called from other paths
+                           (e.g. direct CSV import), leave None so it stays NULL.
         """
         db = DbManager(db_url)
         try:
@@ -229,6 +239,9 @@ class DbImportOrchestrator:
 
                 synced_count += 1
                 synced_peptides.append({"name": raw_name, "slug": row_slug, "method": mapped_method})
+                # Mark as endpoint-triggered if activity_type is provided
+                if activity_type and peptide_id:
+                    db.update_peptide_activity_type(peptide_id, activity_type)
                 print(f"  ✓ SYNCED: '{raw_name}' (slug: {row_slug})")
                 log_success(f"Core sync — '{raw_name}' (slug: {row_slug}, method: {mapped_method})", "db_import_orchestrator")
 

@@ -113,6 +113,10 @@ class DbService:
         
         return protocol_id
 
+    def update_peptide_activity_type(self, peptide_id: int, activity_type: str) -> bool:
+        """Update the activity_type of a peptide ('automatic' or 'manual')."""
+        return self.peptide.update_activity_type(peptide_id, activity_type)
+
     def delete_peptide_full(self, slug: str) -> bool:
         """Delete a peptide and all its related data."""
         return self.peptide.delete_peptide_cascading(slug)
@@ -215,6 +219,9 @@ class DbManager:
     def get_all_peptide_identifiers(self) -> set:
         """Fetch all existing peptide slugs and lowercase names for pre-filtering."""
         return self.service.peptide.get_all_identifiers()
+
+    def update_peptide_activity_type(self, peptide_id: int, activity_type: str) -> bool:
+        return self.service.update_peptide_activity_type(peptide_id, activity_type)
 
     def delete_peptide_data(self, slug: str) -> bool:
         return self.service.delete_peptide_full(slug)
