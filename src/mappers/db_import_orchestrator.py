@@ -337,6 +337,15 @@ class DbImportOrchestrator:
 
         # Link Interactions (Group C)
         for inter in relations["interactions"]:
+            secondary_name = inter.get("secondary_peptide_name", "")
+            if secondary_name:
+                matched = db.search_peptide_by_name(secondary_name)
+                if matched:
+                    inter["secondary_peptide_id"] = matched["id"]
+                    log_debug(
+                        f"  Resolved interaction '{secondary_name}' → peptide_id={matched['id']}",
+                        "db_import_orchestrator"
+                    )
             db.upsert_interaction(peptide_id, inter)
 
         # Link Indications (Group C/F)

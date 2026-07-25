@@ -14,6 +14,53 @@ class PeptideRepository(BaseRepository):
         """Get peptide by ID."""
         return self.execute_one("SELECT * FROM peptides WHERE id = %s", (peptide_id,))
 
+    def search_by_name_flexible(self, name: str) -> Optional[Dict[str, Any]]:
+        """Search for a peptide by name with flexible, similarity-aware matching.
+
+        Tries, in order:
+          1. Exact case-insensitive match on ``name`` or ``slug``.
+          2. Candidate slug generation (parenthetical aliases, filler stripping)
+             via :func:`~src.utils.peptide_utils.get_peptide_candidates`.
+          3. Partial (LIKE) match on ``name``, ``slug``, or ``synonyms``.
+
+        Returns the first matching row, or ``None``.
+        """
+        if not name or not name.strip():
+            return None
+
+        name = name.strip()
+
+        # 1. Exact match on name or slug
+        result = self.execute_one(
+            "SELECT * FROM peptides WHERE LOWER(name) = LOWER(%s) OR LOWER(slug) = LOWER(%s)",
+            (name, name)
+        )
+        if result:
+            return result
+
+        # 2. Try candidate slugs (handles parenthetical aliases, filler stripping)
+        from src.utils.peptide_utils import get_peptide_candidates
+        candidates = get_peptide_candidates(name)
+        if candidates:
+            placeholders = ", ".join("%s" for _ in candidates)
+            result = self.execute_one(
+                f"SELECT * FROM peptides WHERE LOWER(slug) IN ({placeholders}) LIMIT 1",
+                tuple(c.lower() for c in candidates)
+            )
+            if result:
+                return result
+
+        # 3. Partial match on name, slug, or synonyms
+        like_pattern = f"%{name.lower()}%"
+        return self.execute_one(
+            """SELECT * FROM peptides
+               WHERE LOWER(name) LIKE %s
+                  OR LOWER(slug) LIKE %s
+                  OR LOWER(synonyms) LIKE %s
+               LIMIT 1""",
+            (like_pattern, like_pattern, like_pattern)
+        )
+
     def get_all_identifiers(self) -> set:
         """Fetch all existing peptide slugs and lowercase names as a set.
         Used for pre-filtering CSV rows against existing DB peptides."""

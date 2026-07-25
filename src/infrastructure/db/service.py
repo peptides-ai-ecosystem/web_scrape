@@ -155,6 +155,16 @@ class DbManager:
     def get_peptide_by_slug(self, slug: str) -> Optional[Dict[str, Any]]:
         return self.service.peptide.get_by_slug(slug)
 
+    def search_peptide_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Search peptides table for a name with flexible matching.
+
+        Delegates to :meth:`PeptideRepository.search_by_name_flexible`,
+        which tries exact match, candidate slug generation, and partial
+        (LIKE) matching on name / slug / synonyms.
+        Returns the first matching row or ``None``.
+        """
+        return self.service.peptide.search_by_name_flexible(name)
+
     def insert_lookup(self, table: str, name: str, **kwargs) -> int:
         return self.service.lookup.upsert(table, name, **kwargs)
 
