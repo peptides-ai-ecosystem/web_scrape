@@ -85,6 +85,41 @@ class BaseRepository:
             self._commit()
             return cur.rowcount
 
+    def _insert_guarded(self, cursor, table: str, columns: List[str], params: List[Any]) -> Optional[int]:
+        """
+        Insert a row into ``table`` and return the new ``id``.
+
+        If the insert fails with a primary-key ``UniqueViolation`` — caused by
+        a desynced ``id`` sequence after a pg_dump restore that included
+        explicit ids — the aborted transaction is rolled back and the insert
+        is retried once with an explicit ``id = MAX(id) + 1``.
+
+        This is a **pure-code** workaround: it never calls ``setval`` and never
+        alters the schema, so it works regardless of the sequence's state and
+        leaves the database untouched. While a sequence stays desynced, each
+        insert pays one extra rollback + MAX() query and then succeeds.
+        """
+        cols = ", ".join(columns)
+        placeholders = ", ".join(["%s"] * len(columns))
+        insert_sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) RETURNING id"
+        try:
+            cursor.execute(insert_sql, params)
+            return cursor.fetchone()["id"]
+        except psycopg2.errors.UniqueViolation:
+            self._rollback()
+            try:
+                cursor.execute(f"SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM {table}")
+                next_id = cursor.fetchone()["next_id"]
+                cursor.execute(
+                    f"INSERT INTO {table} (id, {cols}) VALUES ({', '.join(['%s'] * (len(columns) + 1))}) RETURNING id",
+                    [next_id] + list(params),
+                )
+                return cursor.fetchone()["id"]
+            except Exception:
+                # Leave the transaction in a clean state for the caller.
+                self._rollback()
+                raise
+
     def log_operation(self, operation: str, table: str, details: str = ""):
         """Log database operation."""
         msg = f"  [{operation}] Table {table}"

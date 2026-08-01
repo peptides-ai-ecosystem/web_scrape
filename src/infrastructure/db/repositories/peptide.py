@@ -83,14 +83,11 @@ class PeptideRepository(BaseRepository):
 
         if not existing:
             # Insert new peptide
-            columns = payload.keys()
+            columns = list(payload.keys())
             values = [payload[col] for col in columns]
-            placeholders = ", ".join(["%s"] * len(columns))
-            sql = f"INSERT INTO peptides ({', '.join(columns)}) VALUES ({placeholders}) RETURNING id"
             
             with self.get_cursor() as cur:
-                cur.execute(sql, values)
-                peptide_id = cur.fetchone()['id']
+                peptide_id = self._insert_guarded(cur, "peptides", columns, values)
                 self._commit()
                 self.log_operation("INSERT_PEPTIDE", "peptides", f"{payload.get('name')} (ID: {peptide_id})")
                 return peptide_id

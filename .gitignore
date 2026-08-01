@@ -18,3 +18,5 @@ log/
 full_dump_main.sql
 *.csv
 full_dump.sql
+.commandcode
+.cursor

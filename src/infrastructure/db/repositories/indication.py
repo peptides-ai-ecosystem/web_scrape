@@ -22,11 +22,12 @@ class IndicationRepository(BaseRepository):
                     f"Peptide {peptide_id}: '{indication['indication_title']}'")
                 return row['id']
             
-            cur.execute(
-                "INSERT INTO peptide_research_indications (peptide_id, indication_title, effectiveness_tag, description) VALUES (%s, %s, %s, %s) RETURNING id",
-                (peptide_id, indication['indication_title'], indication['effectiveness_tag'], indication['description'])
+            indication_id = self._insert_guarded(
+                cur,
+                "peptide_research_indications",
+                ["peptide_id", "indication_title", "effectiveness_tag", "description"],
+                [peptide_id, indication['indication_title'], indication['effectiveness_tag'], indication['description']]
             )
-            indication_id = cur.fetchone()['id']
             self._commit()
             self.log_operation("INSERT_INDICATION", "peptide_research_indications", 
                 f"Added '{indication['indication_title']}' for peptide {peptide_id}")

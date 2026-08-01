@@ -40,12 +40,7 @@ class GraphRepository(BaseRepository):
             else:
                 cols = ["peptide_id", "administration_method_id", "time_range", "action_type"] + list(fields.keys())
                 vals = [peptide_id, am_id, graph_data['time_range'], action_type] + list(fields.values())
-                placeholders = ", ".join(["%s"] * len(vals))
-                cur.execute(
-                    f"INSERT INTO peptide_graph ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",
-                    vals
-                )
-                graph_id = cur.fetchone()['id']
+                graph_id = self._insert_guarded(cur, "peptide_graph", cols, vals)
                 self._commit()
                 self.log_operation("INSERT_GRAPH", "peptide_graph", 
                     f"Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})")

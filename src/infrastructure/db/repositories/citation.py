@@ -51,11 +51,12 @@ class CitationRepository(BaseRepository):
                     self.log_operation("EXIST_CITATION", "citations", f"(ID: {citation_id})")
                 return citation_id
             
-            cur.execute(
-                "INSERT INTO citations (title, publication_url, abstract, doi, authors) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (title, url, abstract, doi, authors)
+            new_id = self._insert_guarded(
+                cur,
+                "citations",
+                ["title", "publication_url", "abstract", "doi", "authors"],
+                [title, url, abstract, doi, authors]
             )
-            new_id = cur.fetchone()['id']
             self._commit()
             self.log_operation("INSERT_CITATION", "citations", f"(ID: {new_id})")
             return new_id

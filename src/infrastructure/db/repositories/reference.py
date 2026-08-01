@@ -1,5 +1,6 @@
 """Reference and Lookup repository for linking entities."""
 from typing import Dict, Any, Optional
+import psycopg2
 from src.infrastructure.db.base_repository import BaseRepository
 
 
@@ -20,11 +21,8 @@ class ReferenceRepository(BaseRepository):
                 self.log_operation("EXIST_REFERENCE", "peptide_references", 
                     f"Peptide {peptide_id} ({ref_type}) -> {ref_id}")
                 return
-            
-            cur.execute(
-                f"INSERT INTO {table} (peptide_id, {id_col}, reference_type) VALUES (%s, %s, %s)",
-                (peptide_id, ref_id, ref_type)
-            )
+
+            self._insert_guarded(cur, table, ["peptide_id", id_col, "reference_type"], [peptide_id, ref_id, ref_type])
             self._commit()
             self.log_operation("INSERT_REFERENCE", "peptide_references", 
                 f"Linked Peptide {peptide_id} ({ref_type}) -> {ref_id}")
@@ -42,10 +40,7 @@ class ReferenceRepository(BaseRepository):
                     f"{fk1_col}={fk1_val} <-> {fk2_col}={fk2_val}")
                 return
 
-            cur.execute(
-                f"INSERT INTO {table} ({fk1_col}, {fk2_col}) VALUES (%s, %s)",
-                (fk1_val, fk2_val)
-            )
+            self._insert_guarded(cur, table, [fk1_col, fk2_col], [fk1_val, fk2_val])
             self._commit()
             self.log_operation("INSERT_LINK", table, 
                 f"{fk1_col}={fk1_val} <-> {fk2_col}={fk2_val}")
@@ -100,11 +95,8 @@ class LookupRepository(BaseRepository):
             # 2. Doesn't exist, insert fully
             cols = ["name"] + list(kwargs.keys())
             vals = [name] + list(kwargs.values())
-            placeholders = ", ".join(["%s"] * len(cols))
-            
-            sql = f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id"
-            cur.execute(sql, vals)
-            new_id = cur.fetchone()['id']
+
+            new_id = self._insert_guarded(cur, table, cols, vals)
             self._commit()
             self.log_operation("INSERT_LOOKUP", table, f"'{name}' (ID: {new_id})")
             return new_id

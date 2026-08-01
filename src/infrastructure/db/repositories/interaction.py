@@ -86,14 +86,18 @@ class InteractionRepository(BaseRepository):
             try:
                 itype = self._map_interaction_type(interaction.get('interaction_type', 'neutral'))
                 if secondary_id:
-                    cur.execute(
-                        "INSERT INTO peptide_interactions (peptide_id_1, peptide_id_2, peptide_name_2, interaction_type, description) VALUES (%s, %s, %s, %s, %s)",
-                        (peptide_id, secondary_id, secondary_name, itype, interaction.get('description'))
+                    self._insert_guarded(
+                        cur,
+                        "peptide_interactions",
+                        ["peptide_id_1", "peptide_id_2", "peptide_name_2", "interaction_type", "description"],
+                        [peptide_id, secondary_id, secondary_name, itype, interaction.get('description')]
                     )
                 else:
-                    cur.execute(
-                        "INSERT INTO peptide_interactions (peptide_id_1, peptide_name_2, interaction_type, description) VALUES (%s, %s, %s, %s)",
-                        (peptide_id, secondary_name, itype, interaction.get('description'))
+                    self._insert_guarded(
+                        cur,
+                        "peptide_interactions",
+                        ["peptide_id_1", "peptide_name_2", "interaction_type", "description"],
+                        [peptide_id, secondary_name, itype, interaction.get('description')]
                     )
                 self._commit()
                 self.log_operation("INSERT_RELATION", "peptide_interactions",

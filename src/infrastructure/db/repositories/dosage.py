@@ -67,11 +67,12 @@ class DosageRepository(BaseRepository):
                 return None
 
             # Create new if missing
-            cur.execute(
-                "INSERT INTO dosages (name, amount, unit) VALUES (%s, %s, %s) RETURNING id",
-                (amount_str[:100], str(val), unit[:20])
+            new_id = self._insert_guarded(
+                cur,
+                "dosages",
+                ["name", "amount", "unit"],
+                [amount_str[:100], str(val), unit[:20]]
             )
-            new_id = cur.fetchone()['id']
             self._commit()
             self.log_operation("INSERT_DOSAGE", "dosages", f"{amount_str} (ID: {new_id})")
             return new_id
@@ -104,9 +105,11 @@ class DosageRepository(BaseRepository):
                     f"Protocol {protocol_id}: dosage_id={dosage_id}, schedule_id={schedule_id}")
                 return
             
-            cur.execute(
-                "INSERT INTO protocol_dosages (protocol_id, dosage_id, schedule_id, is_default, notes) VALUES (%s, %s, %s, %s, %s)",
-                (protocol_id, dosage_id, schedule_id, dosage.get('is_default', False), notes)
+            self._insert_guarded(
+                cur,
+                "protocol_dosages",
+                ["protocol_id", "dosage_id", "schedule_id", "is_default", "notes"],
+                [protocol_id, dosage_id, schedule_id, dosage.get('is_default', False), notes]
             )
             self._commit()
             self.log_operation("INSERT_DOSAGE", "protocol_dosages", 

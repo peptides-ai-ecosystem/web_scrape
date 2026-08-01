@@ -42,11 +42,12 @@ class ResearchStudyRepository(BaseRepository):
                     self.log_operation("EXIST_STUDY", "research_studies", f"'{title}' (ID: {study_id})")
                 return study_id
             
-            cur.execute(
-                "INSERT INTO research_studies (title, url, abstract) VALUES (%s, %s, %s) RETURNING id",
-                (title, url, abstract)
+            new_id = self._insert_guarded(
+                cur,
+                "research_studies",
+                ["title", "url", "abstract"],
+                [title, url, abstract]
             )
-            new_id = cur.fetchone()['id']
             self._commit()
             self.log_operation("INSERT_STUDY", "research_studies", f"'{title}' (ID: {new_id})")
             return new_id

@@ -64,12 +64,7 @@ class ProtocolRepository(BaseRepository):
                         cols.append(col)
                         vals.append(val)
                 
-                placeholders = ", ".join(["%s"] * len(cols))
-                cur.execute(
-                    f"INSERT INTO peptide_protocols ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",
-                    vals
-                )
-                protocol_id = cur.fetchone()['id']
+                protocol_id = self._insert_guarded(cur, "peptide_protocols", cols, vals)
                 self.log_operation("INSERT_PROTOCOL", "peptide_protocols", 
                     f"Created '{protocol['name']}' (ID: {protocol_id}) for peptide {peptide_id}")
             
@@ -84,9 +79,11 @@ class ProtocolRepository(BaseRepository):
                 (protocol_id, step['step_number'])
             )
             if not cur.fetchone():
-                cur.execute(
-                    "INSERT INTO peptide_protocol_reconstitution_steps (protocol_id, step_number, description) VALUES (%s, %s, %s)",
-                    (protocol_id, step['step_number'], step['description'])
+                self._insert_guarded(
+                    cur,
+                    "peptide_protocol_reconstitution_steps",
+                    ["protocol_id", "step_number", "description"],
+                    [protocol_id, step['step_number'], step['description']]
                 )
                 self._commit()
                 self.log_operation("INSERT_DETAIL", "peptide_protocol_reconstitution_steps", 
@@ -100,9 +97,11 @@ class ProtocolRepository(BaseRepository):
                 (protocol_id, indicator['indicator_title'])
             )
             if not cur.fetchone():
-                cur.execute(
-                    "INSERT INTO protocol_quality_indicators (protocol_id, indicator_title, indicator_description) VALUES (%s, %s, %s)",
-                    (protocol_id, indicator['indicator_title'], indicator['indicator_description'])
+                self._insert_guarded(
+                    cur,
+                    "protocol_quality_indicators",
+                    ["protocol_id", "indicator_title", "indicator_description"],
+                    [protocol_id, indicator['indicator_title'], indicator['indicator_description']]
                 )
                 self._commit()
                 self.log_operation("INSERT_DETAIL", "protocol_quality_indicators", 

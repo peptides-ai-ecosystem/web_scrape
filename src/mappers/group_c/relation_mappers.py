@@ -62,7 +62,10 @@ class RelationMapper(BaseMapper):
                 else:
                     name = key.replace('research_indications_', '').replace('_', ' ').title()
                     tag = "effective"
-                
+
+                # Collapse runs of spaces (from '_' separators like 'fat_loss___lipolysis')
+                name = " ".join(name.split())
+
                 indications.append({
                     "indication_title": name,
                     "effectiveness_tag": tag,
