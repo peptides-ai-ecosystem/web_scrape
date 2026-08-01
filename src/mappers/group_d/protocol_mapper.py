@@ -20,9 +20,22 @@ class ProtocolMapper(BaseMapper):
     def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         protocols = []
         
-        # Base expectations (Formatted as JSON here, logic moved from db_manager)
-        expectations = [(row.get(f"what_to_expect_{i}") or "").strip() for i in range(1, 6) if (row.get(f"what_to_expect_{i}") or "").strip()]
-        expectations_json = json.dumps(expectations)
+        # Base expectations: what_to_expect_{1..n} columns contain "<period>: <statement>".
+        # Build a key:value object keyed by the period, preserving CSV order.
+        expectations = {}
+        for i in range(1, 6):
+            value = (row.get(f"what_to_expect_{i}") or "").strip()
+            if not value:
+                continue
+            if ":" in value:
+                key, _, statement = value.partition(":")
+                key = key.strip()
+                statement = statement.strip()
+            else:
+                key, statement = f"Note {len(expectations) + 1}", value.strip()
+            if key and statement:
+                expectations[key] = statement
+        expectations_json = json.dumps(expectations) if expectations else json.dumps([])
         
         method = (row.get("Method") or "").strip()
         main_route = (row.get("route") or "").strip()

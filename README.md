@@ -89,10 +89,11 @@ sudo systemctl restart postgresql
 sudo -i -u postgres psql -c "CREATE DATABASE peptides;"
 
 # Restore data
-psql -U postgres -d peptides < full_dump_main.sql
-psql -U postgres -d peptides < migration_peptide_graph.sql
-psql -U postgres -d peptides < migration_add_activity_type_to_peptides.sql
-psql -U postgres -d peptides < migration_add_molecular_fields_to_peptides.sql
+sudo -i -u postgres psql -U postgres -d peptides < full_dump_main.sql
+sudo -i -u postgres psql -U postgres -d peptides < migration_peptide_graph.sql
+sudo -i -u postgres psql -U postgres -d peptides < migration_add_activity_type_to_peptides.sql
+sudo -i -u postgres psql -U postgres -d peptides < migration_add_molecular_fields_to_peptides.sql
+sudo -i -u postgres psql -U postgres -d peptides < migration_change_contraindications_stop_signs_to_jsonb.sql
 
 ```
 

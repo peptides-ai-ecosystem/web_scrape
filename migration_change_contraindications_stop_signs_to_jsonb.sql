@@ -1,10 +1,12 @@
 -- Change contraindications and stop_signs columns on peptides table to JSONB
 --
--- contraindications: JSON object keyed by week/week range, value is the content.
---   Example: {"1-2": "Do not use with NSAIDs", "3": "Monitor blood pressure"}
+-- contraindications: JSON object keyed by week/time period, value is the content.
+--   Populated from what_to_expect_{1..n} CSV columns via PeptideMapper.
+--   Example: {"Week 1-2": "Minimal noticeable effects", "Week 3-4": "Subtle changes"}
 --
--- stop_signs: JSON array of stop-sign indicators.
---   Example: ["Severe headache", "Nausea", "Persistent fatigue"]
+-- stop_signs: JSON object keyed by stop-sign number (1..n), value is the statement.
+--   Populated from side_effects_and_safety_when_to_stop_{1..n} CSV columns via PeptideMapper.
+--   Example: {"1": "Severe headache", "2": "Nausea", "3": "Persistent fatigue"}
 --
 -- NOTE: Existing TEXT values are NOT auto-converted (PostgreSQL cannot guess
 -- how to structure arbitrary text into this shape). Existing data is preserved
