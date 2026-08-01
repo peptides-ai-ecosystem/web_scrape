@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlsplit
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
@@ -43,6 +44,25 @@ class SyncRequest(BaseModel):
         if v is not None and v < 1:
             raise ValueError("limit must be a positive integer (≥1) if provided.")
         return v
+
+    @field_validator("urls")
+    @classmethod
+    def validate_urls(cls, v):
+        if not v:
+            return v
+        cleaned = []
+        for url in v:
+            if not isinstance(url, str) or not url.strip():
+                raise ValueError("urls must be a list of non-empty strings.")
+            candidate = url.strip()
+            parsed = urlsplit(candidate)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise ValueError(
+                    f"Invalid URL '{candidate}'. Must be an absolute http(s) URL, "
+                    "e.g. 'https://pep-pedia.org/peptide/bpc-157'."
+                )
+            cleaned.append(candidate)
+        return cleaned
 
     model_config = {
         "json_schema_extra": {

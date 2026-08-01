@@ -44,7 +44,7 @@ class GraphExtractor(BaseExtractor):
             log_info(f"Starting graph extraction — {len(time_buttons)} time-range tab(s) found", "graph_extractor.py")
 
             for btn in time_buttons:
-                btn_text = btn.text.strip()
+                btn_text = self.get_text(driver, btn).strip()
                 if btn_text not in TIME_RANGES:
                     continue
 
@@ -156,7 +156,7 @@ class GraphExtractor(BaseExtractor):
         The current_path_d is used for wait-for-change detection on next tab.
         """
         try:
-            peak, half_life, cleared = self._extract_summary_stats(container)
+            peak, half_life, cleared = self._extract_summary_stats(driver, container)
             legend = self._extract_legend(driver, container)
 
             # Extract main path data (raw SVG d attribute) + parsed points
@@ -171,8 +171,8 @@ class GraphExtractor(BaseExtractor):
             markers = self._extract_markers(container)
 
             # Extract axis labels
-            x_labels = self._extract_x_labels(container)
-            y_labels = self._extract_y_labels(container)
+            x_labels = self._extract_x_labels(driver, container)
+            y_labels = self._extract_y_labels(driver, container)
 
             graph_data = GraphData(
                 peak=peak,
@@ -197,7 +197,7 @@ class GraphExtractor(BaseExtractor):
             traceback.print_exc()
             return None, None
 
-    def _extract_summary_stats(self, container):
+    def _extract_summary_stats(self, driver, container):
         """Extract Peak, Half-life, Cleared values robustly."""
         peak = half_life = cleared = ""
 
@@ -206,7 +206,7 @@ class GraphExtractor(BaseExtractor):
             By.CSS_SELECTOR, "div.flex.items-center.gap-4 button"
         )
         for btn in summary_btns:
-            text = btn.text.strip().replace("\n", " ")
+            text = self.get_text(driver, btn).strip().replace("\n", " ")
             if "Peak:" in text:
                 peak = text.split("Peak:")[1].strip()
             elif "Half-life:" in text:
@@ -220,7 +220,7 @@ class GraphExtractor(BaseExtractor):
             label_map = {}
             last_label = None
             for span in spans:
-                text = span.text.strip()
+                text = self.get_text(driver, span).strip()
                 if not text:
                     continue
                 if text.endswith(":"):
@@ -289,7 +289,7 @@ class GraphExtractor(BaseExtractor):
             legend_container = container.find_element(By.CSS_SELECTOR, "div.border-t")
             items = legend_container.find_elements(By.TAG_NAME, "button")
             for item in items:
-                label = item.text.strip()
+                label = self.get_text(driver, item).strip()
                 if not label:
                     continue
                 try:
@@ -307,14 +307,14 @@ class GraphExtractor(BaseExtractor):
             pass
         return legend
 
-    def _extract_x_labels(self, container) -> List[AxisLabel]:
+    def _extract_x_labels(self, driver, container) -> List[AxisLabel]:
         labels = []
         try:
             svg = container.find_element(By.TAG_NAME, "svg")
             for elem in svg.find_elements(By.CSS_SELECTOR, "text[y='43']"):
                 try:
                     x_val = float(elem.get_attribute("x"))
-                    label_text = elem.text.strip()
+                    label_text = self.get_text(driver, elem).strip()
                     if label_text:
                         labels.append(AxisLabel(pos=x_val, label=label_text))
                 except (ValueError, TypeError, AttributeError):
@@ -323,14 +323,14 @@ class GraphExtractor(BaseExtractor):
             pass
         return labels
 
-    def _extract_y_labels(self, container) -> List[AxisLabel]:
+    def _extract_y_labels(self, driver, container) -> List[AxisLabel]:
         labels = []
         try:
             svg = container.find_element(By.TAG_NAME, "svg")
             for elem in svg.find_elements(By.CSS_SELECTOR, "text[text-anchor='end']"):
                 try:
                     y_val = float(elem.get_attribute("y"))
-                    label_text = elem.text.strip()
+                    label_text = self.get_text(driver, elem).strip()
                     if label_text:
                         labels.append(AxisLabel(pos=y_val, label=label_text))
                 except (ValueError, TypeError, AttributeError):

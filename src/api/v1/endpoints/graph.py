@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 from dotenv import load_dotenv
 import sys
 import logging
@@ -132,7 +132,13 @@ async def get_peptides():
         500: {"description": "Database error."},
     },
 )
-async def get_peptide_methods(peptide_id: int):
+async def get_peptide_methods(
+    peptide_id: int = Path(
+        ...,
+        ge=1,
+        description="Numeric peptide database ID (from `GET /api/v1/peptides`).",
+    ),
+):
     """
     🔬 Get all **administration methods** available for a peptide's graph data.
 
@@ -147,6 +153,7 @@ async def get_peptide_methods(peptide_id: int):
 
     ### Errors
     - **404** → Peptide not found or has no graph data.
+    - **422** → `peptide_id` is not a positive integer.
     - **500** → Database error.
     """
     try:
@@ -155,7 +162,8 @@ async def get_peptide_methods(peptide_id: int):
         if not methods:
             raise HTTPException(
                 status_code=404,
-                detail=f"No graph data found for peptide ID {peptide_id}",
+                detail=f"No graph data found for peptide ID {peptide_id}. "
+                       "Check GET /api/v1/peptides for valid peptide IDs.",
             )
         return methods
     except HTTPException:
@@ -200,7 +208,11 @@ async def get_peptide_methods(peptide_id: int):
     },
 )
 async def get_graph_data(
-    peptide_id: int,
+    peptide_id: int = Path(
+        ...,
+        ge=1,
+        description="Numeric peptide database ID (from `GET /api/v1/peptides`).",
+    ),
     method: str = Query(
         "Injectable",
         description="Administration method for the graph. Use `/peptide/{id}/methods` to discover valid options.",
@@ -223,18 +235,41 @@ async def get_graph_data(
     - `method` — administration method (default: `"Injectable"`).
 
     ### Errors
-    - **404** → No graph data for this peptide + method combination.
+    - **404** → Peptide not found or has no graph data.
+    - **422** → Invalid `method` value, or `peptide_id` is not a positive integer.
     - **500** → Database error.
     """
     try:
         with get_pool().acquire() as db:
-            data = db.graph.get_visualization_data(peptide_id, method)
+            methods = db.graph.get_methods_for_peptide(peptide_id)
+            if not methods:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Peptide {peptide_id} not found or has no graph data. "
+                           "Check GET /api/v1/peptides for valid peptide IDs.",
+                )
+
+            # Reject empty/unknown methods instead of silently falling back
+            # to the default "Injectable" method in the repository.
+            method = (method or "").strip()
+            valid = [m["name"] for m in methods]
+            matched = next((m for m in valid if m.lower() == method.lower()), None)
+            if not matched:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Invalid method '{method}' for peptide {peptide_id}. "
+                        f"Valid methods: {', '.join(valid)}"
+                    ),
+                )
+
+            data = db.graph.get_visualization_data(peptide_id, matched)
         if not data or not any(
             k not in ["peptide_name", "administration_method"] for k in data.keys()
         ):
             raise HTTPException(
                 status_code=404,
-                detail=f"No graph data found for peptide {peptide_id} with method '{method}'",
+                detail=f"No graph data found for peptide {peptide_id} with method '{matched}'",
             )
         return data
     except HTTPException:

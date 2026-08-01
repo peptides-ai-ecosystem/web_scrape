@@ -72,12 +72,28 @@ docker exec -i postgres-container psql -U admin -d peptides < migration_peptide_
 **Option B — Local PostgreSQL:**
 
 ```bash
+
+# Before db create
+## Open the host auth file:
+sudo nano /var/lib/pgsql/data/pg_hba.conf
+
+##Make sure these lines exist, and replace any ident entries for localhost with these:
+host all all 127.0.0.1/32 scram-sha-256
+host all all ::1/128 scram-sha-256
+
+## Restart PostgreSQL:
+sudo systemctl restart postgresql
+
+
 # Create database
 sudo -i -u postgres psql -c "CREATE DATABASE peptides;"
 
 # Restore data
 psql -U postgres -d peptides < full_dump_main.sql
 psql -U postgres -d peptides < migration_peptide_graph.sql
+psql -U postgres -d peptides < migration_add_activity_type_to_peptides.sql
+psql -U postgres -d peptides < migration_add_molecular_fields_to_peptides.sql
+
 ```
 
 > **💡 Detailed database guide**: See [`execution_guide.md`](execution_guide.md) for both Docker and local setup steps.

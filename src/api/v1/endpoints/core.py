@@ -13,7 +13,7 @@ All queries go through the existing `DbPool` and entity repositories under
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 
 from src.api.v1.endpoints.graph import get_pool
 
@@ -269,7 +269,13 @@ async def list_core_peptides(
         500: {"description": "Database error."},
     },
 )
-async def get_core_peptide_by_id(peptide_id: int):
+async def get_core_peptide_by_id(
+    peptide_id: int = Path(
+        ...,
+        ge=1,
+        description="Numeric peptide database ID.",
+    ),
+):
     """
     Return everything we have in the database for a single peptide:
     benefits, side effects, interactions, indications (+ studies),

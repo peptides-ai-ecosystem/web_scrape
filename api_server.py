@@ -1,8 +1,9 @@
 import os
+import logging
 import uvicorn
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.api.v1.routers import api_router
@@ -15,6 +16,8 @@ from src.core.scheduler import start_scheduler, shutdown_scheduler
 from src.log_setup import setup_logging
 
 setup_logging(log_dir=os.getenv("LOG_DIR", "log"))
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -137,6 +140,30 @@ app = FastAPI(
         },
     ],
 )
+
+# ---------------------------------------------------------------------------
+# Global exception handling — any unhandled error returns clean JSON (500)
+# instead of a bare traceback, so clients always get a parseable response.
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(
+        "Unhandled exception on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error. Check the server logs for details.",
+            "path": request.url.path,
+        },
+    )
+
 
 # Get project root for static file path
 project_root = os.path.dirname(os.path.abspath(__file__))

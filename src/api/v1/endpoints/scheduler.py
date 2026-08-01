@@ -6,7 +6,7 @@ on a recurring interval. These endpoints let you inspect, start, pause,
 and resume the scheduler independently of manual sync operations.
 """
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
 
 from src.core.scheduler import (
@@ -47,6 +47,16 @@ class SchedulerConfigRequest(BaseModel):
         if v is not None and v < 1:
             raise ValueError("limit must be a positive integer (≥1) if provided.")
         return v
+
+    @model_validator(mode="after")
+    def validate_interval(self):
+        total_hours = (self.interval_hours or 0.0) + (self.interval_minutes or 0.0) / 60.0
+        if total_hours <= 0:
+            raise ValueError(
+                "interval_hours and interval_minutes cannot both be zero — "
+                "the scheduler needs a positive interval."
+            )
+        return self
 
     model_config = {
         "json_schema_extra": {
