@@ -9,18 +9,21 @@ class ProtocolRepository(BaseRepository):
     def upsert(self, peptide_id: int, am_id: int, protocol: Dict[str, Any]) -> int:
         """
         Upserts a peptide protocol.
-        Matches by peptide, method, and name so different goals
-        produce distinct protocols (e.g. "Female HSDD" vs "Male ED").
+
+        The schema enforces UNIQUE(peptide_id, administration_method_id), so at
+        most one protocol row exists per peptide + method. Match on that pair:
+        - If a row already exists, only fill its empty/NULL fields.
+        - Otherwise insert a new row.
         Returns the protocol ID.
         """
         # Truncate name to fit VARCHAR(100) constraint
         protocol_name = (protocol.get('name') or '')[:100]
         
         with self.get_cursor() as cur:
-            # Check if protocol exists
+            # Check if protocol exists for this peptide + method
             cur.execute(
-                "SELECT * FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s AND name = %s",
-                (peptide_id, am_id, protocol_name)
+                "SELECT * FROM peptide_protocols WHERE peptide_id = %s AND administration_method_id = %s",
+                (peptide_id, am_id)
             )
             row = cur.fetchone()
             
