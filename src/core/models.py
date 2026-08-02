@@ -26,6 +26,7 @@ class HeroData:
     name: str
     subtitle: str
     facts: List[HeroFact] = field(default_factory=list)
+    research_level: str = "Limited Research"
 
 @dataclass
 class SectionData:

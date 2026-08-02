@@ -25,7 +25,8 @@ class CSVStorage(IStorage):
                     "Peptide_Name": p_data.name,
                     "Full_Name": p_data.full_name,
                     "Method": p_data.method,
-                    "URL": p_data.url
+                    "URL": p_data.url,
+                    "research_level": p_data.hero.research_level
                 }
                 
                 # Hero facts
