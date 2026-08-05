@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from src.api.v1.routers import api_router
 
 from src.core.scheduler import start_scheduler, shutdown_scheduler
+from src.config import START_SCHEDULER
 
 # ---------------------------------------------------------------------------
 # Bootstrap logging before anything else
@@ -26,7 +27,11 @@ async def lifespan(app: FastAPI):
     get_pool()
     
     # Start the automated scheduler for background sync tasks
-    start_scheduler()
+    if START_SCHEDULER:
+        start_scheduler()
+        logger.info("Scheduler started on boot (START_SCHEDULER=true)")
+    else:
+        logger.info("Scheduler start skipped on boot (START_SCHEDULER=false)")
     
     yield
     
@@ -219,6 +224,17 @@ async def home():
     </body>
     </html>
     ''')
+
+
+@app.get("/health", tags=["Operations"])
+async def health():
+    """Liveness probe for the orchestrator gateway and load balancers.
+
+    Lightweight — returns 200 whenever the process is up and serving. The
+    gateway aggregates this as ``{base_url}/health``.
+    """
+    return {"status": "healthy", "service": "web_scrape"}
+
 
 if __name__ == "__main__":
     uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=True)

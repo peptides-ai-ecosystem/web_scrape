@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.api.v1.endpoints import (
     sync,
@@ -9,8 +9,9 @@ from src.api.v1.endpoints import (
     core,
     csv_inspector,
 )
+from src.api.gateway_auth import require_gateway_token
 
-api_router = APIRouter()
+api_router = APIRouter(dependencies=[Depends(require_gateway_token)])
 
 api_router.include_router(sync.router, prefix="/sync", tags=["Syncing"])
 api_router.include_router(evaluation.router, prefix="/evaluation", tags=["Evaluation"])

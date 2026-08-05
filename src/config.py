@@ -16,6 +16,16 @@ class Settings:
 
     # Selenium settings
     TIMEOUT: int = int(os.getenv("TIMEOUT", 5))
+
+    # ── Gateway integration settings ──────────────────────────────────────
+    # Shared secret the orchestrator gateway presents in UPSTREAM_AUTH_HEADER.
+    # When empty, API routes run open (local dev only).
+    API_TOKEN: str = os.getenv("API_TOKEN", "")
+    # Header that carries the gateway token.
+    GATEWAY_AUTH_HEADER: str = os.getenv("GATEWAY_AUTH_HEADER", "X-Gateway-Token")
+    # Start the APScheduler background sync on boot. Disable when the
+    # orchestrator/gateway manages sync (default: on, preserves old behavior).
+    START_SCHEDULER: bool = os.getenv("START_SCHEDULER", "true").strip().lower() in {"1", "true", "yes", "on"}
     
     # Directory settings
     OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "output"))
@@ -48,6 +58,9 @@ settings = Settings()
 # Export settings for easy imports
 DATABASE_URL = settings.DATABASE_URL
 TIMEOUT = settings.TIMEOUT
+API_TOKEN = settings.API_TOKEN
+GATEWAY_AUTH_HEADER = settings.GATEWAY_AUTH_HEADER
+START_SCHEDULER = settings.START_SCHEDULER
 OUTPUT_DIR = settings.OUTPUT_DIR
 ENHANCED_CSV = settings.ENHANCED_CSV
 GRAPH_CSV = settings.GRAPH_CSV
