@@ -29,9 +29,9 @@ def with_gateway_token(monkeypatch):
 
 
 def test_health_route_registered():
-    import api_server
+    import web_scrape.main as main
 
-    paths = {route.path for route in api_server.app.routes}
+    paths = {route.path for route in main.app.routes}
     assert "/health" in paths
 
 
