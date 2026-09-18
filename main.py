@@ -8,8 +8,17 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.v1.routers import api_router
 
-from src.core.scheduler import start_scheduler, shutdown_scheduler
-from src.config import START_SCHEDULER
+from src.core.scheduler import (
+    start_scheduler,
+    shutdown_scheduler,
+    start_vendor_scrape_scheduler,
+)
+from src.config import (
+    START_SCHEDULER,
+    VENDOR_SCRAPE_CRON_ENABLED,
+    VENDOR_SCRAPE_CRON_HOUR,
+    VENDOR_SCRAPE_CRON_MINUTE,
+)
 
 # ---------------------------------------------------------------------------
 # Bootstrap logging before anything else
@@ -32,7 +41,23 @@ async def lifespan(app: FastAPI):
         logger.info("Scheduler started on boot (START_SCHEDULER=true)")
     else:
         logger.info("Scheduler start skipped on boot (START_SCHEDULER=false)")
-    
+
+    # Nightly competitor price scrape (peptides-platform#288). Opt-in per
+    # environment: we do not start hitting other companies' sites just
+    # because someone booted the service.
+    if VENDOR_SCRAPE_CRON_ENABLED:
+        start_vendor_scrape_scheduler(
+            hour=VENDOR_SCRAPE_CRON_HOUR, minute=VENDOR_SCRAPE_CRON_MINUTE
+        )
+        logger.info(
+            "Nightly vendor scrape scheduled at %02d:%02d (VENDOR_SCRAPE_CRON_ENABLED=true)",
+            VENDOR_SCRAPE_CRON_HOUR,
+            VENDOR_SCRAPE_CRON_MINUTE,
+        )
+    else:
+        logger.info("Nightly vendor scrape not scheduled (VENDOR_SCRAPE_CRON_ENABLED=false)")
+
+
     yield
     
     # Stop the automated scheduler cleanly on shutdown
@@ -94,6 +119,14 @@ app = FastAPI(
     | `DELETE /api/v1/operations/job/{id}` | Cancel a pending or running job |
     | `GET /api/v1/operations/health` | System health check + job queue statistics |
 
+    ### 🏷️ Competitor Vendor Pricing
+    | Endpoint | Description |
+    |---|---|
+    | `GET /api/v1/vendors/targets` | Configured competitor targets + the User-Agent we send |
+    | `POST /api/v1/vendors/scrape` | On-demand competitor price scrape (robots-respecting, rate-limited) |
+    | `GET /api/v1/vendors/observations/flagged` | Review queue — readings we did not trust enough to apply |
+    | `POST /api/v1/vendors/observations/{id}/review` | Accept or reject one flagged reading |
+
     ### ⏰ Automated Scheduler
     | Endpoint | Description |
     |---|---|
@@ -141,7 +174,16 @@ app = FastAPI(
         },
         {
             "name": "Scheduler",
-            "description": "⏰ Manage the automated background sync scheduler (start, pause, resume, status).",
+            "description": "⏰ Manage the automated background sync scheduler (start, pause, resume, status) and the nightly competitor price scrape.",
+        },
+        {
+            "name": "Vendor Pricing",
+            "description": (
+                "🏷️ Competitor price scraping. Targets are configuration, not code; "
+                "robots.txt is honoured before every fetch; requests are rate-limited "
+                "per host; and a price that moves more than the configured threshold is "
+                "flagged for review rather than overwriting the last accepted value."
+            ),
         },
     ],
 )

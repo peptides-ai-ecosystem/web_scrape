@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "Competitor scrape targets (peptides-platform#288).",
+    "Copy to the path named by VENDOR_TARGETS_FILE (default config/vendor_targets.json).",
+    "Targets are configuration, not code: a site is added, paused with",
+    "'enabled': false, or deleted outright by editing this file — no code change,",
+    "no deploy. A missing file means no scraping at all.",
+    "",
+    "Selector lists are ordered. Index 0 is the element you believe is the real",
+    "one; later entries are fallbacks and are scored lower, because 'we found a",
+    "number somewhere on the page' is a weaker claim than 'we found the price'.",
+    "",
+    "The slugs below are placeholders. Replace them with real targets you have",
+    "checked: confirm the site's robots.txt and terms permit this before adding it."
+  ],
+  "targets": [
+    {
+      "slug": "example-vendor",
+      "name": "Example Vendor",
+      "enabled": false,
+      "currency": "USD",
+      "min_request_interval_seconds": 8.0,
+      "max_products_per_run": 25,
+      "product_urls": [
+        "https://example.com/product/bpc-157-5mg",
+        "https://example.com/product/tb-500-5mg"
+      ],
+      "selectors": {
+        "product_name": ["h1.product-title", "h1"],
+        "price": [
+          "[data-testid='product-price']",
+          "p.price ins .amount",
+          "p.price .amount"
+        ],
+        "stock": ["p.stock", ".availability", "form.cart button[type='submit']"],
+        "coa": ["a[href*='coa']", "a[href$='.pdf'][href*='certificate']"]
+      }
+    }
+  ]
+}

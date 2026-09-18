@@ -8,6 +8,7 @@ from src.api.v1.endpoints import (
     scheduler,
     core,
     csv_inspector,
+    vendors,
 )
 from src.api.gateway_auth import require_gateway_token
 
@@ -20,3 +21,4 @@ api_router.include_router(operations.router, prefix="/operations", tags=["Operat
 api_router.include_router(scheduler.router, prefix="/scheduler", tags=["Scheduler"])
 api_router.include_router(core.router, prefix="/core", tags=["Core Data"])
 api_router.include_router(csv_inspector.router, prefix="/csv", tags=["CSV Inspector"])
+api_router.include_router(vendors.router, prefix="/vendors", tags=["Vendor Pricing"])

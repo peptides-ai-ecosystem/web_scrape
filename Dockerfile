@@ -6,6 +6,8 @@
 #   * the FastAPI backend  (api_server.py + src/api/...)
 #   * the static frontend  (src/visualization/*.html|css|js — mounted by FastAPI at /visualization/)
 #   * Chromium + ChromeDriver for the Selenium-based scraper / scheduler jobs
+#     (Playwright, used by the competitor vendor scraper, launches this same
+#      Chromium via CHROME_BIN rather than downloading a second browser)
 #
 # The container binds to Railway's $PORT at runtime. Override CMD or set
 # `startCommand` in railway.json to disable the scheduler / scraper if you want
