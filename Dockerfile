@@ -3,7 +3,7 @@
 # Single-container image for Railway.
 #
 # This image bundles:
-#   * the FastAPI backend  (api_server.py + src/api/...)
+#   * the FastAPI backend  (main.py + src/api/...)
 #   * the static frontend  (src/visualization/*.html|css|js — mounted by FastAPI at /visualization/)
 #   * Chromium + ChromeDriver for the Selenium-based scraper / scheduler jobs
 #
@@ -43,7 +43,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 # 3. Application source
 # ---------------------------------------------------------------------------
 COPY src/ ./src/
-COPY api_server.py main.py ./
+COPY main.py ./
 
 RUN uv sync --frozen --no-dev
 
@@ -71,4 +71,4 @@ EXPOSE 8000
 # 6. Entrypoint — bind to Railway-provided $PORT (falls back to 8000 locally).
 #    Using `sh -c` so ${PORT:-8000} is expanded at container start, not build.
 # ---------------------------------------------------------------------------
-CMD ["sh", "-c", "uvicorn api_server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]

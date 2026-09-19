@@ -2,7 +2,7 @@
 
 This project ships **as a single Docker container** that runs:
 
-1. The FastAPI backend (`api_server.py` → REST API at `/api/v1/*`, Swagger at `/docs`).
+1. The FastAPI backend (`main.py` → REST API at `/api/v1/*`, Swagger at `/docs`).
 2. The static frontend (HTML/CSS/JS in `src/visualization/`, mounted at `/visualization/`).
 3. Chromium + ChromeDriver, so the scraper / scheduler endpoints work in‑container.
 
@@ -109,7 +109,7 @@ You can do the same with `/app/log` if you want to keep historical logs.
 
 ## 7. The scheduler runs automatically — disable if you don't want it
 
-`api_server.py` calls `start_scheduler()` on boot with a **12‑hour interval**, so
+`main.py` calls `start_scheduler()` on boot with a **12‑hour interval**, so
 Railway will start running scraping jobs against `pep-pedia.org` 12 h after
 boot, and again every 12 h after that.
 
@@ -126,7 +126,7 @@ curl -X POST https://<your-domain>/api/v1/scheduler/resume
 curl -X POST "https://<your-domain>/api/v1/scheduler/start?interval_hours=24"
 ```
 
-To **never** start the scheduler, edit `api_server.py` and remove the
+To **never** start the scheduler, edit `main.py` and remove the
 `start_scheduler()` / `shutdown_scheduler()` calls in `lifespan` before
 deploying.
 

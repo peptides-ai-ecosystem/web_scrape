@@ -1,8 +1,8 @@
 # Feature: FastAPI Server, Scheduler & Operations
 
-> **Module**: `api_server.py`, `viz_server.py`, `src/api/`, `src/core/scheduler.py`, `src/core/job_queue.py`
+> **Module**: `main.py`, `viz_server.py`, `src/api/`, `src/core/scheduler.py`, `src/core/job_queue.py`
 >
-> **Entry Point**: `uv run api_server.py`
+> **Entry Point**: `uv run main.py`
 
 ---
 
@@ -44,7 +44,7 @@ flowchart TB
         C[CLI]
     end
 
-    subgraph FastAPI["FastAPI Server (api_server.py)"]
+    subgraph FastAPI["FastAPI Server (main.py)"]
         D["/" Home page]
         E["/api/v1/sync/*" Sync endpoints]
         F["/api/v1/evaluation/*" Evaluation endpoints]
@@ -90,7 +90,7 @@ flowchart TB
 
 ### 3.1 Server Initialization & Lifespan
 
-**File**: `api_server.py`
+**File**: `main.py`
 
 ```python
 @asynccontextmanager
@@ -108,7 +108,7 @@ The server has two build variants:
 
 | Server | File | Purpose |
 |--------|------|---------|
-| **`api_server.py`** | Standalone consolidated server | Full API + visualization (primary) |
+| **`main.py`** | The consolidated server | Full API + visualization (primary) |
 | **`viz_server.py`** | Visualization-only server | Lightweight graph dashboard only |
 
 ### 3.2 API Endpoints Reference
@@ -434,7 +434,7 @@ COPY requirements.txt . && pip install -r requirements.txt
 COPY src/ ./src/
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_BIN=/usr/bin/chromedriver
-CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 **docker-compose.yml**:
@@ -464,7 +464,7 @@ services:
 
 ```bash
 # Start the consolidated API server
-uv run api_server.py
+uv run main.py
 
 # Start visualization-only server
 uv run viz_server.py
