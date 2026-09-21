@@ -20,3 +20,7 @@ full_dump_main.sql
 full_dump.sql
 .commandcode
 .cursor
+
+# Real competitor scrape targets are deployment-owned config, not code
+# (peptides-platform#288). config/vendor_targets.example.json is committed.
+config/vendor_targets.json

@@ -14,6 +14,10 @@ from src.core.scheduler import (
     pause_scheduler,
     resume_scheduler,
     get_scheduler_status,
+    start_vendor_scrape_scheduler,
+    pause_vendor_scrape_scheduler,
+    resume_vendor_scrape_scheduler,
+    get_vendor_scrape_scheduler_status,
 )
 
 router = APIRouter()
@@ -138,3 +142,79 @@ async def resume_sync_scheduler():
     """
     resume_scheduler()
     return {"message": "Scheduler resumed"}
+
+
+# ---------------------------------------------------------------------------
+# Nightly competitor vendor scrape (peptides-platform#288)
+# ---------------------------------------------------------------------------
+
+
+class VendorScrapeScheduleRequest(BaseModel):
+    """Cron configuration for the nightly competitor price scrape."""
+
+    hour: int = Field(3, description="Hour of day (server time) to run at.", ge=0, le=23)
+    minute: int = Field(15, description="Minute of the hour to run at.", ge=0, le=59)
+    vendors: Optional[list[str]] = Field(
+        None,
+        description="Target slugs to scrape nightly. `null` means every enabled target.",
+        examples=[None, ["competitor-a"]],
+    )
+    limit_per_vendor: Optional[int] = Field(
+        None,
+        description="Cap on product URLs fetched per vendor per run.",
+        ge=1,
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"hour": 3, "minute": 15, "vendors": None, "limit_per_vendor": None},
+            ]
+        }
+    }
+
+
+@router.get("/vendor-scrape/status")
+async def vendor_scrape_schedule_status():
+    """
+    🌙 Status of the nightly competitor price scrape.
+
+    Cron-triggered, not interval-triggered: an interval job drifts into
+    business hours, and we do not want to be loading a competitor's site at
+    midday.
+    """
+    return get_vendor_scrape_scheduler_status()
+
+
+@router.post("/vendor-scrape/start")
+async def vendor_scrape_schedule_start(config: VendorScrapeScheduleRequest):
+    """
+    🌙 Start or re-configure the nightly competitor price scrape.
+
+    The scheduled run and `POST /api/v1/vendors/scrape` execute the same
+    pipeline with the same robots.txt, rate-limit and delta-review guards.
+    """
+    start_vendor_scrape_scheduler(
+        hour=config.hour,
+        minute=config.minute,
+        vendors=config.vendors,
+        limit_per_vendor=config.limit_per_vendor,
+    )
+    return {
+        "message": "Nightly vendor scrape scheduled",
+        **get_vendor_scrape_scheduler_status(),
+    }
+
+
+@router.post("/vendor-scrape/pause")
+async def vendor_scrape_schedule_pause():
+    """⏸️ Pause the nightly competitor price scrape without unscheduling it."""
+    pause_vendor_scrape_scheduler()
+    return {"message": "Nightly vendor scrape paused"}
+
+
+@router.post("/vendor-scrape/resume")
+async def vendor_scrape_schedule_resume():
+    """▶️ Resume a paused nightly competitor price scrape."""
+    resume_vendor_scrape_scheduler()
+    return {"message": "Nightly vendor scrape resumed"}

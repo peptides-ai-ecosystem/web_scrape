@@ -12,6 +12,7 @@ from src.infrastructure.db.repositories import (
     DosageRepository,
     ReferenceRepository,
     LookupRepository,
+    VendorObservationRepository,
 )
 
 
@@ -51,6 +52,8 @@ class DbService:
         self.dosage = DosageRepository(connection)
         self.reference = ReferenceRepository(connection)
         self.lookup = LookupRepository(connection)
+        # Competitor vendor price observations (peptides-platform#288).
+        self.vendor_observation = VendorObservationRepository(connection)
 
     # ==================== High-level orchestration methods ====================
     

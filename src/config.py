@@ -42,6 +42,56 @@ class Settings:
     ERROR_LOG: Path = LOG_DIR / "error_log.txt"
     DEBUG_LOG: Path = LOG_DIR / "debug_log.txt"
     
+    # ── Competitor vendor scraping (peptides-platform#288) ────────────────
+    # Targets live in a file, never in code, so a site can be removed or
+    # paused without a deploy. Missing file == no targets == no scraping.
+    VENDOR_TARGETS_FILE: Path = Path(
+        os.getenv("VENDOR_TARGETS_FILE", "config/vendor_targets.json")
+    )
+    # Contact URL embedded in the User-Agent so a site owner who wants us to
+    # stop has somewhere to go. Keep it real.
+    VENDOR_SCRAPER_CONTACT_URL: str = os.getenv(
+        "VENDOR_SCRAPER_CONTACT_URL",
+        "https://github.com/peptides-ai-ecosystem/web_scrape",
+    )
+    # Honest, identifiable User-Agent. This is NOT the spoofed browser string
+    # used by src/infrastructure/webdriver_factory.py for our own pep-pedia
+    # scrape — competitor sites get told exactly who is calling.
+    VENDOR_SCRAPER_USER_AGENT: str = os.getenv(
+        "VENDOR_SCRAPER_USER_AGENT",
+        f"PeptidesVendorScraper/1.0 (+{VENDOR_SCRAPER_CONTACT_URL})",
+    )
+    # Politeness floor, seconds between requests to the same host. The
+    # effective delay is max(this, target override, robots.txt Crawl-delay).
+    VENDOR_SCRAPE_MIN_INTERVAL_SECONDS: float = float(
+        os.getenv("VENDOR_SCRAPE_MIN_INTERVAL_SECONDS", "5.0")
+    )
+    # Retries on 429/5xx before the host is abandoned for the run.
+    VENDOR_SCRAPE_MAX_RETRIES: int = int(os.getenv("VENDOR_SCRAPE_MAX_RETRIES", "2"))
+    VENDOR_SCRAPE_BACKOFF_SECONDS: float = float(
+        os.getenv("VENDOR_SCRAPE_BACKOFF_SECONDS", "30.0")
+    )
+    VENDOR_SCRAPE_TIMEOUT_MS: int = int(os.getenv("VENDOR_SCRAPE_TIMEOUT_MS", "20000"))
+    # Relative price move that flags an observation for review instead of
+    # letting it overwrite a previously accepted price. 0.25 == 25%.
+    VENDOR_PRICE_DELTA_THRESHOLD: float = float(
+        os.getenv("VENDOR_PRICE_DELTA_THRESHOLD", "0.25")
+    )
+    # Below this confidence an observation is always flagged.
+    VENDOR_MIN_CONFIDENCE: float = float(os.getenv("VENDOR_MIN_CONFIDENCE", "0.6"))
+    # Nightly cron. Off by default — turn it on deliberately, per environment.
+    VENDOR_SCRAPE_CRON_ENABLED: bool = os.getenv(
+        "VENDOR_SCRAPE_CRON_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    VENDOR_SCRAPE_CRON_HOUR: int = int(os.getenv("VENDOR_SCRAPE_CRON_HOUR", "3"))
+    VENDOR_SCRAPE_CRON_MINUTE: int = int(os.getenv("VENDOR_SCRAPE_CRON_MINUTE", "15"))
+    # Publishing accepted observations onward into the platform's
+    # `vendor_products` table. Off, and unimplemented — see
+    # src/services/vendor_products_publisher.py for why.
+    VENDOR_PRODUCTS_PUBLISH_ENABLED: bool = os.getenv(
+        "VENDOR_PRODUCTS_PUBLISH_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
     # Time range settings
     TIME_RANGES: list = ["24h", "7d", "14d", "30d"]
     
@@ -70,6 +120,21 @@ ERROR_LOG = settings.ERROR_LOG
 DEBUG_LOG = settings.DEBUG_LOG
 TIME_RANGES = settings.TIME_RANGES
 BUTTON_SKIP_LIST = settings.BUTTON_SKIP_LIST
+
+# Competitor vendor scraping (peptides-platform#288)
+VENDOR_TARGETS_FILE = settings.VENDOR_TARGETS_FILE
+VENDOR_SCRAPER_CONTACT_URL = settings.VENDOR_SCRAPER_CONTACT_URL
+VENDOR_SCRAPER_USER_AGENT = settings.VENDOR_SCRAPER_USER_AGENT
+VENDOR_SCRAPE_MIN_INTERVAL_SECONDS = settings.VENDOR_SCRAPE_MIN_INTERVAL_SECONDS
+VENDOR_SCRAPE_MAX_RETRIES = settings.VENDOR_SCRAPE_MAX_RETRIES
+VENDOR_SCRAPE_BACKOFF_SECONDS = settings.VENDOR_SCRAPE_BACKOFF_SECONDS
+VENDOR_SCRAPE_TIMEOUT_MS = settings.VENDOR_SCRAPE_TIMEOUT_MS
+VENDOR_PRICE_DELTA_THRESHOLD = settings.VENDOR_PRICE_DELTA_THRESHOLD
+VENDOR_MIN_CONFIDENCE = settings.VENDOR_MIN_CONFIDENCE
+VENDOR_SCRAPE_CRON_ENABLED = settings.VENDOR_SCRAPE_CRON_ENABLED
+VENDOR_SCRAPE_CRON_HOUR = settings.VENDOR_SCRAPE_CRON_HOUR
+VENDOR_SCRAPE_CRON_MINUTE = settings.VENDOR_SCRAPE_CRON_MINUTE
+VENDOR_PRODUCTS_PUBLISH_ENABLED = settings.VENDOR_PRODUCTS_PUBLISH_ENABLED
 
 
 # -------------------- LOGGING FUNCTIONS -------------------- #

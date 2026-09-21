@@ -20,6 +20,7 @@ Each feature is documented in detail with business logic, architecture diagrams,
 | 2 | **🔄 Database Sync** | [`docs/features/02-sync.md`](docs/features/02-sync.md) | `DbImportOrchestrator`, `GraphImportOrchestrator`, mappers (groups A–F) |
 | 3 | **📊 Evaluation** | [`docs/features/03-evaluation.md`](docs/features/03-evaluation.md) | `EvaluationEngine`, `CsvExpectationBuilder`, `DbActualFetcher`, `GraphEvaluator` |
 | 4 | **🚀 FastAPI & Scheduler & Operations** | [`docs/features/04-fastapi-schedule-operations.md`](docs/features/04-fastapi-schedule-operations.md) | `api_server.py`, APScheduler, `JobQueue`, async endpoints, visualization |
+| 5 | **🏷️ Competitor Vendor Pricing** | [`docs/features/05-vendor-scraping.md`](docs/features/05-vendor-scraping.md) | `VendorScrapeService`, `RobotsPolicy`, `HostRateLimiter`, `PlaywrightPageFetcher`, `DeltaReviewer` |
 
 ---
 
