@@ -19,7 +19,7 @@ Each feature is documented in detail with business logic, architecture diagrams,
 | 1 | **🕷️ Web Scrape** | [`docs/features/01-scrape.md`](docs/features/01-scrape.md) | `PageScraper`, `ScraperManager`, extractors, `WebDriverFactory`, `CSVStorage` |
 | 2 | **🔄 Database Sync** | [`docs/features/02-sync.md`](docs/features/02-sync.md) | `DbImportOrchestrator`, `GraphImportOrchestrator`, mappers (groups A–F) |
 | 3 | **📊 Evaluation** | [`docs/features/03-evaluation.md`](docs/features/03-evaluation.md) | `EvaluationEngine`, `CsvExpectationBuilder`, `DbActualFetcher`, `GraphEvaluator` |
-| 4 | **🚀 FastAPI & Scheduler & Operations** | [`docs/features/04-fastapi-schedule-operations.md`](docs/features/04-fastapi-schedule-operations.md) | `api_server.py`, APScheduler, `JobQueue`, async endpoints, visualization |
+| 4 | **🚀 FastAPI & Scheduler & Operations** | [`docs/features/04-fastapi-schedule-operations.md`](docs/features/04-fastapi-schedule-operations.md) | `main.py`, APScheduler, `JobQueue`, async endpoints, visualization |
 | 5 | **🏷️ Competitor Vendor Pricing** | [`docs/features/05-vendor-scraping.md`](docs/features/05-vendor-scraping.md) | `VendorScrapeService`, `RobotsPolicy`, `HostRateLimiter`, `PlaywrightPageFetcher`, `DeltaReviewer` |
 
 ---
@@ -106,55 +106,31 @@ The project provides **two entry points** depending on your use case:
 
 ---
 
-#### 🧪 Path A: CLI Pipeline (`main.py`) — For Ad-Hoc Operations
+#### 🧪 Path A: the CLI — *lives in another repository*
 
-Use `main.py` when you need to run one-off scraping, syncing, or evaluation from the command line.
+There is no command-line pipeline here. `main.py` is the FastAPI application; it takes no
+`--scrape` / `--sync` flags and never has in this repository. Passing them does nothing —
+the server simply starts.
+
+The CLI-first version of this scraper is **`peptide_web_sync`**, a sibling repository:
 
 ```bash
-# ── Full pipeline: scrape → sync ──
+# in peptide_web_sync, not here
 uv run main.py --scrape --sync
-
-# ── Scrape only (saves to CSV, no DB) ──
-uv run main.py --scrape
-
-# ── Sync only (reads existing CSV → DB) ──
-uv run main.py --sync
-
-# ── Evaluate sync quality ──
-uv run main.py --evaluate
-
-# ── With limits (for testing) ──
-uv run main.py --scrape --sync --limit 5
-
-# ── Specific URLs (skip auto-discovery) ──
-uv run main.py --scrape --url https://pep-pedia.org/peptides/example
-
-# ── Evaluate + save JSON report ──
-uv run main.py --evaluate --eval-output output/eval_report.json
-
-# ── Delete a peptide from DB ──
-uv run main.py --delete some-peptide-slug
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--scrape` | Extract data from pep-pedia.org → saves to `output/pep_pedia_master.csv` |
-| `--sync` | Sync CSV data to PostgreSQL (core tables) |
-| `--evaluate` | Compare CSV expectations vs DB actuals (13 checks/peptide) |
-| `--eval-output PATH` | Save evaluation JSON report |
-| `--url URL [URL ...]` | Scrape specific URLs (skips crawling) |
-| `--limit N` | Process at most N peptides |
-| `--delete SLUG` | Delete a peptide from DB |
 
 ---
 
-#### 🌐 Path B: API Server (`api_server.py`) — For Production & Dashboard
+#### 🌐 Path B: the API server (`main.py`) — how this service runs
 
-Use `api_server.py` when you need the HTTP API, automated scheduling, job tracking, and the web visualization dashboard.
+`main.py` is the whole service: HTTP API, APScheduler, job tracking and the visualization dashboard.
 
 ```bash
-# Start the consolidated API server
-uv run api_server.py
+# Start the service (reload enabled; binds $PORT, default 8000)
+uv run main.py
+
+# Or explicitly — this is what the Dockerfile runs
+uv run uvicorn main:app --host 0.0.0.0 --port 8000
 
 # Server starts at http://localhost:8000
 # Swagger docs at http://localhost:8000/docs
@@ -185,20 +161,16 @@ uv run api_server.py
 
 ---
 
-## 🤔 `main.py` vs `api_server.py` — Which One Should I Use?
+## 🤔 One entry point
 
-| Criterion | `main.py` (CLI) | `api_server.py` (API Server) |
-|-----------|-----------------|------------------------------|
-| **Best for** | One-off scraping, testing, debugging | Production, automation, integration |
-| **Interface** | Command-line with argparse | REST API + Swagger UI |
-| **Async jobs** | ❌ No — runs synchronously | ✅ Yes — background tasks with job queue |
-| **Scheduling** | ❌ Manual only | ✅ APScheduler (configurable interval) |
-| **Job tracking** | ❌ Not applicable | ✅ In-memory job queue, cancellable |
-| **Visualization** | ❌ No | ✅ Interactive dashboard at `/visualization/` |
-| **Graph API** | ❌ No | ✅ Full graph data endpoints |
-| **When to use** | "I want to scrape 5 peptides and check the CSV" | "I need to run this in production and monitor results" |
+Earlier versions of this repository had two: a CLI (`main.py`) and a server (`api_server.py`).
+They were consolidated — `main.py` **is** the server, and `api_server.py` no longer exists.
 
-**Recommendation**: **Keep both.** Use `main.py` for development, testing, and one-off tasks. Use `api_server.py` for production deployment and when you need the dashboard. The `api_server.py` can also trigger all the same operations via its API endpoints — no feature is lost by moving to the server.
+That consolidation was never finished in the docs or the `Dockerfile`, which is why this README
+described flags that do nothing and the container started a module that is not there. If you find
+another `api_server.py` reference, it is stale; the answer is always `main.py`.
+
+For one-off command-line scraping, use the `peptide_web_sync` repository.
 
 ---
 
@@ -215,7 +187,7 @@ graph TB
     end
 
     subgraph API["API Layer"]
-        C[api_server.py<br/>FastAPI]
+        C[main.py<br/>FastAPI]
         D[Scheduler<br/>APScheduler]
         E[JobQueue<br/>In-memory]
     end
@@ -260,8 +232,7 @@ graph TB
 ### Directory Structure
 
 ```
-├── api_server.py              # 🚀 FastAPI server (sync API, evaluation, graph, dashboard)
-├── main.py                    # 🧪 CLI entry point (scrape, sync, evaluate, delete)
+├── main.py                    # 🚀 FastAPI app (sync API, evaluation, graph, dashboard, scheduler)
 ├── viz_server.py              # 📊 Legacy visualization-only server
 │
 ├── docs/
