@@ -84,6 +84,9 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        # `envs:` below only forwards variables into the remote shell; it does
+        # not create them. Without this block the script runs with GITHUB_TOKEN
+        # unbound, which is how the first deploy failed.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
@@ -94,9 +97,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GITHUB_TOKEN,GITHUB_ACTOR,GITHUB_SHA
           command_timeout: 15m
-        # Without this the script runs with GITHUB_TOKEN unset; `envs:` only
-        # forwards variables, it does not define them.
-
           script: |
             set -euo pipefail
 
