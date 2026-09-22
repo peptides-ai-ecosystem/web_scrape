@@ -1,0 +1,54 @@
+# Deployment topology for the shared EC2 host.
+#
+# Kept separate from docker-compose.yml on purpose. That file is a local
+# development stack: it builds from source and brings up its own Postgres with
+# a hardcoded password. Neither belongs on a shared server, and the scraper
+# there publishes no ports at all, so nothing could route to it.
+#
+# This file is the counterpart to chat-microservice's compose: pull a pinned
+# image, read secrets from `.env` on the host, and join the shared
+# `ai-microservices-net` so the orchestrator can reach it by name.
+services:
+  web-scrape:
+    image: ${WEB_SCRAPE_IMAGE:-ghcr.io/peptides-ai-ecosystem/web_scrape:latest}
+    container_name: web-scrape
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      # The app binds $PORT; 8000 inside the container matches the Dockerfile's
+      # EXPOSE and the alias below, so the orchestrator's URL stays stable
+      # regardless of which host port is published.
+      PORT: 8000
+
+    ports:
+      # 8005 on the host because that is the port the orchestrator's
+      # WEBSCRAPE_SERVICE_URL default documents, and it keeps the service
+      # reachable for debugging without going through the gateway.
+      - "8005:8000"
+
+    # Chromium needs more than the default 64MB of shared memory or it crashes
+    # part-way through a page render; the local compose already sets this.
+    shm_size: "2gb"
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    networks:
+      scrape-net:
+        aliases:
+          # The orchestrator resolves this name on the shared network, the same
+          # way it reaches `chat-service`. Set
+          # WEBSCRAPE_SERVICE_URL=http://web-scrape-service:8000 on the gateway.
+          - web-scrape-service
+
+networks:
+  scrape-net:
+    name: ai-microservices-net
+    external: true
