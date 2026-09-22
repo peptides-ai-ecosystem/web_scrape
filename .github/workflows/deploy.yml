@@ -73,7 +73,11 @@ jobs:
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          # Not a secret, just the Linux login. Defaults to the Ubuntu AMI's
+          # `ubuntu` — which is what peptides-platform hardcodes in all seven
+          # of its SSH steps — so this repo needs only EC2_HOST and
+          # EC2_SSH_KEY to work. Set EC2_USER to override on a different AMI.
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: docker-compose.deploy.yml
           target: ~/web_scrape/
@@ -82,7 +86,7 @@ jobs:
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GITHUB_TOKEN,GITHUB_ACTOR,GITHUB_SHA
           command_timeout: 15m
@@ -150,7 +154,7 @@ jobs:
           DSN: ${{ inputs.set_sentry_dsn }}
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: DSN
           command_timeout: 5m
