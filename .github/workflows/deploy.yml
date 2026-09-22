@@ -84,14 +84,32 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER || 'ubuntu' }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GITHUB_TOKEN,GITHUB_ACTOR,GITHUB_SHA
           command_timeout: 15m
+        # Without this the script runs with GITHUB_TOKEN unset; `envs:` only
+        # forwards variables, it does not define them.
+
           script: |
             set -euo pipefail
+
+            # Name the host before doing anything. There is more than one EC2
+            # box in this account and only one of them runs Docker; landing on
+            # the wrong one should say so, not fail with "command not found".
+            echo "==> host: $(hostname) as $(whoami)"
+            command -v docker >/dev/null 2>&1 || {
+              echo "ERROR: docker is not on PATH for $(whoami)@$(hostname)."
+              echo "       Either EC2_HOST points at a box that does not run Docker,"
+              echo "       or this user is not in the docker group."
+              exit 1
+            }
 
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
