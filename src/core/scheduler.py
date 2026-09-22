@@ -1,4 +1,5 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.jobstores.base import JobLookupError
 import os
@@ -15,6 +16,7 @@ from src.config import log_debug, log_error, OUTPUT_DIR, FULL_CSV
 # Keep a global instance of the scheduler
 scheduler = AsyncIOScheduler()
 SYNC_JOB_ID = "scheduled_combined_sync"
+VENDOR_SCRAPE_JOB_ID = "nightly_vendor_scrape"
 
 def run_combined_sync_job(limit: int | None = None):
     """
@@ -122,6 +124,90 @@ def get_scheduler_status() -> dict:
         }
     else:
         return {"status": "not_configured"}
+
+# ---------------------------------------------------------------------------
+# Nightly competitor vendor scrape (peptides-platform#288)
+# ---------------------------------------------------------------------------
+
+
+def run_vendor_scrape_job(vendors: list | None = None, limit_per_vendor: int | None = None):
+    """Nightly competitor price scrape.
+
+    Runs the same pipeline as ``POST /api/v1/vendors/scrape`` — robots.txt is
+    honoured, hosts are rate-limited, and sharp price moves are flagged for
+    review rather than applied. A run with no configured targets is a no-op,
+    not an error.
+    """
+    from src.services.vendor_scrape_runner import run_vendor_scrape
+
+    try:
+        log_debug("Starting nightly vendor scrape...", "scheduler")
+        report = run_vendor_scrape(vendors=vendors, limit_per_vendor=limit_per_vendor)
+        log_debug(
+            f"Nightly vendor scrape finished: {report.get('urls_processed', 0)} URLs, "
+            f"review={report.get('review_counts')}",
+            "scheduler",
+        )
+        return report
+    except Exception as e:
+        log_error(f"Fatal error during nightly vendor scrape: {e}", "scheduler")
+        return None
+
+
+def start_vendor_scrape_scheduler(
+    hour: int = 3, minute: int = 15, vendors: list | None = None, limit_per_vendor: int | None = None
+):
+    """Schedule the nightly vendor scrape with a cron trigger.
+
+    Cron rather than an interval because "nightly" means *at night* — an
+    interval job drifts into business hours, and hammering a competitor's
+    site at midday is exactly the kind of thing we said we would not do.
+    """
+    if not scheduler.running:
+        scheduler.start()
+
+    scheduler.add_job(
+        run_vendor_scrape_job,
+        trigger=CronTrigger(hour=hour, minute=minute),
+        args=[vendors, limit_per_vendor],
+        id=VENDOR_SCRAPE_JOB_ID,
+        replace_existing=True,
+    )
+    log_debug(
+        f"Nightly vendor scrape scheduled at {hour:02d}:{minute:02d} "
+        f"(vendors={vendors or 'all enabled'}, limit={limit_per_vendor}).",
+        "scheduler",
+    )
+
+
+def pause_vendor_scrape_scheduler():
+    try:
+        scheduler.pause_job(VENDOR_SCRAPE_JOB_ID)
+        log_debug("Nightly vendor scrape paused.", "scheduler")
+    except JobLookupError:
+        pass
+
+
+def resume_vendor_scrape_scheduler():
+    try:
+        scheduler.resume_job(VENDOR_SCRAPE_JOB_ID)
+        log_debug("Nightly vendor scrape resumed.", "scheduler")
+    except JobLookupError:
+        pass
+
+
+def get_vendor_scrape_scheduler_status() -> dict:
+    job = scheduler.get_job(VENDOR_SCRAPE_JOB_ID)
+    if not job:
+        return {"status": "not_configured"}
+    return {
+        "status": "running" if job.next_run_time else "paused",
+        "cron": str(job.trigger),
+        "vendors": job.args[0] if job.args else None,
+        "limit_per_vendor": job.args[1] if len(job.args) > 1 else None,
+        "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+    }
+
 
 def shutdown_scheduler():
     if scheduler.running:
