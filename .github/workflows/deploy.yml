@@ -289,6 +289,34 @@ jobs:
               done
               su=$(docker exec "$c" printenv SUPABASE_URL 2>/dev/null) && echo "  $c SUPABASE_URL: $su"
             done
+            echo "== web_scrape as the gateway will see it =="
+            G=$(docker ps --format '{{.Names}}' | grep -iE 'orchestr' | head -1)
+            if docker ps --format '{{.Names}}' | grep -qx web-scrape; then
+              # Run from INSIDE the gateway container, over ai-microservices-net, with
+              # the gateway's own token - i.e. exactly the request the gateway will
+              # make. python rather than curl: the gateway image is a Python app.
+              docker exec "$G" python -c '
+            import os, urllib.request, urllib.error
+            def hit(path, token):
+                h = {"X-Gateway-Token": os.environ["API_TOKEN"]} if token else {}
+                try:
+                    r = urllib.request.urlopen(urllib.request.Request("http://web-scrape:8000" + path, headers=h), timeout=15)
+                    return r.status, r.read(160).decode("utf8", "replace")
+                except urllib.error.HTTPError as e:
+                    return e.code, e.read(120).decode("utf8", "replace")
+                except Exception as e:
+                    return 0, type(e).__name__ + ": " + str(e)[:80]
+            for label, path, tok in [("public /health", "/health", False),
+                                     ("/api/v1 without token (expect 401)", "/api/v1/operations/health", False),
+                                     ("/api/v1 with gateway token (expect 200)", "/api/v1/operations/health", True)]:
+                c, b = hit(path, tok)
+                print(f"  {c}  {label:42} {b}")
+            '
+              echo "  --- boot log: is it idle? ---"
+              docker logs web-scrape 2>&1 | grep -iE "scheduler|vendor scrape|error|traceback" | tail -6 | sed 's/^/  /'
+            else
+              echo "  web-scrape container not running"
+            fi
             echo "== candidate env files on disk (paths only) =="
             ls -la ~/web_scrape ~/web-scrape ~/webscrape 2>/dev/null | sed 's/^/  /' || true
             find ~ -maxdepth 3 -name '.env' -path '*scrap*' 2>/dev/null | sed 's/^/  /'
