@@ -10,6 +10,10 @@ on:
       - master
   workflow_dispatch:
     inputs:
+      inspect:
+        description: 'Read-only: report what is running on the box (containers, where web_scrape lives, which URL the orchestrator uses) and deploy nothing. Values are never printed, only key names.'
+        required: false
+        default: "false"
       set_sentry_dsn:
         description: 'Set the Sentry DSN on the EC2 box instead of deploying. Blank = normal build + deploy. A DSN is a write-only ingest URL and is safe here; never paste any other credential into this field.'
         required: false
@@ -25,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     # A DSN-only dispatch changes one line in an env file; it must not rebuild
     # and roll a new image as a side effect.
-    if: github.event_name != 'workflow_dispatch' || inputs.set_sentry_dsn == ''
+    if: github.event_name != 'workflow_dispatch' || (inputs.set_sentry_dsn == '' && inputs.inspect != 'true')
     permissions:
       contents: read
       packages: write
@@ -60,7 +64,7 @@ jobs:
     name: Deploy to EC2
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || inputs.set_sentry_dsn == ''
+    if: github.event_name != 'workflow_dispatch' || (inputs.set_sentry_dsn == '' && inputs.inspect != 'true')
     permissions:
       contents: read
       packages: read
@@ -223,3 +227,41 @@ jobs:
             echo "ERROR: /health did not answer after the recreate"
             docker compose -f docker-compose.deploy.yml logs --tail 40 web-scrape
             exit 1
+
+  inspect:
+    name: Inspect the box (read-only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.inspect == 'true'
+    steps:
+      - name: Report containers and where web_scrape runs
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -u
+            echo "==> host: $(hostname)"
+            echo "== containers =="
+            docker ps -a --format '  {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+            echo "== networks =="
+            docker network ls --format '  {{.Name}}'
+            echo "== anything scrape-shaped =="
+            for c in $(docker ps -a --format '{{.Names}}' | grep -iE 'scrap|web.?scrape'); do
+              echo "  --- $c ---"
+              docker inspect "$c" --format '    image={{.Config.Image}}  workdir={{.Config.WorkingDir}}'
+              echo "    compose project dir: $(docker inspect "$c" --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+              echo "    env KEYS (values withheld):"
+              docker inspect "$c" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sed 's/^/      /'
+            done
+            echo "== the orchestrator's view of web_scrape =="
+            for c in $(docker ps --format '{{.Names}}' | grep -iE 'orchestr|gateway'); do
+              # a URL, not a credential - safe to show
+              docker exec "$c" printenv WEBSCRAPE_SERVICE_URL 2>/dev/null | sed "s/^/  $c WEBSCRAPE_SERVICE_URL=/"
+            done
+            echo "== candidate env files on disk (paths only) =="
+            ls -la ~/web_scrape ~/web-scrape ~/webscrape 2>/dev/null | sed 's/^/  /' || true
+            find ~ -maxdepth 3 -name '.env' -path '*scrap*' 2>/dev/null | sed 's/^/  /'
+            echo "== done (nothing was modified) =="
+
