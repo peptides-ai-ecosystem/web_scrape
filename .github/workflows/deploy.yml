@@ -260,6 +260,19 @@ jobs:
               # a URL, not a credential - safe to show
               docker exec "$c" printenv WEBSCRAPE_SERVICE_URL 2>/dev/null | sed "s/^/  $c WEBSCRAPE_SERVICE_URL=/"
             done
+            echo "== networks each container is on (routing depends on sharing one) =="
+            for c in $(docker ps --format '{{.Names}}'); do
+              echo "  $c: $(docker inspect "$c" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}({{join $v.Aliases ","}}) {{end}}')"
+            done
+            echo "== gateway settings that decide whether an http upstream is accepted =="
+            O=$(docker ps --format '{{.Names}}' | grep -iE 'orchestr' | head -1)
+            for k in ENVIRONMENT REQUIRE_UPSTREAM_TLS CHAT_SERVICE_URL PEPTIDE_SERVICE_URL SDS_SERVICE_URL WEBSCRAPE_SERVICE_URL UPSTREAM_AUTH_HEADER; do
+              # URLs and flags only - API_TOKEN is deliberately not in this list
+              echo "  $k=$(docker exec "$O" printenv "$k" 2>/dev/null || echo '<unset>')"
+            done
+            echo "  API_TOKEN is $(docker exec "$O" sh -c 'test -n "$API_TOKEN" && echo set || echo EMPTY')"
+            echo "== gateway /health =="
+            curl -s -m 10 http://127.0.0.1:8080/health | head -c 1500; echo
             echo "== candidate env files on disk (paths only) =="
             ls -la ~/web_scrape ~/web-scrape ~/webscrape 2>/dev/null | sed 's/^/  /' || true
             find ~ -maxdepth 3 -name '.env' -path '*scrap*' 2>/dev/null | sed 's/^/  /'
