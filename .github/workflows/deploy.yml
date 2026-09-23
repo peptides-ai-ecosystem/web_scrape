@@ -277,6 +277,18 @@ jobs:
             echo "  API_TOKEN is $(docker exec "$O" sh -c 'test -n "$API_TOKEN" && echo set || echo EMPTY')"
             echo "== gateway /health =="
             curl -s -m 10 http://127.0.0.1:8080/health | head -c 1500; echo
+            echo "== which database each container uses (host + user only; never the password) =="
+            # The user part of a Supabase pooler URL is postgres.<project-ref>, which
+            # names the project (staging is eqwawbiaaoqnymajhhgp). sed -n .../p prints
+            # only on a match, so an unparseable value is never echoed whole.
+            for c in $(docker ps --format '{{.Names}}' | grep -vE 'redis'); do
+              for k in DATABASE_URL DIRECT_DATABASE_URL POSTGRES_URL SUPABASE_DB_URL; do
+                v=$(docker exec "$c" printenv "$k" 2>/dev/null) || continue
+                hu=$(printf '%s' "$v" | sed -nE 's#^postgres(ql)?://([^:@/]+)(:[^@]*)?@([^:/?]+).*#user=\2 host=\4#p')
+                echo "  $c $k: ${hu:-<set, unparseable - not shown>}"
+              done
+              su=$(docker exec "$c" printenv SUPABASE_URL 2>/dev/null) && echo "  $c SUPABASE_URL: $su"
+            done
             echo "== candidate env files on disk (paths only) =="
             ls -la ~/web_scrape ~/web-scrape ~/webscrape 2>/dev/null | sed 's/^/  /' || true
             find ~ -maxdepth 3 -name '.env' -path '*scrap*' 2>/dev/null | sed 's/^/  /'
