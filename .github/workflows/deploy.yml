@@ -10,6 +10,14 @@ on:
       - master
   workflow_dispatch:
     inputs:
+      bootstrap_env:
+        description: 'One-time: create ~/web_scrape/.env on the box (staging DB + the gateway token + safe idle defaults). Refuses if the file exists. Deploys nothing.'
+        required: false
+        default: "false"
+      inspect:
+        description: 'Read-only: report what is running on the box (containers, where web_scrape lives, which URL the orchestrator uses) and deploy nothing. Values are never printed, only key names.'
+        required: false
+        default: "false"
       set_sentry_dsn:
         description: 'Set the Sentry DSN on the EC2 box instead of deploying. Blank = normal build + deploy. A DSN is a write-only ingest URL and is safe here; never paste any other credential into this field.'
         required: false
@@ -25,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     # A DSN-only dispatch changes one line in an env file; it must not rebuild
     # and roll a new image as a side effect.
-    if: github.event_name != 'workflow_dispatch' || inputs.set_sentry_dsn == ''
+    if: github.event_name != 'workflow_dispatch' || (inputs.set_sentry_dsn == '' && inputs.inspect != 'true' && inputs.bootstrap_env != 'true')
     permissions:
       contents: read
       packages: write
@@ -60,7 +68,7 @@ jobs:
     name: Deploy to EC2
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || inputs.set_sentry_dsn == ''
+    if: github.event_name != 'workflow_dispatch' || (inputs.set_sentry_dsn == '' && inputs.inspect != 'true' && inputs.bootstrap_env != 'true')
     permissions:
       contents: read
       packages: read
@@ -223,3 +231,156 @@ jobs:
             echo "ERROR: /health did not answer after the recreate"
             docker compose -f docker-compose.deploy.yml logs --tail 40 web-scrape
             exit 1
+
+  inspect:
+    name: Inspect the box (read-only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.inspect == 'true'
+    steps:
+      - name: Report containers and where web_scrape runs
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -u
+            echo "==> host: $(hostname)"
+            echo "== containers =="
+            docker ps -a --format '  {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+            echo "== networks =="
+            docker network ls --format '  {{.Name}}'
+            echo "== anything scrape-shaped =="
+            for c in $(docker ps -a --format '{{.Names}}' | grep -iE 'scrap|web.?scrape'); do
+              echo "  --- $c ---"
+              docker inspect "$c" --format '    image={{.Config.Image}}  workdir={{.Config.WorkingDir}}'
+              echo "    compose project dir: $(docker inspect "$c" --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+              echo "    env KEYS (values withheld):"
+              docker inspect "$c" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sed 's/^/      /'
+            done
+            echo "== the orchestrator's view of web_scrape =="
+            for c in $(docker ps --format '{{.Names}}' | grep -iE 'orchestr|gateway'); do
+              # a URL, not a credential - safe to show
+              docker exec "$c" printenv WEBSCRAPE_SERVICE_URL 2>/dev/null | sed "s/^/  $c WEBSCRAPE_SERVICE_URL=/"
+            done
+            echo "== networks each container is on (routing depends on sharing one) =="
+            for c in $(docker ps --format '{{.Names}}'); do
+              echo "  $c: $(docker inspect "$c" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}({{join $v.Aliases ","}}) {{end}}')"
+            done
+            echo "== gateway settings that decide whether an http upstream is accepted =="
+            O=$(docker ps --format '{{.Names}}' | grep -iE 'orchestr' | head -1)
+            for k in ENVIRONMENT REQUIRE_UPSTREAM_TLS CHAT_SERVICE_URL PEPTIDE_SERVICE_URL SDS_SERVICE_URL WEBSCRAPE_SERVICE_URL UPSTREAM_AUTH_HEADER; do
+              # URLs and flags only - API_TOKEN is deliberately not in this list
+              echo "  $k=$(docker exec "$O" printenv "$k" 2>/dev/null || echo '<unset>')"
+            done
+            echo "  API_TOKEN is $(docker exec "$O" sh -c 'test -n "$API_TOKEN" && echo set || echo EMPTY')"
+            echo "== gateway /health =="
+            curl -s -m 10 http://127.0.0.1:8080/health | head -c 1500; echo
+            echo "== which database each container uses (host + user only; never the password) =="
+            # The user part of a Supabase pooler URL is postgres.<project-ref>, which
+            # names the project (staging is eqwawbiaaoqnymajhhgp). sed -n .../p prints
+            # only on a match, so an unparseable value is never echoed whole.
+            for c in $(docker ps --format '{{.Names}}' | grep -vE 'redis'); do
+              for k in DATABASE_URL DIRECT_DATABASE_URL POSTGRES_URL SUPABASE_DB_URL; do
+                v=$(docker exec "$c" printenv "$k" 2>/dev/null) || continue
+                hu=$(printf '%s' "$v" | sed -nE 's#^postgres(ql)?://([^:@/]+)(:[^@]*)?@([^:/?]+).*#user=\2 host=\4#p')
+                echo "  $c $k: ${hu:-<set, unparseable - not shown>}"
+              done
+              su=$(docker exec "$c" printenv SUPABASE_URL 2>/dev/null) && echo "  $c SUPABASE_URL: $su"
+            done
+            echo "== web_scrape as the gateway will see it =="
+            G=$(docker ps --format '{{.Names}}' | grep -iE 'orchestr' | head -1)
+            if docker ps --format '{{.Names}}' | grep -qx web-scrape; then
+              # Run from INSIDE the gateway container, over ai-microservices-net, with
+              # the gateway's own token - i.e. exactly the request the gateway will
+              # make. python rather than curl: the gateway image is a Python app.
+              docker exec "$G" python -c '
+            import os, urllib.request, urllib.error
+            def hit(path, token):
+                h = {"X-Gateway-Token": os.environ["API_TOKEN"]} if token else {}
+                try:
+                    r = urllib.request.urlopen(urllib.request.Request("http://web-scrape:8000" + path, headers=h), timeout=15)
+                    return r.status, r.read(160).decode("utf8", "replace")
+                except urllib.error.HTTPError as e:
+                    return e.code, e.read(120).decode("utf8", "replace")
+                except Exception as e:
+                    return 0, type(e).__name__ + ": " + str(e)[:80]
+            for label, path, tok in [("public /health", "/health", False),
+                                     ("/api/v1 without token (expect 401)", "/api/v1/operations/health", False),
+                                     ("/api/v1 with gateway token (expect 200)", "/api/v1/operations/health", True)]:
+                c, b = hit(path, tok)
+                print(f"  {c}  {label:42} {b}")
+            '
+              echo "  --- boot log: is it idle? ---"
+              docker logs web-scrape 2>&1 | grep -iE "scheduler|vendor scrape|error|traceback" | tail -6 | sed 's/^/  /'
+            else
+              echo "  web-scrape container not running"
+            fi
+            echo "== candidate env files on disk (paths only) =="
+            ls -la ~/web_scrape ~/web-scrape ~/webscrape 2>/dev/null | sed 's/^/  /' || true
+            find ~ -maxdepth 3 -name '.env' -path '*scrap*' 2>/dev/null | sed 's/^/  /'
+            echo "== done (nothing was modified) =="
+
+  bootstrap-env:
+    name: Create ~/web_scrape/.env (one-time)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_env == 'true'
+    env:
+      DB_URL: ${{ secrets.WEB_SCRAPE_DATABASE_URL }}
+      SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      AIBOX: ${{ secrets.EC2_HOST }}
+      AIUSER: ${{ secrets.EC2_USER || 'ubuntu' }}
+    steps:
+      - name: Assemble the env file on the box
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/k
+          S="-i $HOME/.ssh/k -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20"
+          trap 'rm -f ~/.ssh/k' EXIT
+
+          # Never overwrite. An existing file is someone's configuration.
+          if ssh $S "$AIUSER@$AIBOX" 'test -f ~/web_scrape/.env'; then
+            echo "ERROR: ~/web_scrape/.env already exists - refusing to overwrite it"; exit 1
+          fi
+
+          # WEB_SCRAPE_DATABASE_URL was sealed on the platform box to this repo's
+          # public key, so GitHub is the only party that ever decrypted it. It goes
+          # to the box through ssh's stdin - never a command-line argument, never
+          # printed to the log (and GitHub masks secrets in logs regardless).
+          echo "DATABASE_URL=$DB_URL" | ssh $S "$AIUSER@$AIBOX" 'umask 077; mkdir -p ~/web_scrape; cat > ~/web_scrape/.env.part'
+
+          ssh $S "$AIUSER@$AIBOX" 'bash -s' <<'AIBOX'
+          set -euo pipefail
+          cd ~/web_scrape
+          grep -qE '^DATABASE_URL=postgres(ql)?://' .env.part \
+            || { echo "ERROR: no usable DATABASE_URL came across"; rm -f .env.part; exit 1; }
+          # -n and /p: print only on a match. Without them a line that failed to
+          # match would be echoed whole - credentials included.
+          echo "==> DATABASE_URL host: $(sed -nE 's#^DATABASE_URL=[^@]*@([^:/]+).*#\1#p' .env.part)"
+          G=$(docker ps --format '{{.Names}}' | grep -iE 'orchestr' | head -1)
+          TOKEN=$(docker exec "$G" printenv API_TOKEN)
+          test -n "$TOKEN" || { echo "ERROR: gateway API_TOKEN is empty"; rm -f .env.part; exit 1; }
+          umask 077
+          {
+            cat .env.part
+            # Must equal the gateway's API_TOKEN: it forwards that as X-Gateway-Token.
+            printf 'API_TOKEN=%s\n' "$TOKEN"
+            echo "GATEWAY_AUTH_HEADER=X-Gateway-Token"
+            # Boots idle. The scraper UPDATEs the platform's own tables, so nothing
+            # writes until someone triggers a sync or turns these on deliberately.
+            echo "START_SCHEDULER=false"
+            echo "VENDOR_SCRAPE_CRON_ENABLED=false"
+            echo "VENDOR_PRODUCTS_PUBLISH_ENABLED=false"
+            echo "TIMEOUT=5"
+            echo "OUTPUT_DIR=output"
+            echo "LOG_DIR=output"
+            echo "VENDOR_TARGETS_FILE=config/vendor_targets.json"
+            echo "VENDOR_SCRAPER_CONTACT_URL=https://github.com/peptides-ai-ecosystem/web_scrape"
+          } > .env
+          rm -f .env.part
+          chmod 600 .env
+          echo "==> wrote ~/web_scrape/.env ($(stat -c %a .env)): $(cut -d= -f1 .env | tr '\n' ' ')"
+          AIBOX
+
