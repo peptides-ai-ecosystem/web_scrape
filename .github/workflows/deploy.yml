@@ -299,9 +299,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_env == 'true'
     env:
-      # The platform box holds the staging database URL. Not a secret: it is the
-      # host the platform's own deploy targets, and the same key reaches both.
-      PLATFORM_HOST: 18.217.252.207
+      DB_URL: ${{ secrets.WEB_SCRAPE_DATABASE_URL }}
       SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
       AIBOX: ${{ secrets.EC2_HOST }}
       AIUSER: ${{ secrets.EC2_USER || 'ubuntu' }}
@@ -319,21 +317,11 @@ jobs:
             echo "ERROR: ~/web_scrape/.env already exists - refusing to overwrite it"; exit 1
           fi
 
-          # The database URL travels platform box -> pipe -> web_scrape box. It is
-          # never assigned in this runner's shell, never echoed, never an output.
-          # Same selection the platform's own schema check uses, which is proven to
-          # connect over IPv4 (the pooler), unlike a Supabase direct host.
-          # Same login as the web_scrape box: this key and EC2_USER already reached
-          # the platform box once (2026-09-22 05:48); "ubuntu" with it is refused.
-          ssh $S "$AIUSER@$PLATFORM_HOST" 'bash -s' <<'PLATFORM' \
-            | ssh $S "$AIUSER@$AIBOX" 'umask 077; mkdir -p ~/web_scrape; cat > ~/web_scrape/.env.part'
-          set -e
-          f=/etc/peptides-platform-staging/api.env
-          test -r "$f" || { echo "ERROR: $(whoami) cannot read $f" >&2; exit 1; }
-          l=$(grep -m1 '^DIRECT_DATABASE_URL=' "$f" || grep -m1 '^DATABASE_URL=' "$f")
-          v=${l#*=}; v=${v%$'\r'}; v=${v#\"}; v=${v%\"}
-          printf 'DATABASE_URL=%s\n' "$v"
-          PLATFORM
+          # WEB_SCRAPE_DATABASE_URL was sealed on the platform box to this repo's
+          # public key, so GitHub is the only party that ever decrypted it. It goes
+          # to the box through ssh's stdin - never a command-line argument, never
+          # printed to the log (and GitHub masks secrets in logs regardless).
+          echo "DATABASE_URL=$DB_URL" | ssh $S "$AIUSER@$AIBOX" 'umask 077; mkdir -p ~/web_scrape; cat > ~/web_scrape/.env.part'
 
           ssh $S "$AIUSER@$AIBOX" 'bash -s' <<'AIBOX'
           set -euo pipefail
