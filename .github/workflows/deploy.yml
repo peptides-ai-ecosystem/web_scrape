@@ -311,10 +311,13 @@ jobs:
           # never assigned in this runner's shell, never echoed, never an output.
           # Same selection the platform's own schema check uses, which is proven to
           # connect over IPv4 (the pooler), unlike a Supabase direct host.
-          ssh $S "ubuntu@$PLATFORM_HOST" 'bash -s' <<'PLATFORM' \
+          # Same login as the web_scrape box: this key and EC2_USER already reached
+          # the platform box once (2026-09-22 05:48); "ubuntu" with it is refused.
+          ssh $S "$AIUSER@$PLATFORM_HOST" 'bash -s' <<'PLATFORM' \
             | ssh $S "$AIUSER@$AIBOX" 'umask 077; mkdir -p ~/web_scrape; cat > ~/web_scrape/.env.part'
           set -e
           f=/etc/peptides-platform-staging/api.env
+          test -r "$f" || { echo "ERROR: $(whoami) cannot read $f" >&2; exit 1; }
           l=$(grep -m1 '^DIRECT_DATABASE_URL=' "$f" || grep -m1 '^DATABASE_URL=' "$f")
           v=${l#*=}; v=${v%$'\r'}; v=${v#\"}; v=${v%\"}
           printf 'DATABASE_URL=%s\n' "$v"
