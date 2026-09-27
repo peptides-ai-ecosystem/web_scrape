@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import urlsplit
 
 from src.core.vendor_models import FieldSelectors, VendorTarget
+from src.infrastructure.url_safety import UnsafeTargetURLError, check_url
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,37 @@ def _validated_urls(value: Any, slug: str) -> Tuple[str, ...]:
             raise VendorTargetConfigError(
                 f"target '{slug}': '{candidate}' is not an absolute http(s) URL"
             )
+        _refuse_internal(candidate, "product_urls", slug)
         out.append(candidate)
     return tuple(out)
+
+
+def _refuse_internal(url: str, field_name: str, slug: str, *, resolve: bool = False) -> None:
+    """SSRF guard (see :mod:`src.infrastructure.url_safety`).
+
+    On every parse only what needs no DNS is checked (IP literals such as
+    127.0.0.1 or 169.254.169.254, ``localhost``), so loading the file or the
+    DB never blocks on a resolver; :func:`check_target_addresses` adds the DNS
+    check at save time and the fetchers repeat it on every request.
+    """
+    try:
+        check_url(url, resolve=resolve)
+    except UnsafeTargetURLError as exc:
+        raise VendorTargetConfigError(
+            f"target '{slug}': {field_name} '{url}' is not allowed: {exc}"
+        ) from None
+
+
+def check_target_addresses(target: VendorTarget) -> None:
+    """Save-time SSRF check with DNS: every URL's host must resolve publicly.
+
+    Raises :class:`VendorTargetConfigError` (the API answers 422). A host that
+    does not resolve at all is refused too — there is nothing to vouch for.
+    """
+    for url in target.product_urls:
+        _refuse_internal(url, "product_urls", target.slug, resolve=True)
+    if target.listing_url:
+        _refuse_internal(target.listing_url, "listing_url", target.slug, resolve=True)
 
 
 def _optional_url(value: Any, field_name: str, slug: str) -> Optional[str]:
@@ -83,6 +113,7 @@ def _optional_url(value: Any, field_name: str, slug: str) -> Optional[str]:
         raise VendorTargetConfigError(
             f"target '{slug}': {field_name} '{candidate}' is not an absolute http(s) URL"
         )
+    _refuse_internal(candidate, field_name, slug)
     return candidate
 
 

@@ -370,6 +370,12 @@ def api(monkeypatch):
     monkeypatch.setattr(vendors, "_repository", lambda: obs_repo)
     monkeypatch.setattr(runner, "load_db_targets", lambda: target_repo.list_all())
     monkeypatch.setattr(runner, "load_targets", lambda include_disabled=False: [])
+    # Saving a target resolves its host (SSRF guard). Keep these tests offline:
+    # the *.example hosts used here "resolve" to a fixed public address
+    # instead of going to a real resolver.
+    import src.infrastructure.url_safety as url_safety
+
+    monkeypatch.setattr(url_safety, "_system_resolver", lambda host: ["93.184.216.34"])
     return vendors, target_repo, obs_repo
 
 
@@ -542,7 +548,12 @@ def _playwright_fetcher_or_skip():
 
 
 class TestLocalFixtureSite:
-    def test_end_to_end_against_the_fixture_site(self, fixture_site):
+    def test_end_to_end_against_the_fixture_site(self, fixture_site, monkeypatch):
+        from src.config import settings
+
+        # The fixture site is on 127.0.0.1, which the SSRF guard refuses by
+        # default: opt in explicitly, for this test only.
+        monkeypatch.setattr(settings, "VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS", True)
         base, requested = fixture_site
         fetcher = _playwright_fetcher_or_skip()
         repo = FakeObservationRepo()

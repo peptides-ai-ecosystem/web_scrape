@@ -73,6 +73,13 @@ class Settings:
         os.getenv("VENDOR_SCRAPE_BACKOFF_SECONDS", "30.0")
     )
     VENDOR_SCRAPE_TIMEOUT_MS: int = int(os.getenv("VENDOR_SCRAPE_TIMEOUT_MS", "20000"))
+    # SSRF guard (src/infrastructure/url_safety.py): targets on loopback,
+    # private, link-local (cloud metadata), multicast or reserved addresses are
+    # refused at save and at fetch time. true disables that address check for
+    # LOCAL TESTING ONLY (a fixture site on 127.0.0.1). Never set it deployed.
+    VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS: bool = os.getenv(
+        "VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
     # Relative price move that flags an observation for review instead of
     # letting it overwrite a previously accepted price. 0.25 == 25%.
     VENDOR_PRICE_DELTA_THRESHOLD: float = float(
@@ -137,6 +144,9 @@ VENDOR_SCRAPE_MIN_INTERVAL_SECONDS = settings.VENDOR_SCRAPE_MIN_INTERVAL_SECONDS
 VENDOR_SCRAPE_MAX_RETRIES = settings.VENDOR_SCRAPE_MAX_RETRIES
 VENDOR_SCRAPE_BACKOFF_SECONDS = settings.VENDOR_SCRAPE_BACKOFF_SECONDS
 VENDOR_SCRAPE_TIMEOUT_MS = settings.VENDOR_SCRAPE_TIMEOUT_MS
+# Read it as settings.VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS (url_safety does, per
+# call) so a test or operator change is seen without a re-import.
+VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS = settings.VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS
 VENDOR_PRICE_DELTA_THRESHOLD = settings.VENDOR_PRICE_DELTA_THRESHOLD
 VENDOR_MIN_CONFIDENCE = settings.VENDOR_MIN_CONFIDENCE
 VENDOR_SCRAPE_CRON_ENABLED = settings.VENDOR_SCRAPE_CRON_ENABLED

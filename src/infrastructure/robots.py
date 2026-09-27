@@ -26,7 +26,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, Tuple
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
 logger = logging.getLogger(__name__)
@@ -38,17 +38,43 @@ RobotsFetchResult = Tuple[Optional[int], str]
 RobotsFetcher = Callable[[str], RobotsFetchResult]
 
 
+#: Redirect hops we follow for robots.txt, each re-checked by the SSRF guard.
+MAX_ROBOTS_REDIRECTS = 5
+_REDIRECT_STATUSES = (301, 302, 303, 307, 308)
+
+
 def default_robots_fetcher(url: str, *, timeout: float = 10.0, user_agent: str = "") -> RobotsFetchResult:
-    """Fetch robots.txt with ``requests``, announcing who we are."""
+    """Fetch robots.txt with ``requests``, announcing who we are.
+
+    SSRF guard: every hop — the first request and each redirect, which are
+    followed here by hand (``allow_redirects=False``) rather than by
+    ``requests`` — must be a public http(s) address, checked with a fresh DNS
+    lookup right before it is sent. A refused hop is reported as a transport
+    failure, which the policy reads as "rules unknown -> do not crawl".
+    """
     import requests  # imported here so the module stays importable without it
 
+    from src.infrastructure.url_safety import UnsafeTargetURLError, check_url
+
     headers = {"User-Agent": user_agent} if user_agent else {}
-    try:
-        resp = requests.get(url, timeout=timeout, headers=headers)
-    except Exception as exc:  # noqa: BLE001 — any transport failure is "unknown"
-        logger.warning("robots.txt fetch failed for %s: %s", url, exc)
-        return None, ""
-    return resp.status_code, resp.text or ""
+    current = url
+    for _hop in range(MAX_ROBOTS_REDIRECTS + 1):
+        try:
+            check_url(current)
+        except UnsafeTargetURLError as exc:
+            logger.warning("robots.txt fetch refused for %s: %s", current, exc)
+            return None, ""
+        try:
+            resp = requests.get(current, timeout=timeout, headers=headers, allow_redirects=False)
+        except Exception as exc:  # noqa: BLE001 — any transport failure is "unknown"
+            logger.warning("robots.txt fetch failed for %s: %s", current, exc)
+            return None, ""
+        location = (resp.headers or {}).get("Location") if resp.status_code in _REDIRECT_STATUSES else None
+        if not location:
+            return resp.status_code, resp.text or ""
+        current = urljoin(current, location)
+    logger.warning("robots.txt for %s redirected more than %d times", url, MAX_ROBOTS_REDIRECTS)
+    return None, ""
 
 
 @dataclass

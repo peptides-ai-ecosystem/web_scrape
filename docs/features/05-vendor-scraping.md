@@ -40,6 +40,7 @@ much it trusts each reading, and puts anything doubtful in a review queue instea
 | **Confidence from matches** | Scored on which selectors actually matched and how far down the fallback list — never on whether the run completed. |
 | **Big deltas flag, not overwrite** | A price move beyond the threshold is stored **flagged**; the last accepted value stays current until a human resolves it. |
 | **Nothing rather than a placeholder** | An unreadable price is `NULL`, never `0`. Unrecognised stock text is `NULL`, never `instock`. |
+| **Public addresses only (SSRF guard)** | A target URL must be `http(s)` on a public address. See [2.3](#23-ssrf-guard-public-addresses-only). |
 
 ---
 
@@ -105,6 +106,32 @@ See `.env.example` for the full list. The ones that change behaviour most:
 | `VENDOR_MIN_CONFIDENCE` | `0.6` | Below this, always flag |
 | `VENDOR_SCRAPE_CRON_ENABLED` | `false` | Nightly cron on boot — opt in per environment |
 | `VENDOR_SCRAPE_CRON_HOUR` / `_MINUTE` | `3` / `15` | When the nightly run fires |
+| `VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS` | `false` | **Local testing only.** `true` turns off the SSRF address check (below) so a fixture site on 127.0.0.1 can be scraped. Never set it in a deployed environment |
+
+### 2.3 SSRF guard: public addresses only
+
+Targets are admin-entered URLs that this service fetches from inside our network, so a target could
+otherwise point the scraper at `127.0.0.1`, a private-range service, or the cloud metadata endpoint
+`169.254.169.254`. `src/infrastructure/url_safety.py` refuses any host that is, or resolves to, a
+loopback, private (RFC 1918 / ULA), link-local, shared (100.64/10), multicast, reserved or unspecified
+address (IPv4-mapped IPv6 forms included), plus `localhost` / `*.localhost`. A host with *any* such address,
+or that does not resolve, is refused.
+
+| When | What is checked | Refusal |
+|---|---|---|
+| Every parse (file, DB row, API) | IP literals and `localhost` (no DNS) | the target is invalid; a bad DB row is skipped with a log line |
+| API save (`POST`/`PUT /targets`) | the above plus a DNS lookup of every product/listing URL | **422** |
+| robots.txt fetch | every hop, fresh DNS lookup; redirects are followed by hand (`allow_redirects=False`) | treated as an unreachable robots.txt -> nothing on that host is crawled |
+| Page fetch | the target URL (fresh DNS lookup, before a browser starts), then every browser request — document, redirect hops, scripts, XHR, images — through a `context.route` handler that sends each hop itself with `max_redirects=0` and checks each `Location` before following it. Service workers are blocked (they would bypass routing) | the observation is stored as `error` with `blocked (non-public address)` |
+
+The fetch-time lookup is what defeats DNS rebinding (a host that was public when saved and resolves
+internally later). One gap remains and is stated plainly: our lookup and the one the HTTP client or browser
+then makes are separate, so a hostile DNS server with a near-zero TTL could still race them. Only
+network-level egress rules (no route from the scraper to internal ranges) close that completely; this guard
+complements them.
+
+Because redirects are followed by the guard rather than the browser, a page reached through a redirect is
+rendered under its original URL. Product links are resolved against the listing URL in Python either way.
 
 ---
 
@@ -216,13 +243,20 @@ This service still writes nothing outside its own database. The platform-side ch
 ## 6. Testing
 
 ```bash
-uv run pytest src/tests/test_vendor_scraper.py src/tests/test_vendor_targets_api.py -q
+uv run pytest src/tests/test_vendor_scraper.py src/tests/test_vendor_targets_api.py src/tests/test_vendor_ssrf.py -q
 ```
 
 `test_vendor_targets_api.py::TestLocalFixtureSite` serves `src/tests/fixtures/competitor_site/` (a static
 fixture shop with a robots.txt that disallows `/private/`) from `http.server` on 127.0.0.1 and drives the
 real Playwright fetcher at it. It skips when no Chromium launches — set `CHROME_BIN` to an installed
-Chromium. No test contacts a real competitor site.
+Chromium. No test contacts a real competitor site. Because 127.0.0.1 is refused by the SSRF guard, that
+test turns on `VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS` for itself only (via `monkeypatch`); do the same, or
+export the variable, when pointing a local run at your own fixture server.
+
+`test_vendor_ssrf.py` covers the guard: blocked address classes, save-time 422s, DNS rebinding between
+save and fetch, robots.txt and browser redirect hops into internal addresses (DNS stubbed, browser faked),
+and — when Chromium launches — a real browser that must never reach a loopback server by default nor send
+a redirect hop the guard refuses.
 
 No network, no browser, no database: Playwright is never imported by the tests, robots responses are canned,
 clocks and sleepers are injected, and the repository is an in-memory double.

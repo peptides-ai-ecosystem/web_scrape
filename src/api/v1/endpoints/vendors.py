@@ -36,7 +36,11 @@ from src.infrastructure.db.repositories import (
     VendorObservationRepository,
     VendorTargetRepository,
 )
-from src.infrastructure.vendor_targets import VendorTargetConfigError, parse_target
+from src.infrastructure.vendor_targets import (
+    VendorTargetConfigError,
+    check_target_addresses,
+    parse_target,
+)
 from src.services.vendor_scrape_runner import all_targets, run_vendor_scrape, select_targets
 
 router = APIRouter()
@@ -136,7 +140,10 @@ class TargetPayload(BaseModel):
             raise VendorTargetConfigError("at least one price selector is required")
         if not self.product_urls and not self.listing_url:
             raise VendorTargetConfigError("give product URLs, a listing URL, or both")
-        return parse_target(self.model_dump(), source="db")
+        target = parse_target(self.model_dump(), source="db")
+        # SSRF: refuse hosts that resolve to internal addresses (422).
+        check_target_addresses(target)
+        return target
 
 
 # ---------------------------------------------------------------------------
