@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from src.config import (
     VENDOR_MIN_CONFIDENCE,
@@ -23,16 +23,48 @@ from src.config import (
 )
 from src.core.vendor_models import VendorTarget
 from src.infrastructure.db.connection import DbConnection
-from src.infrastructure.db.repositories import VendorObservationRepository
+from src.infrastructure.db.repositories import (
+    VendorObservationRepository,
+    VendorTargetRepository,
+)
 from src.infrastructure.playwright_fetcher import PlaywrightPageFetcher
 from src.infrastructure.rate_limiter import HostRateLimiter
 from src.infrastructure.robots import RobotsPolicy
-from src.infrastructure.vendor_targets import load_targets
+from src.infrastructure.vendor_targets import load_targets, merge_targets
 from src.services.vendor_confidence import DeltaReviewer
 from src.services.vendor_products_publisher import VendorProductsPublisher
 from src.services.vendor_scraper import VendorScrapeService
 
 logger = logging.getLogger(__name__)
+
+
+def load_db_targets() -> List[VendorTarget]:
+    """API-managed targets from ``vendor_scrape_targets``; [] when unavailable.
+
+    An unreachable database (or a database the migration has not reached yet)
+    degrades to the file targets instead of taking the scraper down — the file
+    is the documented fallback.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return []
+    connection = DbConnection(db_url)
+    try:
+        return VendorTargetRepository(connection).list_all()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not read vendor_scrape_targets (%s) — using the targets file only.", exc)
+        return []
+    finally:
+        connection.close()
+
+
+def all_targets(*, include_disabled: bool = False) -> List[VendorTarget]:
+    """DB targets merged over the file targets (DB wins on a slug clash)."""
+    return merge_targets(
+        load_db_targets(),
+        load_targets(include_disabled=True),
+        include_disabled=include_disabled,
+    )
 
 
 def select_targets(
@@ -44,7 +76,7 @@ def select_targets(
     guessed at — "scrape competitorX" for a competitorX we have no selectors
     for would produce a confident-looking empty result.
     """
-    targets = load_targets(include_disabled=include_disabled)
+    targets = all_targets(include_disabled=include_disabled)
     if not vendors:
         return targets
 
@@ -56,11 +88,12 @@ def select_targets(
     return [by_slug[s] for s in sorted(wanted & set(by_slug))]
 
 
-def build_service(repository=None) -> VendorScrapeService:
+def build_service(repository=None, fetcher=None) -> VendorScrapeService:
     """Assemble the pipeline from settings."""
     user_agent = VENDOR_SCRAPER_USER_AGENT
     return VendorScrapeService(
-        fetcher=PlaywrightPageFetcher(
+        fetcher=fetcher
+        or PlaywrightPageFetcher(
             user_agent=user_agent, timeout_ms=VENDOR_SCRAPE_TIMEOUT_MS
         ),
         # Same user-agent string the fetcher sends: obeying robots rules
@@ -81,7 +114,9 @@ def build_service(repository=None) -> VendorScrapeService:
 
 
 def run_vendor_scrape(
-    vendors: Optional[Sequence[str]] = None, limit_per_vendor: Optional[int] = None
+    vendors: Optional[Sequence[str]] = None,
+    limit_per_vendor: Optional[int] = None,
+    on_progress: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
     """Run one pass and return a JSON-safe report.
 
@@ -111,7 +146,9 @@ def run_vendor_scrape(
 
     try:
         service = build_service(repository=repository)
-        report = service.run(targets, limit_per_target=limit_per_vendor)
+        report = service.run(
+            targets, limit_per_target=limit_per_vendor, on_progress=on_progress
+        )
     finally:
         if connection is not None:
             connection.close()

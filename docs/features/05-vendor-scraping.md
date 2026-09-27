@@ -45,6 +45,21 @@ much it trusts each reading, and puts anything doubtful in a review queue instea
 
 ## 2. Configuration
 
+### 2.0 Targets are managed from the admin (CEO feedback round 2, P2)
+
+Targets now live primarily in the `vendor_scrape_targets` table
+(`migration_vendor_scrape_targets.sql`, created on startup while `VENDOR_SCHEMA_AUTO_CREATE=true`) and are
+edited from the admin **Pepti.AI -> Scrape** tab through `POST/PUT/DELETE /api/v1/vendors/targets`. Each
+target carries: slug, name, enabled, product URL list and/or a `listing_url` + `listing_link_selector`
+(product links are discovered from the listing page, same host only, through the same robots.txt and
+rate-limit gates), per-field selectors, currency fallback, `min_request_interval_seconds` (never below the
+global floor or robots Crawl-delay), `max_products_per_run`, and `platform_vendor_slug` — the platform
+`vendors.slug` its prices are imported onto (empty = the slug).
+
+The file below is kept as a **seed / fallback**: a file target applies only while no DB target has its slug.
+`PUT` on a file-only target takes it over into the DB; a DB row saved `enabled: false` pauses a site that is
+also in the file.
+
 ### 2.1 Targets file
 
 Copy `config/vendor_targets.example.json` to the path in `VENDOR_TARGETS_FILE`
@@ -151,10 +166,18 @@ cannot become the current price. Resolve one with
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/v1/vendors/targets` | Configured targets, plus the exact User-Agent we send |
-| `POST /api/v1/vendors/scrape` | On-demand run; returns **202** and a `job_id` to poll on `/operations/job/{id}` |
+| `GET /api/v1/vendors/targets` | Targets (DB + file fallback, `source` on each), plus the exact User-Agent we send |
+| `GET /api/v1/vendors/targets/{slug}` | One target |
+| `POST /api/v1/vendors/targets` | Create (201; 409 on a duplicate slug; 422 without a price selector or any URL) |
+| `PUT /api/v1/vendors/targets/{slug}` | Replace (slug immutable); takes a file-only target over into the DB |
+| `DELETE /api/v1/vendors/targets/{slug}` | Remove a DB target (204; 409 for a file-only target). Observations are kept |
+| `POST /api/v1/vendors/scrape` | On-demand run (all enabled, or `vendors: [...]`); **202** + `job_id`; **409** while another run is in flight |
+| `GET /api/v1/vendors/scrape/jobs` | Recent scrape jobs (summary) |
+| `GET /api/v1/vendors/scrape/jobs/{job_id}` | Job status: `progress` 0-100, `progress_detail` `{done, total}`, full report when done |
+| `GET /api/v1/vendors/observations` | Readings, newest first, `?vendor=&review_status=&status=&limit=&offset=` |
 | `GET /api/v1/vendors/observations/flagged` | The review queue |
-| `POST /api/v1/vendors/observations/{id}/review` | `accept` or `reject` one flagged reading |
+| `GET /api/v1/vendors/observations/accepted-latest` | Newest **accepted** priced reading per `(vendor, url)`, with `platform_vendor_slug` — the PeptiPrices import reads this |
+| `POST /api/v1/vendors/observations/{id}/review` | `accept` or `reject` one flagged reading (404 unknown; 409 already resolved, or accepting a reading with no price) |
 | `GET /api/v1/scheduler/vendor-scrape/status` | Nightly cron status |
 | `POST /api/v1/scheduler/vendor-scrape/{start,pause,resume}` | Manage the nightly cron |
 
@@ -182,16 +205,24 @@ implemented**, and the full reasoning lives in the module docstring of
    issue's owners' call, in their repo. This change loosens nothing: no column, no grant, no connection, no
    outbound write.
 
-Accepted observations live in this service's own `vendor_price_observations` and are readable over the API
-today. The platform-side changes that would unblock the direct write are enumerated in the publisher module.
+Accepted observations live in this service's own `vendor_price_observations` and are readable over the API.
+**PeptiPrices pulls them** (CEO round 2, P3): the platform API's admin "Import accepted" reads
+`observations/accepted-latest` through the gateway and writes `pepti_price_vendor_pricing` rows through its
+own admin pricing service (price history + watcher notifications), marked `source = 'competitor_scrape'`.
+This service still writes nothing outside its own database. The platform-side changes that would unblock the direct write are enumerated in the publisher module.
 
 ---
 
 ## 6. Testing
 
 ```bash
-uv run pytest src/tests/test_vendor_scraper.py -q
+uv run pytest src/tests/test_vendor_scraper.py src/tests/test_vendor_targets_api.py -q
 ```
+
+`test_vendor_targets_api.py::TestLocalFixtureSite` serves `src/tests/fixtures/competitor_site/` (a static
+fixture shop with a robots.txt that disallows `/private/`) from `http.server` on 127.0.0.1 and drives the
+real Playwright fetcher at it. It skips when no Chromium launches — set `CHROME_BIN` to an installed
+Chromium. No test contacts a real competitor site.
 
 No network, no browser, no database: Playwright is never imported by the tests, robots responses are canned,
 clocks and sleepers are injected, and the repository is an in-memory double.

@@ -1,10 +1,16 @@
-"""Loads competitor scrape targets from a configuration file.
+"""Competitor scrape targets: parsing, the configuration file, and merging.
 
-Targets are **configuration, not code** (peptides-platform#288). A site is
-added, paused (``"enabled": false``) or removed by editing one JSON file and
-restarting — never by changing a Python module. That matters beyond
-convenience: when a site owner asks us to stop, the person handling it must be
-able to do so without a deploy.
+Targets are **configuration, not code** (peptides-platform#288). Since the
+admin "Scrape" tab (CEO feedback round 2, P2) they are primarily managed
+through the API and stored in ``vendor_scrape_targets``
+(:mod:`src.infrastructure.db.repositories.vendor_target`). The JSON file named
+by ``VENDOR_TARGETS_FILE`` is kept as a seed / fallback: a file target is used
+only while no DB target has the same slug, so the DB always wins and an admin
+can take a file target over by saving it once.
+
+Either way a site is added, paused (``"enabled": false``) or removed without a
+deploy — when a site owner asks us to stop, the person handling it must be
+able to do so immediately.
 
 Failure behaviour is deliberately quiet-and-empty. A missing or malformed file
 yields *no targets*, so the scraper does nothing, rather than a crash that
@@ -66,7 +72,21 @@ def _validated_urls(value: Any, slug: str) -> Tuple[str, ...]:
     return tuple(out)
 
 
-def parse_target(raw: Dict[str, Any]) -> VendorTarget:
+def _optional_url(value: Any, field_name: str, slug: str) -> Optional[str]:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str):
+        raise VendorTargetConfigError(f"target '{slug}': {field_name} must be a string")
+    candidate = value.strip()
+    parsed = urlsplit(candidate)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise VendorTargetConfigError(
+            f"target '{slug}': {field_name} '{candidate}' is not an absolute http(s) URL"
+        )
+    return candidate
+
+
+def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
     """Build one :class:`VendorTarget` from a config dict, validating it."""
     if not isinstance(raw, dict):
         raise VendorTargetConfigError("each target must be a JSON object")
@@ -110,6 +130,17 @@ def parse_target(raw: Dict[str, Any]) -> VendorTarget:
             f"target '{slug}': min_request_interval_seconds cannot be negative"
         )
 
+    listing_url = _optional_url(raw.get("listing_url"), "listing_url", slug)
+    link_selector = raw.get("listing_link_selector")
+    link_selector = str(link_selector).strip() if link_selector else None
+    if listing_url and not link_selector:
+        raise VendorTargetConfigError(
+            f"target '{slug}': listing_url needs a listing_link_selector "
+            "(the CSS selector for product links on that page)"
+        )
+
+    platform_vendor_slug = str(raw.get("platform_vendor_slug") or "").strip().lower() or None
+
     return VendorTarget(
         slug=slug,
         name=str(raw.get("name") or slug),
@@ -119,7 +150,36 @@ def parse_target(raw: Dict[str, Any]) -> VendorTarget:
         enabled=bool(raw.get("enabled", True)),
         min_request_interval_seconds=interval,
         max_products_per_run=max_products,
+        listing_url=listing_url,
+        listing_link_selector=link_selector,
+        platform_vendor_slug=platform_vendor_slug,
+        source=source,
     )
+
+
+def merge_targets(
+    db_targets: Sequence[VendorTarget],
+    file_targets: Sequence[VendorTarget],
+    *,
+    include_disabled: bool = False,
+) -> List[VendorTarget]:
+    """DB targets, plus file targets whose slug the DB does not define.
+
+    The DB wins on a slug clash — including a *disabled* DB row, which is how
+    an admin pauses a site that is also in the file. ``include_disabled``
+    filters only after the merge for exactly that reason.
+    """
+    merged: List[VendorTarget] = []
+    seen: set = set()
+    for target in list(db_targets) + list(file_targets):
+        key = target.slug.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(target)
+    if include_disabled:
+        return merged
+    return [t for t in merged if t.enabled]
 
 
 def load_targets(

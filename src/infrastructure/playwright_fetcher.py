@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,23 @@ class _PlaywrightPageDocument:
         value = (value or "").strip()
         return value or None
 
+    def query_all_attr(self, selector: str, attr: str) -> List[str]:
+        """Attribute of every match, in document order (listing-page links)."""
+        try:
+            elements = self._page.query_selector_all(selector)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Selector %r failed: %s", selector, exc)
+            return []
+        out: List[str] = []
+        for element in elements:
+            try:
+                value = (element.get_attribute(attr) or "").strip()
+            except Exception:  # noqa: BLE001
+                continue
+            if value:
+                out.append(value)
+        return out
+
 
 @dataclass
 class StaticPageDocument:
@@ -135,6 +152,8 @@ class StaticPageDocument:
 
     texts: Dict[str, str] = field(default_factory=dict)
     attrs: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    #: ``{selector: {attr: [value, ...]}}`` for :meth:`query_all_attr`.
+    attr_lists: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
 
     def query_text(self, selector: str) -> Optional[str]:
         value = self.texts.get(selector)
@@ -143,6 +162,10 @@ class StaticPageDocument:
     def query_attr(self, selector: str, attr: str) -> Optional[str]:
         value = (self.attrs.get(selector) or {}).get(attr)
         return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def query_all_attr(self, selector: str, attr: str) -> List[str]:
+        values = (self.attr_lists.get(selector) or {}).get(attr) or []
+        return [v.strip() for v in values if isinstance(v, str) and v.strip()]
 
 
 class PlaywrightPageFetcher:

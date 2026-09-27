@@ -43,8 +43,9 @@ class Settings:
     DEBUG_LOG: Path = LOG_DIR / "debug_log.txt"
     
     # ── Competitor vendor scraping (peptides-platform#288) ────────────────
-    # Targets live in a file, never in code, so a site can be removed or
-    # paused without a deploy. Missing file == no targets == no scraping.
+    # Targets are managed through the API (vendor_scrape_targets table, the
+    # admin Pepti.AI -> Scrape tab). This file is the seed / fallback: its
+    # targets apply only where no DB target has the same slug. Never code.
     VENDOR_TARGETS_FILE: Path = Path(
         os.getenv("VENDOR_TARGETS_FILE", "config/vendor_targets.json")
     )
@@ -92,6 +93,13 @@ class Settings:
         "VENDOR_PRODUCTS_PUBLISH_ENABLED", "false"
     ).strip().lower() in {"1", "true", "yes", "on"}
 
+    # Apply the idempotent competitor-scraping DDL
+    # (migration_vendor_price_observations.sql, migration_vendor_scrape_targets.sql)
+    # on startup. Set false where the DB role has no DDL rights.
+    VENDOR_SCHEMA_AUTO_CREATE: bool = os.getenv(
+        "VENDOR_SCHEMA_AUTO_CREATE", "true"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
     # Time range settings
     TIME_RANGES: list = ["24h", "7d", "14d", "30d"]
     
@@ -135,6 +143,7 @@ VENDOR_SCRAPE_CRON_ENABLED = settings.VENDOR_SCRAPE_CRON_ENABLED
 VENDOR_SCRAPE_CRON_HOUR = settings.VENDOR_SCRAPE_CRON_HOUR
 VENDOR_SCRAPE_CRON_MINUTE = settings.VENDOR_SCRAPE_CRON_MINUTE
 VENDOR_PRODUCTS_PUBLISH_ENABLED = settings.VENDOR_PRODUCTS_PUBLISH_ENABLED
+VENDOR_SCHEMA_AUTO_CREATE = settings.VENDOR_SCHEMA_AUTO_CREATE
 
 
 # -------------------- LOGGING FUNCTIONS -------------------- #
