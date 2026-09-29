@@ -46,6 +46,10 @@ RUN uv sync --frozen --no-dev --no-install-project
 # ---------------------------------------------------------------------------
 COPY src/ ./src/
 COPY main.py ./
+# The competitor-scrape tables are created on boot from these two files
+# (src/infrastructure/db/vendor_schema.py). Without them in the image the
+# bootstrap fails and the admin Scrape tab has no tables to use.
+COPY migration_vendor_price_observations.sql migration_vendor_scrape_targets.sql ./
 
 RUN uv sync --frozen --no-dev
 
