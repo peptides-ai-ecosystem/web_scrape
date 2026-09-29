@@ -22,9 +22,23 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
+from urllib.parse import urljoin, urlsplit
+
+from src.infrastructure.url_safety import UnsafeTargetURLError, check_url
 
 logger = logging.getLogger(__name__)
+
+#: Redirect hops followed per request, each one re-checked by the SSRF guard.
+MAX_REDIRECTS = 5
+_REDIRECT_STATUSES = (301, 302, 303, 307, 308)
+
+
+def _safe_abort(route: Any, error_code: str) -> None:
+    try:
+        route.abort(error_code)
+    except Exception:  # noqa: BLE001 — the page may already be gone
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +137,23 @@ class _PlaywrightPageDocument:
         value = (value or "").strip()
         return value or None
 
+    def query_all_attr(self, selector: str, attr: str) -> List[str]:
+        """Attribute of every match, in document order (listing-page links)."""
+        try:
+            elements = self._page.query_selector_all(selector)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Selector %r failed: %s", selector, exc)
+            return []
+        out: List[str] = []
+        for element in elements:
+            try:
+                value = (element.get_attribute(attr) or "").strip()
+            except Exception:  # noqa: BLE001
+                continue
+            if value:
+                out.append(value)
+        return out
+
 
 @dataclass
 class StaticPageDocument:
@@ -135,6 +166,8 @@ class StaticPageDocument:
 
     texts: Dict[str, str] = field(default_factory=dict)
     attrs: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    #: ``{selector: {attr: [value, ...]}}`` for :meth:`query_all_attr`.
+    attr_lists: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
 
     def query_text(self, selector: str) -> Optional[str]:
         value = self.texts.get(selector)
@@ -143,6 +176,10 @@ class StaticPageDocument:
     def query_attr(self, selector: str, attr: str) -> Optional[str]:
         value = (self.attrs.get(selector) or {}).get(attr)
         return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def query_all_attr(self, selector: str, attr: str) -> List[str]:
+        values = (self.attr_lists.get(selector) or {}).get(attr) or []
+        return [v.strip() for v in values if isinstance(v, str) and v.strip()]
 
 
 class PlaywrightPageFetcher:
@@ -162,6 +199,8 @@ class PlaywrightPageFetcher:
         self._browser: Any = None
         self._context: Any = None
         self._pending_page: Any = None
+        #: Why the SSRF guard aborted a request during the current fetch.
+        self._blocked_reason: Optional[str] = None
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -184,8 +223,14 @@ class PlaywrightPageFetcher:
             user_agent=self._user_agent,
             # No stealth flags, no webdriver patch, no fingerprint spoofing.
             extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+            # A service worker's requests bypass context.route — and so the
+            # SSRF guard below. A product page has no need for one.
+            service_workers="block",
         )
         self._context.set_default_navigation_timeout(self._timeout_ms)
+        # SSRF guard on every request the page makes (document, redirects,
+        # scripts, XHR, images): see _guard_route.
+        self._context.route("**/*", self._guard_route)
 
     def close(self) -> None:
         self.close_page()
@@ -214,7 +259,67 @@ class PlaywrightPageFetcher:
         except (TypeError, ValueError):
             return None  # HTTP-date form: let our own backoff decide instead
 
+    def _guard_route(self, route: Any) -> None:
+        """Let a browser request out only to public addresses, hop by hop.
+
+        The browser would follow redirects on its own, and Playwright does not
+        route the redirected request, so a public page answering
+        ``302 Location: http://169.254.169.254/`` would get past a check made
+        only on the first URL. Instead every http(s) request is performed here
+        with ``max_redirects=0``: each hop's URL is checked (fresh DNS lookup)
+        *before* it is sent, a ``Location`` is followed by hand, and the final
+        response is handed to the page. A refused hop aborts the request.
+        """
+        try:
+            request = route.request
+            current = request.url
+            if urlsplit(current).scheme not in ("http", "https"):
+                route.continue_()  # data:, blob: ... never reach the network
+                return
+        except Exception:  # noqa: BLE001
+            _safe_abort(route, "failed")
+            return
+
+        reason = f"more than {MAX_REDIRECTS} redirects"
+        try:
+            for hop in range(MAX_REDIRECTS + 1):
+                check_url(current)
+                if hop == 0:
+                    response = route.fetch(max_redirects=0)
+                else:
+                    # route.fetch cannot change scheme (http -> https), so a
+                    # later hop goes through the context's own request API
+                    # (same cookies, user agent and extra headers).
+                    response = self._context.request.fetch(current, method="GET", max_redirects=0)
+                location = None
+                if response.status in _REDIRECT_STATUSES:
+                    headers = {k.lower(): v for k, v in (response.headers or {}).items()}
+                    location = headers.get("location")
+                if not location:
+                    route.fulfill(response=response)
+                    return
+                current = urljoin(current, location)
+        except UnsafeTargetURLError as exc:
+            reason = str(exc)
+        except Exception as exc:  # noqa: BLE001 — transport failure: a plain network error
+            logger.debug("Guarded request to %s failed: %s", current, exc)
+            _safe_abort(route, "failed")
+            return
+        self._blocked_reason = reason
+        logger.warning("SSRF guard refused a request to %s: %s", current, reason)
+        _safe_abort(route, "blockedbyclient")
+
     def fetch(self, url: str) -> FetchResult:
+        # SSRF guard, before a browser is even started: the target URL itself
+        # must be a public address *now* (fresh DNS lookup, whatever it
+        # resolved to when it was saved).
+        try:
+            check_url(url)
+        except UnsafeTargetURLError as exc:
+            logger.warning("SSRF guard refused %s: %s", url, exc)
+            return FetchResult(status=None, error=f"blocked (non-public address): {exc}")
+        self._blocked_reason = None
+
         try:
             self._ensure_started()
         except Exception as exc:  # noqa: BLE001 — missing browser binaries, etc.
@@ -232,6 +337,10 @@ class PlaywrightPageFetcher:
         try:
             response = self._pending_page.goto(url, wait_until="domcontentloaded")
         except Exception as exc:  # noqa: BLE001
+            if self._blocked_reason:
+                return FetchResult(
+                    status=None, error=f"blocked (non-public address): {self._blocked_reason}"
+                )
             return FetchResult(status=None, error=str(exc))
 
         if response is None:

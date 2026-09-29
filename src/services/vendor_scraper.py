@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Iterable, List, Optional, Sequence
-from urllib.parse import urlsplit
+from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from urllib.parse import urldefrag, urljoin, urlsplit
 
 from src.core.vendor_models import (
     ReviewStatus,
@@ -72,15 +72,38 @@ class VendorScrapeService:
     # -- public ------------------------------------------------------------
 
     def run(
-        self, targets: Sequence[VendorTarget], limit_per_target: Optional[int] = None
+        self,
+        targets: Sequence[VendorTarget],
+        limit_per_target: Optional[int] = None,
+        on_progress: Optional[Callable[[int, int], None]] = None,
     ) -> VendorScrapeReport:
+        """Scrape every enabled target.
+
+        Two passes: first every target's URL list is resolved (discovering
+        product links from ``listing_url`` where one is configured), then the
+        product pages are read. Resolving first is what lets ``on_progress``
+        report ``(done, total)`` with a real total — the admin "Run scrape"
+        button shows it as a progress bar.
+        """
         report = VendorScrapeReport(started_at=self._clock())
         try:
+            plan: List[Tuple[VendorTarget, List[str]]] = []
             for target in targets:
                 if not target.enabled:
                     logger.info("Vendor target %s is disabled — skipping.", target.slug)
                     continue
-                report.observations.extend(self._run_target(target, limit_per_target))
+                urls, failures = self._resolve_urls(target, limit_per_target)
+                report.observations.extend(failures)
+                plan.append((target, urls))
+
+            total = sum(len(urls) for _, urls in plan)
+            done = 0
+            self._notify(on_progress, done, total)
+            for target, urls in plan:
+                for observation in self._run_target(target, urls):
+                    report.observations.append(observation)
+                    done += 1
+                    self._notify(on_progress, done, total)
         finally:
             try:
                 self._fetcher.close()
@@ -91,34 +114,114 @@ class VendorScrapeService:
 
     # -- per target --------------------------------------------------------
 
-    def _urls_for(self, target: VendorTarget, limit: Optional[int]) -> List[str]:
+    @staticmethod
+    def _notify(callback: Optional[Callable[[int, int], None]], done: int, total: int) -> None:
+        if callback is None:
+            return
+        try:
+            callback(done, total)
+        except Exception:  # noqa: BLE001 — progress reporting never ends a run
+            logger.debug("progress callback failed", exc_info=True)
+
+    def _resolve_urls(
+        self, target: VendorTarget, limit: Optional[int]
+    ) -> Tuple[List[str], List[VendorObservation]]:
+        """Configured product URLs plus any discovered from the listing page.
+
+        Returns ``(urls, failures)``; a listing page that could not be read
+        (robots, refusal, error) is recorded as a failed observation against
+        the listing URL itself, and the configured product URLs still run.
+        """
         urls = list(target.product_urls)
+        failures: List[VendorObservation] = []
+        if target.listing_url and target.listing_link_selector:
+            discovered, failure = self._discover_listing(target)
+            if failure is not None:
+                failures.append(failure)
+            for url in discovered:
+                if url not in urls:
+                    urls.append(url)
         caps = [c for c in (target.max_products_per_run, limit) if c]
         if caps:
             urls = urls[: min(caps)]
-        return urls
+        return urls, failures
+
+    def _discover_listing(
+        self, target: VendorTarget
+    ) -> Tuple[List[str], Optional[VendorObservation]]:
+        """Read product links off a listing page, under the same gates as a product."""
+        listing = target.listing_url or ""
+        host = _host_of(listing)
+
+        if not self._robots.is_allowed(listing):
+            return [], self._failed(
+                target,
+                listing,
+                ScrapeStatus.ROBOTS_DISALLOWED,
+                "robots.txt disallows the listing page for our user-agent",
+            )
+
+        self._limiter.set_interval(host, target.min_request_interval_seconds)
+        crawl_delay = self._robots.crawl_delay(listing)
+        if crawl_delay:
+            self._limiter.set_interval(host, crawl_delay)
+        self._limiter.wait(host)
+
+        result = self._fetcher.fetch(listing)
+        try:
+            if result.refused:
+                self._limiter.note_blocked(host, f"HTTP {result.status}")
+                return [], self._failed(
+                    target, listing, ScrapeStatus.BLOCKED, f"site refused with HTTP {result.status}"
+                )
+            if not result.ok:
+                if result.throttled:
+                    self._limiter.note_throttled(host, result.retry_after)
+                detail = result.error or f"HTTP {result.status}"
+                return [], self._failed(
+                    target, listing, ScrapeStatus.ERROR, f"listing page: {detail}"
+                )
+            self._limiter.note_success(host)
+
+            enumerate_links = getattr(result.document, "query_all_attr", None)
+            if not callable(enumerate_links):
+                return [], self._failed(
+                    target, listing, ScrapeStatus.ERROR, "fetcher cannot enumerate listing links"
+                )
+            hrefs = enumerate_links(target.listing_link_selector, "href") or []
+        finally:
+            self._close_page()
+
+        found: List[str] = []
+        for href in hrefs:
+            absolute, _ = urldefrag(urljoin(listing, href))
+            parsed = urlsplit(absolute)
+            # Same host only: a listing page linking to another site does not
+            # make that site a target we agreed to read.
+            if parsed.scheme not in ("http", "https") or parsed.netloc.lower() != host:
+                continue
+            if absolute != listing and absolute not in found:
+                found.append(absolute)
+        logger.info("Listing %s yielded %d product links.", listing, len(found))
+        return found, None
 
     def _run_target(
-        self, target: VendorTarget, limit: Optional[int]
+        self, target: VendorTarget, urls: Sequence[str]
     ) -> Iterable[VendorObservation]:
-        observations: List[VendorObservation] = []
-        for url in self._urls_for(target, limit):
+        for url in urls:
             host = _host_of(url)
 
             # A host that already refused us is not asked again this run.
             if self._limiter.should_abandon(host):
-                observations.append(
-                    self._failed(
-                        target,
-                        url,
-                        ScrapeStatus.SKIPPED,
-                        self._limiter.abandon_reason(host) or "host abandoned this run",
-                    )
+                yield self._failed(
+                    target,
+                    url,
+                    ScrapeStatus.SKIPPED,
+                    self._limiter.abandon_reason(host) or "host abandoned this run",
                 )
                 continue
 
-            observations.append(self._scrape_url(target, url))
-        return observations
+            yield self._scrape_url(target, url)
 
     # -- per URL -----------------------------------------------------------
 

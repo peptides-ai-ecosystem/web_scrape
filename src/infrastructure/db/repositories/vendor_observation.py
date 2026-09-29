@@ -154,6 +154,73 @@ class VendorObservationRepository(BaseRepository):
             (ReviewStatus.FLAGGED.value, limit),
         )
 
+    def get_row(self, observation_id: int) -> Optional[Dict[str, Any]]:
+        return self.execute_one(
+            f"SELECT {_COLUMNS} FROM vendor_price_observations WHERE id = %s",
+            (observation_id,),
+        )
+
+    def list_observations(
+        self,
+        *,
+        vendor: Optional[str] = None,
+        review_status: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Filtered observation list for the admin Scrape tab, newest first.
+
+        Returns ``{"total": int, "rows": [...]}`` so the UI can paginate.
+        Filters are exact matches on the stored vocabulary; the endpoint
+        validates them against the enums before they reach SQL.
+        """
+        clauses: List[str] = []
+        params: List[Any] = []
+        if vendor:
+            clauses.append("vendor = %s")
+            params.append(vendor)
+        if review_status:
+            clauses.append("review_status = %s")
+            params.append(review_status)
+        if status:
+            clauses.append("status = %s")
+            params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        total = self.execute_scalar(
+            f"SELECT count(*) AS n FROM vendor_price_observations {where}", tuple(params)
+        )
+        rows = self.execute_all(
+            f"""SELECT {_COLUMNS}
+                  FROM vendor_price_observations
+                  {where}
+                 ORDER BY observed_at DESC, id DESC
+                 LIMIT %s OFFSET %s""",
+            tuple(params) + (limit, offset),
+        )
+        return {"total": int(total or 0), "rows": rows}
+
+    def list_latest_accepted(self, vendor: Optional[str] = None) -> List[Dict[str, Any]]:
+        """The current trusted reading per ``(vendor, url)`` — what an import reads.
+
+        One row per listing: the newest ``accepted`` observation with a price.
+        A newer *flagged* or *rejected* reading does not hide it (that is the
+        whole point of the review gate), and a listing whose only readings are
+        flagged/rejected does not appear at all.
+        """
+        vendor_clause = "AND vendor = %s" if vendor else ""
+        params: tuple = (ReviewStatus.ACCEPTED.value,) + ((vendor,) if vendor else ())
+        return self.execute_all(
+            f"""SELECT DISTINCT ON (vendor, url) {_COLUMNS}
+                  FROM vendor_price_observations
+                 WHERE review_status = %s
+                   AND price IS NOT NULL
+                   {vendor_clause}
+                 ORDER BY vendor, url, observed_at DESC, id DESC""",
+            params,
+        )
+
     def resolve_review(
         self, observation_id: int, status: ReviewStatus, reviewer: Optional[str] = None
     ) -> int:
@@ -165,6 +232,19 @@ class VendorObservationRepository(BaseRepository):
         """
         if status not in (ReviewStatus.ACCEPTED, ReviewStatus.REJECTED):
             raise ValueError("a review resolves to 'accepted' or 'rejected'")
+        if status is ReviewStatus.ACCEPTED:
+            # Accepting a reading with no price would make "accepted" mean
+            # nothing to an importer; such rows can only be rejected.
+            return self.execute_update(
+                """UPDATE vendor_price_observations
+                      SET review_status = %s,
+                          reviewed_at = now(),
+                          reviewed_by = %s
+                    WHERE id = %s
+                      AND review_status = %s
+                      AND price IS NOT NULL""",
+                (status.value, reviewer, observation_id, ReviewStatus.FLAGGED.value),
+            )
         return self.execute_update(
             """UPDATE vendor_price_observations
                   SET review_status = %s,

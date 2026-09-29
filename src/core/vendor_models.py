@@ -76,7 +76,8 @@ class ReviewReason(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Target configuration (loaded from a file — see infrastructure/vendor_targets)
+# Target configuration (API-managed in the DB, with the file as seed/fallback —
+# see infrastructure/vendor_targets)
 # ---------------------------------------------------------------------------
 
 
@@ -101,8 +102,9 @@ class FieldSelectors:
 class VendorTarget:
     """One competitor site we have been configured to read.
 
-    Targets come from a configuration file, never from code, so a site can be
-    removed — or paused with ``enabled: false`` — without a deploy.
+    Targets come from configuration — the ``vendor_scrape_targets`` table
+    (managed through the admin API) or the targets file — never from code, so
+    a site can be removed, or paused with ``enabled: false``, without a deploy.
     """
 
     slug: str
@@ -117,6 +119,39 @@ class VendorTarget:
     min_request_interval_seconds: float = 5.0
     #: Hard cap on URLs fetched from this host in one run.
     max_products_per_run: Optional[int] = None
+    #: Optional category/listing page. When set, product URLs are discovered
+    #: from it (links matching ``listing_link_selector`` on the same host) in
+    #: addition to ``product_urls``. The listing page itself goes through the
+    #: same robots.txt and rate-limit gates as a product page.
+    listing_url: Optional[str] = None
+    listing_link_selector: Optional[str] = None
+    #: ``vendors.slug`` on the platform this competitor's prices land on when
+    #: an admin imports them into PeptiPrices. ``None`` means "same as slug".
+    platform_vendor_slug: Optional[str] = None
+    #: Where the target came from: ``db`` (managed through the API) or
+    #: ``file`` (VENDOR_TARGETS_FILE, the seed / fallback).
+    source: str = "file"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "slug": self.slug,
+            "name": self.name,
+            "enabled": self.enabled,
+            "product_urls": list(self.product_urls),
+            "listing_url": self.listing_url,
+            "listing_link_selector": self.listing_link_selector,
+            "currency": self.currency,
+            "min_request_interval_seconds": self.min_request_interval_seconds,
+            "max_products_per_run": self.max_products_per_run,
+            "platform_vendor_slug": self.platform_vendor_slug,
+            "source": self.source,
+            "selectors": {
+                "price": list(self.selectors.price),
+                "stock": list(self.selectors.stock),
+                "coa": list(self.selectors.coa),
+                "product_name": list(self.selectors.product_name),
+            },
+        }
 
 
 # ---------------------------------------------------------------------------

@@ -43,8 +43,9 @@ class Settings:
     DEBUG_LOG: Path = LOG_DIR / "debug_log.txt"
     
     # ── Competitor vendor scraping (peptides-platform#288) ────────────────
-    # Targets live in a file, never in code, so a site can be removed or
-    # paused without a deploy. Missing file == no targets == no scraping.
+    # Targets are managed through the API (vendor_scrape_targets table, the
+    # admin Pepti.AI -> Scrape tab). This file is the seed / fallback: its
+    # targets apply only where no DB target has the same slug. Never code.
     VENDOR_TARGETS_FILE: Path = Path(
         os.getenv("VENDOR_TARGETS_FILE", "config/vendor_targets.json")
     )
@@ -72,6 +73,13 @@ class Settings:
         os.getenv("VENDOR_SCRAPE_BACKOFF_SECONDS", "30.0")
     )
     VENDOR_SCRAPE_TIMEOUT_MS: int = int(os.getenv("VENDOR_SCRAPE_TIMEOUT_MS", "20000"))
+    # SSRF guard (src/infrastructure/url_safety.py): targets on loopback,
+    # private, link-local (cloud metadata), multicast or reserved addresses are
+    # refused at save and at fetch time. true disables that address check for
+    # LOCAL TESTING ONLY (a fixture site on 127.0.0.1). Never set it deployed.
+    VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS: bool = os.getenv(
+        "VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
     # Relative price move that flags an observation for review instead of
     # letting it overwrite a previously accepted price. 0.25 == 25%.
     VENDOR_PRICE_DELTA_THRESHOLD: float = float(
@@ -90,6 +98,13 @@ class Settings:
     # src/services/vendor_products_publisher.py for why.
     VENDOR_PRODUCTS_PUBLISH_ENABLED: bool = os.getenv(
         "VENDOR_PRODUCTS_PUBLISH_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+    # Apply the idempotent competitor-scraping DDL
+    # (migration_vendor_price_observations.sql, migration_vendor_scrape_targets.sql)
+    # on startup. Set false where the DB role has no DDL rights.
+    VENDOR_SCHEMA_AUTO_CREATE: bool = os.getenv(
+        "VENDOR_SCHEMA_AUTO_CREATE", "true"
     ).strip().lower() in {"1", "true", "yes", "on"}
 
     # Time range settings
@@ -129,12 +144,16 @@ VENDOR_SCRAPE_MIN_INTERVAL_SECONDS = settings.VENDOR_SCRAPE_MIN_INTERVAL_SECONDS
 VENDOR_SCRAPE_MAX_RETRIES = settings.VENDOR_SCRAPE_MAX_RETRIES
 VENDOR_SCRAPE_BACKOFF_SECONDS = settings.VENDOR_SCRAPE_BACKOFF_SECONDS
 VENDOR_SCRAPE_TIMEOUT_MS = settings.VENDOR_SCRAPE_TIMEOUT_MS
+# Read it as settings.VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS (url_safety does, per
+# call) so a test or operator change is seen without a re-import.
+VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS = settings.VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS
 VENDOR_PRICE_DELTA_THRESHOLD = settings.VENDOR_PRICE_DELTA_THRESHOLD
 VENDOR_MIN_CONFIDENCE = settings.VENDOR_MIN_CONFIDENCE
 VENDOR_SCRAPE_CRON_ENABLED = settings.VENDOR_SCRAPE_CRON_ENABLED
 VENDOR_SCRAPE_CRON_HOUR = settings.VENDOR_SCRAPE_CRON_HOUR
 VENDOR_SCRAPE_CRON_MINUTE = settings.VENDOR_SCRAPE_CRON_MINUTE
 VENDOR_PRODUCTS_PUBLISH_ENABLED = settings.VENDOR_PRODUCTS_PUBLISH_ENABLED
+VENDOR_SCHEMA_AUTO_CREATE = settings.VENDOR_SCHEMA_AUTO_CREATE
 
 
 # -------------------- LOGGING FUNCTIONS -------------------- #

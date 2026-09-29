@@ -9,6 +9,7 @@ from src.infrastructure.db.repositories.graph import GraphRepository
 from src.infrastructure.db.repositories.dosage import DosageRepository
 from src.infrastructure.db.repositories.reference import ReferenceRepository, LookupRepository
 from src.infrastructure.db.repositories.vendor_observation import VendorObservationRepository
+from src.infrastructure.db.repositories.vendor_target import VendorTargetRepository
 
 __all__ = [
     "PeptideRepository",
@@ -22,4 +23,5 @@ __all__ = [
     "ReferenceRepository",
     "LookupRepository",
     "VendorObservationRepository",
+    "VendorTargetRepository",
 ]

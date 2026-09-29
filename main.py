@@ -18,6 +18,7 @@ from src.config import (
     VENDOR_SCRAPE_CRON_ENABLED,
     VENDOR_SCRAPE_CRON_HOUR,
     VENDOR_SCRAPE_CRON_MINUTE,
+    VENDOR_SCHEMA_AUTO_CREATE,
 )
 
 # ---------------------------------------------------------------------------
@@ -41,6 +42,12 @@ async def lifespan(app: FastAPI):
         logger.info("Scheduler started on boot (START_SCHEDULER=true)")
     else:
         logger.info("Scheduler start skipped on boot (START_SCHEDULER=false)")
+
+    # Competitor-scraping tables (idempotent DDL). Non-fatal: a failure is
+    # logged and the rest of the service still boots.
+    if VENDOR_SCHEMA_AUTO_CREATE:
+        from src.infrastructure.db.vendor_schema import ensure_vendor_schema
+        ensure_vendor_schema(os.getenv("DATABASE_URL", ""))
 
     # Nightly competitor price scrape (peptides-platform#288). Opt-in per
     # environment: we do not start hitting other companies' sites just
@@ -122,9 +129,13 @@ app = FastAPI(
     ### 🏷️ Competitor Vendor Pricing
     | Endpoint | Description |
     |---|---|
-    | `GET /api/v1/vendors/targets` | Configured competitor targets + the User-Agent we send |
-    | `POST /api/v1/vendors/scrape` | On-demand competitor price scrape (robots-respecting, rate-limited) |
+    | `GET /api/v1/vendors/targets` | Competitor targets (DB-managed + file fallback) + the User-Agent we send |
+    | `POST/PUT/DELETE /api/v1/vendors/targets[/{slug}]` | Manage targets (admin Pepti.AI -> Scrape tab) |
+    | `POST /api/v1/vendors/scrape` | On-demand competitor price scrape (robots-respecting, rate-limited, one at a time) |
+    | `GET /api/v1/vendors/scrape/jobs[/{job_id}]` | Scrape job status with {done,total} progress |
+    | `GET /api/v1/vendors/observations` | Readings filtered by vendor / review_status / status |
     | `GET /api/v1/vendors/observations/flagged` | Review queue — readings we did not trust enough to apply |
+    | `GET /api/v1/vendors/observations/accepted-latest` | Current accepted reading per listing (what PeptiPrices imports) |
     | `POST /api/v1/vendors/observations/{id}/review` | Accept or reject one flagged reading |
 
     ### ⏰ Automated Scheduler
