@@ -38,6 +38,9 @@ graph_html/
 
 # --- Local-only assets ---
 *.sql
+# ...except the two the service applies itself on startup (vendor_schema.py).
+!migration_vendor_price_observations.sql
+!migration_vendor_scrape_targets.sql
 *.csv
 sync_supabase.sh
 viz_server.py
