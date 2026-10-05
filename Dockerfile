@@ -59,9 +59,15 @@ RUN uv sync --frozen --no-dev
 # ---------------------------------------------------------------------------
 RUN mkdir -p /app/output /app/log
 
+# FEEDBACK-3 G36: the commit this image was built from, reported by /health,
+# so "which code is running on the box?" is answered without reading the box.
+# The deploy workflow passes the pushed sha; a local build reports "unknown".
+ARG GIT_SHA=unknown
+
 # ---------------------------------------------------------------------------
 # 5. Environment
 # ---------------------------------------------------------------------------
+ENV GIT_SHA=${GIT_SHA}
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     CHROME_BIN=/usr/bin/chromium \

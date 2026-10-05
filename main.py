@@ -285,8 +285,12 @@ async def health():
 
     Lightweight — returns 200 whenever the process is up and serving. The
     gateway aggregates this as ``{base_url}/health``.
+
+    FEEDBACK-3 G36: ``commit`` is the git sha the running image was built from
+    (the deploy workflow's ``GIT_SHA`` build arg). The EC2 host runs a pulled
+    image and holds no source, so this is how to tell which code is live.
     """
-    return {"status": "healthy", "service": "web_scrape"}
+    return {"status": "healthy", "service": "web_scrape", "commit": os.getenv("GIT_SHA") or "unknown"}
 
 
 @app.get("/api/v1/openapi.json", include_in_schema=False)
