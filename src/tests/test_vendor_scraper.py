@@ -660,3 +660,53 @@ def test_publisher_never_offers_a_flagged_observation():
     # refuses rather than reporting a successful publish of zero rows.
     with pytest.raises(VendorProductsPublishUnavailable):
         VendorProductsPublisher(enabled=True).publish([flagged])
+
+
+# ---------------------------------------------------------------------------
+# FEEDBACK-3 G11: static first, rendered only when the price is missing
+# ---------------------------------------------------------------------------
+
+
+class RenderingFetcher(FakeFetcher):
+    """Static pass answers `static`, the rendered pass answers `rendered`."""
+
+    def __init__(self, url, static, rendered):
+        super().__init__({url: static})
+        self._url, self._rendered = url, rendered
+        self.rendered_requests = []
+
+    def fetch_rendered(self, url):
+        self.rendered_requests.append(url)
+        return self._rendered
+
+
+def test_a_price_in_the_static_html_needs_no_rendered_fetch():
+    url = "https://shop.example.com/p/bpc-157"
+    fetcher = RenderingFetcher(url, FetchResult(200, good_page()), FetchResult(status=None, error="unused"))
+
+    observation = build_service(fetcher).run([make_target()]).observations[0]
+
+    assert observation.price == Decimal("129.99")
+    assert fetcher.rendered_requests == []
+
+
+def test_a_price_drawn_by_scripts_is_read_on_the_rendered_pass():
+    url = "https://shop.example.com/p/bpc-157"
+    static = FetchResult(200, StaticPageDocument(texts={"h1": "BPC-157 5mg"}))
+    fetcher = RenderingFetcher(url, static, FetchResult(200, good_page()))
+
+    observation = build_service(fetcher).run([make_target()]).observations[0]
+
+    assert fetcher.rendered_requests == [url]
+    assert observation.status is ScrapeStatus.OK and observation.price == Decimal("129.99")
+
+
+def test_a_failed_rendered_pass_keeps_the_static_reading():
+    url = "https://shop.example.com/p/bpc-157"
+    static = FetchResult(200, StaticPageDocument(texts={"h1": "BPC-157 5mg"}))
+    fetcher = RenderingFetcher(url, static, FetchResult(status=None, error="timeout"))
+
+    observation = build_service(fetcher).run([make_target()]).observations[0]
+
+    assert observation.status is ScrapeStatus.OK and observation.price is None
+    assert observation.review_status is ReviewStatus.FLAGGED

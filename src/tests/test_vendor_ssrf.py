@@ -209,8 +209,8 @@ class _FakeResponse:
 
 
 class _FakeRoute:
-    def __init__(self, url, first_response):
-        self.request = SimpleNamespace(url=url)
+    def __init__(self, url, first_response, resource_type="document"):
+        self.request = SimpleNamespace(url=url, resource_type=resource_type)
         self._first = first_response
         self.fulfilled = None
         self.aborted = None
@@ -283,6 +283,46 @@ def test_subrequest_to_an_internal_address_is_aborted(dns):
     route = _FakeRoute("http://10.0.0.5/internal.js", _FakeResponse(200))
     fetcher._guard_route(route)
     assert route.aborted == "blockedbyclient" and route.fulfilled is None
+
+
+# FEEDBACK-3 G11: every image, font and stylesheet went through the guard one
+# at a time and the product page missed its navigation timeout.
+@pytest.mark.parametrize("resource_type", ["image", "media", "font", "stylesheet"])
+def test_assets_a_scrape_never_reads_are_dropped_without_a_request(dns, resource_type):
+    dns["rival.example"] = [PUBLIC_IP]
+    fetcher, sent = _fetcher_with_context({})
+    route = _FakeRoute("https://rival.example/logo.png", _FakeResponse(200), resource_type=resource_type)
+
+    fetcher._guard_route(route)
+
+    assert route.aborted == "blockedbyclient" and route.fulfilled is None and sent == []
+
+
+@pytest.mark.parametrize("resource_type", ["script", "xhr", "fetch"])
+def test_scripts_are_dropped_on_the_static_pass(dns, resource_type):
+    dns["rival.example"] = [PUBLIC_IP]
+    fetcher, sent = _fetcher_with_context({})
+    route = _FakeRoute("https://rival.example/app.js", _FakeResponse(200), resource_type=resource_type)
+
+    fetcher._guard_route(route)
+
+    assert route.aborted == "blockedbyclient" and sent == []
+
+
+@pytest.mark.parametrize(
+    "resource_type, rendered",
+    [("document", False), ("document", True), ("script", True), ("xhr", True), ("fetch", True)],
+)
+def test_documents_and_rendered_scripts_still_go_through_the_guard(dns, resource_type, rendered):
+    dns["rival.example"] = [PUBLIC_IP]
+    fetcher, _ = _fetcher_with_context({})
+    fetcher._render_scripts = rendered
+    final = _FakeResponse(200, body="<html>price</html>")
+    route = _FakeRoute("https://rival.example/p/1", final, resource_type=resource_type)
+
+    fetcher._guard_route(route)
+
+    assert route.fulfilled is final and route.aborted is None
 
 
 def test_non_network_schemes_are_left_to_the_browser(dns):
