@@ -28,6 +28,20 @@ sha the running image was built from (FEEDBACK-3 G36). Then compare it with
 `git log master -1`. On the box, `docker inspect web-scrape --format
 '{{.Config.Image}}'` shows the same sha in the image tag.
 
+**Error reporting (Sentry, FEEDBACK-3 G15).** Off unless `SENTRY_DSN` is set in
+the box's `.env` (run the deploy workflow with `set_sentry_dsn`). It reports
+5xx, timeouts and unhandled exceptions on API routes, scheduler jobs that raise,
+and sync / competitor scrape runs that fail as a whole — never ordinary 4xx, and
+never a single competitor page that fails to parse. Events are tagged
+`service=web_scrape` plus the request's `X-Trace-Id`; credentials are scrubbed.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SENTRY_DSN` | empty | Empty = Sentry fully off (no init, no network) |
+| `SENTRY_ENVIRONMENT` | `$ENVIRONMENT`, else `production` | Environment shown in Sentry |
+| `SENTRY_RELEASE` | `$GIT_SHA` (baked in by the Dockerfile) | Release shown in Sentry |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.0` | Performance tracing; leave at 0 |
+
 ---
 
 ## 📑 Feature Documentation

@@ -107,6 +107,16 @@ class Settings:
         "VENDOR_SCHEMA_AUTO_CREATE", "true"
     ).strip().lower() in {"1", "true", "yes", "on"}
 
+    # ── Sentry error capture (FEEDBACK-3 G15) ─────────────────────────────
+    # Empty SENTRY_DSN (the default) means sentry_sdk.init is never called.
+    # The deploy workflow's `set_sentry_dsn` input writes it into the box's .env.
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "").strip()
+    # Blank -> ENVIRONMENT, else "production".
+    SENTRY_ENVIRONMENT: str = os.getenv("SENTRY_ENVIRONMENT", "").strip()
+    # Blank -> GIT_SHA (set by the Dockerfile build arg), else unset.
+    SENTRY_RELEASE: str = os.getenv("SENTRY_RELEASE", "").strip()
+    SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0") or 0.0)
+
     # Time range settings
     TIME_RANGES: list = ["24h", "7d", "14d", "30d"]
     

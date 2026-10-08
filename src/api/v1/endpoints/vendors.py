@@ -30,6 +30,7 @@ from src.config import (
     log_info,
 )
 from src.core.job_queue import JobStatus, get_job_queue
+from src.core.sentry import capture_background_failure
 from src.core.vendor_models import ReviewStatus, ScrapeStatus, VendorTarget
 from src.infrastructure.db.connection import DbConnection
 from src.infrastructure.db.repositories import (
@@ -206,7 +207,10 @@ def _run_scrape_task(job_id: str, vendors: Optional[List[str]], limit: Optional[
             "vendors_endpoint",
         )
     except Exception as exc:  # noqa: BLE001
-        log_error(f"Vendor scrape job {job_id} failed: {exc}", "vendors_endpoint")
+        # FEEDBACK-3 G15: the run failed as a whole — one Sentry event under
+        # its own trace_id (the 202 has already been sent).
+        trace_id = capture_background_failure(exc, job="vendor_scrape", job_id=job_id)
+        log_error(f"Vendor scrape job {job_id} failed (trace_id={trace_id}): {exc}", "vendors_endpoint")
         job.fail(str(exc))
 
 
