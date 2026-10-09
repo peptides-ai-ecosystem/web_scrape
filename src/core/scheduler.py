@@ -2,6 +2,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.jobstores.base import JobLookupError
+from apscheduler.events import EVENT_JOB_ERROR
 import os
 
 from src.utils.crawl_peptide_urls import crawl_peptide_urls
@@ -12,9 +13,14 @@ from src.mappers.graph_import_orchestrator import GraphImportOrchestrator
 from src.utils.error_tracker import ErrorTracker
 from pathlib import Path
 from src.config import log_debug, log_error, OUTPUT_DIR, FULL_CSV
+from src.core.sentry import capture_background_failure, capture_job_error
 
 # Keep a global instance of the scheduler
 scheduler = AsyncIOScheduler()
+# FEEDBACK-3 G15: a job that raises out of its body has no HTTP request to be
+# reported against; the listener sends it to Sentry under its own trace_id.
+# A no-op while SENTRY_DSN is empty.
+scheduler.add_listener(capture_job_error, EVENT_JOB_ERROR)
 SYNC_JOB_ID = "scheduled_combined_sync"
 VENDOR_SCRAPE_JOB_ID = "nightly_vendor_scrape"
 
@@ -65,7 +71,8 @@ def run_combined_sync_job(limit: int | None = None):
         log_debug("Completed scheduled combined sync successfully.", "scheduler")
         
     except Exception as e:
-        log_error(f"Fatal error during scheduled combined sync: {e}", "scheduler")
+        trace_id = capture_background_failure(e, job=SYNC_JOB_ID)
+        log_error(f"Fatal error during scheduled combined sync (trace_id={trace_id}): {e}", "scheduler")
     finally:
         if tracker.has_errors():
             tracker.save(OUTPUT_DIR / "tracker_report_scheduled_sync.json")
@@ -150,7 +157,10 @@ def run_vendor_scrape_job(vendors: list | None = None, limit_per_vendor: int | N
         )
         return report
     except Exception as e:
-        log_error(f"Fatal error during nightly vendor scrape: {e}", "scheduler")
+        # The run failed as a whole (a single page that fails to parse is
+        # handled, and logged, inside the run): one Sentry event.
+        trace_id = capture_background_failure(e, job=VENDOR_SCRAPE_JOB_ID)
+        log_error(f"Fatal error during nightly vendor scrape (trace_id={trace_id}): {e}", "scheduler")
         return None
 
 

@@ -35,6 +35,19 @@ def test_health_route_registered():
     assert "/health" in paths
 
 
+def test_health_reports_the_commit_the_image_was_built_from(monkeypatch):
+    """FEEDBACK-3 G36: the EC2 host holds no source, so /health says which
+    commit is running (the deploy's GIT_SHA build arg)."""
+    import asyncio
+
+    import main
+
+    monkeypatch.setenv("GIT_SHA", "ac49ca9")
+    assert asyncio.run(main.health())["commit"] == "ac49ca9"
+    monkeypatch.delenv("GIT_SHA")
+    assert asyncio.run(main.health())["commit"] == "unknown"
+
+
 def test_api_router_has_auth_dependency():
     from src.api.v1.routers import api_router
 

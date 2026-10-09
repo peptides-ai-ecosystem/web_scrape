@@ -3,13 +3,35 @@ name: Build and Deploy
 # web_scrape had no workflows at all: whatever ran on the box was put there by
 # hand, so #12's scraper and #13's Dockerfile fix had no way to ship. This
 # mirrors chat-microservice's deploy, which is the proven pattern on this host.
+#
+# Two routes, one workflow (same shape as chat/peptide):
+#   staging    - push to `staging`, or dispatch with environment=staging.
+#                Tags :staging and :staging-<sha7> (never :latest) and rolls ONLY
+#                web-scrape-staging in ~/ms-staging (orchestrator's
+#                deploy/ms-staging) to the new digest via .deploy/staging-remote.sh,
+#                then tags :staging-tree-<tree>.
+#   production - push to master, or dispatch with environment=production.
+#                Unchanged, except that it first checks this exact source tree
+#                already ran healthy on staging (skip_staging_gate overrides).
+#                The manual bootstrap_env / inspect / set_sentry_dsn jobs all act
+#                on ~/web_scrape (production) and refuse any other target.
 
 on:
   push:
     branches:
       - master
+      - staging
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Target environment (bootstrap_env, inspect and set_sentry_dsn are production-only)"
+        type: choice
+        options: [staging, production]
+        default: staging
+      skip_staging_gate:
+        description: "Production only, emergencies only: deploy even if this tree never ran on staging"
+        type: boolean
+        default: false
       bootstrap_env:
         description: 'One-time: create ~/web_scrape/.env on the box (staging DB + the gateway token + safe idle defaults). Refuses if the file exists. Deploys nothing.'
         required: false
@@ -23,9 +45,15 @@ on:
         required: false
         default: ""
 
+# One deploy at a time per environment; a staging run never waits on production.
+concurrency:
+  group: deploy-${{ (github.event_name == 'workflow_dispatch' && inputs.environment) || (github.ref_name == 'staging' && 'staging') || 'production' }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE: ghcr.io/peptides-ai-ecosystem/web_scrape
+  TARGET: ${{ (github.event_name == 'workflow_dispatch' && inputs.environment) || (github.ref_name == 'staging' && 'staging') || 'production' }}
 
 jobs:
   build-and-push:
@@ -37,10 +65,26 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      target: ${{ env.TARGET }}
+      digest: ${{ steps.push.outputs.digest }}
+      tree: ${{ steps.meta.outputs.tree }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Tags for ${{ env.TARGET }}
+        id: meta
+        run: |
+          TREE=$(git rev-parse 'HEAD^{tree}')
+          echo "tree=$TREE" >> "$GITHUB_OUTPUT"
+          if [ "$TARGET" = staging ]; then
+            printf 'tags<<EOF\n%s:staging\n%s:staging-%s\nEOF\n' "$IMAGE" "$IMAGE" "${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          else
+            printf 'tags<<EOF\n%s:latest\n%s:%s\nEOF\n' "$IMAGE" "$IMAGE" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          fi
+          echo "$TARGET build of tree $TREE"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -49,35 +93,51 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Before the build, so a refused production run costs seconds, not a build.
+      # A push to master fails here unless this exact tree was first deployed to
+      # staging (push it to `staging`, or dispatch environment=staging).
+      - name: Gate - this tree must have run on staging
+        if: env.TARGET == 'production'
+        env:
+          SKIP_STAGING_GATE: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_staging_gate }}
+        run: ./.deploy/staging-gate.sh "$IMAGE" "${{ steps.meta.outputs.tree }}"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           provenance: false
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.sha }}
+          # FEEDBACK-3 G36: /health reports the commit the image was built from.
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision-tree=${{ steps.meta.outputs.tree }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
-    name: Deploy to EC2
+    name: Deploy to EC2 (${{ needs.build-and-push.outputs.target }})
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.event_name != 'workflow_dispatch' || (inputs.set_sentry_dsn == '' && inputs.inspect != 'true' && inputs.bootstrap_env != 'true')
     permissions:
       contents: read
-      packages: read
+      packages: write   # staging: push the staging-tree-<tree> tag after a healthy deploy
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # -- production (unchanged): ~/web_scrape, service web-scrape --
       - name: Copy the deployment compose file to EC2
+        if: needs.build-and-push.outputs.target == 'production'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -91,6 +151,7 @@ jobs:
           target: ~/web_scrape/
 
       - name: Deploy via SSH
+        if: needs.build-and-push.outputs.target == 'production'
         uses: appleboy/ssh-action@v1
         # `envs:` below only forwards variables into the remote shell; it does
         # not create them. Without this block the script runs with GITHUB_TOKEN
@@ -166,6 +227,47 @@ jobs:
             docker compose -f docker-compose.deploy.yml logs --tail 60 web-scrape
             exit 1
 
+      # -- staging: ~/ms-staging, service web-scrape-staging, nothing else --
+      # No migrations: web_scrape has no Alembic; its migration_*.sql files are
+      # applied by hand. The ms-staging compose pins START_SCHEDULER and
+      # VENDOR_SCRAPE_CRON_ENABLED to false, so the staging container boots idle.
+      # Health is probed inside the container (ms-staging publishes no host port).
+      - name: Deploy digest to web-scrape-staging (recreate, health, rollback)
+        if: needs.build-and-push.outputs.target == 'staging'
+        timeout-minutes: 20
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          GHCR_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ env.IMAGE }}@${{ needs.build-and-push.outputs.digest }}
+        run: >-
+          ./.deploy/staging-remote.sh
+          --dir=ms-staging
+          --service=web-scrape-staging
+          --image="$REF"
+          --pin-var=WEBSCRAPE_IMAGE
+          --migrate=none
+          --health-port=8000
+
+      - name: Log in to GHCR
+        if: needs.build-and-push.outputs.target == 'staging'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # What the production gate looks for: this tree ran healthy on staging.
+      - name: Mark tree as deployed to staging
+        if: needs.build-and-push.outputs.target == 'staging'
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE:staging-tree-${{ needs.build-and-push.outputs.tree }}" \
+            "$IMAGE@${{ needs.build-and-push.outputs.digest }}"
+
   set-sentry-dsn:
     name: Set the Sentry DSN on EC2
     runs-on: ubuntu-latest
@@ -174,7 +276,14 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.set_sentry_dsn != ''
 
     steps:
+      - name: Refuse a non-production target
+        if: inputs.environment != 'production'
+        run: |
+          echo "::error::set_sentry_dsn acts on ~/web_scrape (production). Re-run with environment=production. Staging's web-scrape.env lives in ~/ms-staging and is built by its make-env.sh."
+          exit 1
+
       - name: Write SENTRY_DSN into ~/web_scrape/.env and recreate the container
+        if: inputs.environment == 'production'
         uses: appleboy/ssh-action@v1
         env:
           DSN: ${{ inputs.set_sentry_dsn }}
@@ -237,7 +346,14 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.inspect == 'true'
     steps:
+      - name: Refuse a non-production target
+        if: inputs.environment != 'production'
+        run: |
+          echo "::error::inspect acts on ~/web_scrape (production). Re-run with environment=production. Staging's web-scrape.env lives in ~/ms-staging and is built by its make-env.sh."
+          exit 1
+
       - name: Report containers and where web_scrape runs
+        if: inputs.environment == 'production'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -332,7 +448,14 @@ jobs:
       AIBOX: ${{ secrets.EC2_HOST }}
       AIUSER: ${{ secrets.EC2_USER || 'ubuntu' }}
     steps:
+      - name: Refuse a non-production target
+        if: inputs.environment != 'production'
+        run: |
+          echo "::error::bootstrap_env acts on ~/web_scrape (production). Re-run with environment=production. Staging's web-scrape.env lives in ~/ms-staging and is built by its make-env.sh."
+          exit 1
+
       - name: Assemble the env file on the box
+        if: inputs.environment == 'production'
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh && umask 077

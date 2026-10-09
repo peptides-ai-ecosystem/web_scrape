@@ -32,6 +32,12 @@ logger = logging.getLogger(__name__)
 #: Redirect hops followed per request, each one re-checked by the SSRF guard.
 MAX_REDIRECTS = 5
 _REDIRECT_STATUSES = (301, 302, 303, 307, 308)
+# Playwright resource types a scrape never needs (see _guard_route).
+_SKIPPED_RESOURCE_TYPES = frozenset({"image", "media", "font", "stylesheet"})
+# ...and scripts, on the first (static) pass. WooCommerce prints prices in
+# the HTML; only a page whose price the static pass cannot find is loaded
+# again with its scripts (fetch_rendered), each one still guarded.
+_SCRIPT_RESOURCE_TYPES = frozenset({"script", "xhr", "fetch", "eventsource", "websocket"})
 
 
 def _safe_abort(route: Any, error_code: str) -> None:
@@ -201,6 +207,8 @@ class PlaywrightPageFetcher:
         self._pending_page: Any = None
         #: Why the SSRF guard aborted a request during the current fetch.
         self._blocked_reason: Optional[str] = None
+        #: Whether the current fetch lets the page run its scripts.
+        self._render_scripts = False
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -276,6 +284,19 @@ class PlaywrightPageFetcher:
             if urlsplit(current).scheme not in ("http", "https"):
                 route.continue_()  # data:, blob: ... never reach the network
                 return
+            # Prices, stock and names are read from the DOM; nothing the page
+            # draws with is needed. Each guarded request below is fetched
+            # through Python one at a time (the sync API serialises route
+            # handlers), so a product page's dozens of images, fonts and
+            # stylesheets made the document miss its 20 s navigation timeout
+            # and every scrape came back empty (FEEDBACK-3 G11). Aborting them
+            # is instant and asks less of the site being read.
+            resource_type = getattr(request, "resource_type", None)
+            if resource_type in _SKIPPED_RESOURCE_TYPES or (
+                not self._render_scripts and resource_type in _SCRIPT_RESOURCE_TYPES
+            ):
+                _safe_abort(route, "blockedbyclient")
+                return
         except Exception:  # noqa: BLE001
             _safe_abort(route, "failed")
             return
@@ -308,6 +329,16 @@ class PlaywrightPageFetcher:
         self._blocked_reason = reason
         logger.warning("SSRF guard refused a request to %s: %s", current, reason)
         _safe_abort(route, "blockedbyclient")
+
+    def fetch_rendered(self, url: str) -> FetchResult:
+        """Like :meth:`fetch`, but the page runs its scripts (each script and
+        XHR still guarded hop by hop). Slower: used only when the static pass
+        found no price."""
+        self._render_scripts = True
+        try:
+            return self.fetch(url)
+        finally:
+            self._render_scripts = False
 
     def fetch(self, url: str) -> FetchResult:
         # SSRF guard, before a browser is even started: the target URL itself

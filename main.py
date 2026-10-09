@@ -3,8 +3,10 @@ import logging
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler as default_http_exception_handler
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.v1.routers import api_router
 
@@ -29,6 +31,17 @@ from src.log_setup import setup_logging
 setup_logging(log_dir=os.getenv("LOG_DIR", "log"))
 
 logger = logging.getLogger(__name__)
+
+# FEEDBACK-3 G15: before the app is built, so an exception during construction
+# is reported. A no-op when SENTRY_DSN is empty: sentry_sdk.init is not called.
+from src.core.sentry import capture_exception, init_sentry  # noqa: E402
+from src.core.request_context import (  # noqa: E402
+    TraceContextMiddleware,
+    bound_trace,
+    trace_ids_from_request,
+)
+
+init_sentry()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -199,27 +212,57 @@ app = FastAPI(
     ],
 )
 
+# Reads (or mints) X-Trace-Id and echoes it, so a Sentry event and the
+# gateway's log lines for the same request share one id (FEEDBACK-3 G15).
+app.add_middleware(TraceContextMiddleware)
+
 # ---------------------------------------------------------------------------
 # Global exception handling — any unhandled error returns clean JSON (500)
 # instead of a bare traceback, so clients always get a parseable response.
 # ---------------------------------------------------------------------------
 
 
+def _route_tag(request: Request) -> str:
+    route = request.scope.get("route")
+    return getattr(route, "path", None) or request.url.path
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Unchanged response; a 5xx is additionally reported to Sentry.
+
+    Endpoints wrap failures as HTTPException(500, ...) inside ``except``, so
+    the original error is ``exc.__context__`` — that is what gets captured.
+    Ordinary 4xx is never reported.
+    """
+    if exc.status_code >= 500:
+        capture_exception(exc.__context__ or exc, status_code=exc.status_code, route=_route_tag(request))
+    return await default_http_exception_handler(request, exc)
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    trace_id, request_id = trace_ids_from_request(request)
     logger.error(
-        "Unhandled exception on %s %s: %s",
+        "Unhandled exception on %s %s (trace_id=%s): %s",
         request.method,
         request.url.path,
+        trace_id,
         exc,
         exc_info=True,
     )
+    # This handler runs outside every user middleware, so the request's trace
+    # is re-bound from request.state for the Sentry event.
+    with bound_trace(trace_id, request_id) as bound_id:
+        capture_exception(exc, status_code=500, route=_route_tag(request))
     return JSONResponse(
         status_code=500,
         content={
             "detail": "Internal server error. Check the server logs for details.",
             "path": request.url.path,
+            "trace_id": bound_id,
         },
+        headers={"X-Trace-Id": bound_id},
     )
 
 
@@ -285,8 +328,12 @@ async def health():
 
     Lightweight — returns 200 whenever the process is up and serving. The
     gateway aggregates this as ``{base_url}/health``.
+
+    FEEDBACK-3 G36: ``commit`` is the git sha the running image was built from
+    (the deploy workflow's ``GIT_SHA`` build arg). The EC2 host runs a pulled
+    image and holds no source, so this is how to tell which code is live.
     """
-    return {"status": "healthy", "service": "web_scrape"}
+    return {"status": "healthy", "service": "web_scrape", "commit": os.getenv("GIT_SHA") or "unknown"}
 
 
 @app.get("/api/v1/openapi.json", include_in_schema=False)

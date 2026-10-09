@@ -292,6 +292,24 @@ class VendorScrapeService:
         finally:
             self._close_page()
 
+        # Static pass found no price: the page may draw it with scripts. One
+        # more, rendered fetch, paced like any other request (FEEDBACK-3 G11).
+        rendered = getattr(self._fetcher, "fetch_rendered", None)
+        if fields.price is None and callable(rendered):
+            self._limiter.wait(host)
+            second = rendered(url)
+            if second.ok:
+                try:
+                    again = self._extractor.extract(second.document, target, url)
+                    if again.price is not None:
+                        fields = again
+                except Exception:  # noqa: BLE001 — keep the static reading
+                    logger.exception("Rendered extraction failed for %s", url)
+                finally:
+                    self._close_page()
+            else:
+                self._close_page()
+
         breakdown = score_confidence(fields, target)
         observation = VendorObservation(
             vendor=target.slug,
