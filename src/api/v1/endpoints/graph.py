@@ -113,6 +113,64 @@ async def get_peptides():
 
 
 @router.get(
+    "/pk/peptides",
+    responses={
+        200: {
+            "description": "Every peptide with PK curves, with source, last write time and a headline summary.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "count": 1,
+                        "peptides": [
+                            {
+                                "id": 12,
+                                "name": "BPC-157",
+                                "slug": "bpc-157",
+                                "source": "pep-pedia.org",
+                                "source_url": "https://pep-pedia.org/peptides/bpc-157",
+                                "methods": ["Injectable", "Oral"],
+                                "curve_count": 8,
+                                "last_updated": "2026-10-01T03:15:00",
+                                "action_type": "scraped",
+                                "headline": {
+                                    "method": "Injectable",
+                                    "half_life": "8 hrs",
+                                    "peak": "48 min",
+                                    "cleared": "~1.7 days",
+                                },
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        500: {"description": "Database error."},
+    },
+)
+async def get_pk_summary():
+    """
+    📋 List peptides with **pharmacokinetics curves**, for the admin PK tab.
+
+    Like `GET /peptides` but with what an admin needs to judge the data: the
+    administration methods available, how many curve rows exist, when the
+    newest row was written (`last_updated`, the last scrape or manual edit),
+    whether it was `scraped` or `manual`, the pep-pedia.org source page
+    (derived from the peptide slug) and a headline half-life / peak / cleared
+    summary (Injectable 24h preferred).
+
+    ### Errors
+    - **500** → Database query failed or `DATABASE_URL` is not set.
+    """
+    try:
+        with get_pool().acquire() as db:
+            peptides = db.graph.list_pk_summary()
+        return {"count": len(peptides), "peptides": peptides}
+    except Exception as e:
+        logger.error(f"Failed to fetch PK summary: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch PK summary.")
+
+
+@router.get(
     "/peptide/{peptide_id}/methods",
     response_model=List[MethodItem],
     responses={
