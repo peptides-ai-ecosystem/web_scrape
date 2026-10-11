@@ -3,6 +3,75 @@ from typing import Dict, Any, Optional, List
 from src.infrastructure.db.base_repository import BaseRepository
 import json
 
+# pep-pedia.org serves each peptide at /peptides/<slug>; the crawler follows
+# exactly these links. The peptides table keeps no scraped URL, so the source
+# link is derived from the slug the graph importer matched on.
+PEP_PEDIA_PEPTIDE_URL = "https://pep-pedia.org/peptides/{slug}"
+
+# One row per peptide that has PK curves: the methods available, how many
+# curve rows exist, when the newest one was written, and a headline row
+# (Injectable + 24h preferred, else the most recently written) for the
+# half-life / peak / cleared summary.
+PK_SUMMARY_SQL = """
+    WITH headline AS (
+        SELECT DISTINCT ON (pg.peptide_id)
+            pg.peptide_id,
+            am.name AS method,
+            pg.half_life,
+            pg.peak_concentration,
+            pg.cleared_percentage,
+            pg.action_type
+        FROM peptide_graph pg
+        LEFT JOIN administration_methods am ON am.id = pg.administration_method_id
+        ORDER BY pg.peptide_id,
+                 (am.name = 'Injectable') DESC NULLS LAST,
+                 (pg.time_range = '24h') DESC NULLS LAST,
+                 COALESCE(pg.updated_at, pg.created_at) DESC NULLS LAST
+    )
+    SELECT p.id,
+           p.name,
+           p.slug,
+           ARRAY_REMOVE(ARRAY_AGG(DISTINCT am.name), NULL) AS methods,
+           COUNT(pg.id) AS curve_count,
+           MAX(COALESCE(pg.updated_at, pg.created_at)) AS last_updated,
+           h.method AS headline_method,
+           h.half_life,
+           h.peak_concentration,
+           h.cleared_percentage,
+           h.action_type
+    FROM peptides p
+    JOIN peptide_graph pg ON pg.peptide_id = p.id
+    LEFT JOIN administration_methods am ON am.id = pg.administration_method_id
+    LEFT JOIN headline h ON h.peptide_id = p.id
+    GROUP BY p.id, p.name, p.slug, h.method, h.half_life,
+             h.peak_concentration, h.cleared_percentage, h.action_type
+    ORDER BY p.name
+"""
+
+
+def pk_summary_row_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape one PK_SUMMARY_SQL row for the API (pure, unit-tested)."""
+    slug = (row.get("slug") or "").strip() or None
+    last = row.get("last_updated")
+    methods = sorted(m for m in (row.get("methods") or []) if m)
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "slug": slug,
+        "source": "pep-pedia.org",
+        "source_url": PEP_PEDIA_PEPTIDE_URL.format(slug=slug) if slug else None,
+        "methods": methods,
+        "curve_count": int(row.get("curve_count") or 0),
+        "last_updated": last.isoformat() if hasattr(last, "isoformat") else last,
+        "action_type": row.get("action_type"),
+        "headline": {
+            "method": row.get("headline_method"),
+            "half_life": row.get("half_life") or None,
+            "peak": row.get("peak_concentration") or None,
+            "cleared": row.get("cleared_percentage") or None,
+        },
+    }
+
 
 class GraphRepository(BaseRepository):
     """Repository for peptide graph data (pharmacokinetics) operations."""
@@ -44,6 +113,10 @@ class GraphRepository(BaseRepository):
                 self._commit()
                 self.log_operation("INSERT_GRAPH", "peptide_graph", 
                     f"Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})")
+
+    def list_pk_summary(self) -> List[Dict[str, Any]]:
+        """Every peptide with PK curves, with its source and last-written time."""
+        return [pk_summary_row_to_dict(row) for row in self.execute_all(PK_SUMMARY_SQL)]
 
     def get_methods_for_peptide(self, peptide_id: int) -> List[Dict[str, Any]]:
         """Get all available administration methods for a peptide."""
