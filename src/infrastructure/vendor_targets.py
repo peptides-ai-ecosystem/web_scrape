@@ -137,6 +137,7 @@ def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
         product_name=_as_selector_tuple(
             selectors_raw.get("product_name"), "product_name", slug
         ),
+        variant=_as_selector_tuple(selectors_raw.get("variant"), "variant", slug),
     )
 
     currency = raw.get("currency")

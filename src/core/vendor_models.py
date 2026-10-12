@@ -96,6 +96,10 @@ class FieldSelectors:
     stock: Tuple[str, ...] = ()
     coa: Tuple[str, ...] = ()
     product_name: Tuple[str, ...] = ()
+    #: Optional: the selected size/variant (e.g. ``button[aria-pressed=true]``
+    #: on a multi-size page whose ``<h1>`` carries no size). Its text is
+    #: appended to the product name; it is not scored for confidence.
+    variant: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -150,6 +154,7 @@ class VendorTarget:
                 "stock": list(self.selectors.stock),
                 "coa": list(self.selectors.coa),
                 "product_name": list(self.selectors.product_name),
+                "variant": list(self.selectors.variant),
             },
         }
 

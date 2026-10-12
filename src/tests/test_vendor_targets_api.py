@@ -140,6 +140,21 @@ class TestTargetParsing:
         assert target.platform_vendor_slug == "rival-labs"
         assert target.source == "db"
         assert target.to_dict()["selectors"]["price"] == [".price"]
+        assert target.to_dict()["selectors"]["variant"] == []
+
+    def test_variant_selectors_round_trip(self):
+        target = parse_target(
+            {
+                "slug": "glp",
+                "name": "GL Peptides",
+                "selectors": {
+                    "price": ".price",
+                    "variant": ['button[aria-pressed="true"]'],
+                },
+            }
+        )
+        assert target.selectors.variant == ('button[aria-pressed="true"]',)
+        assert target.to_dict()["selectors"]["variant"] == ['button[aria-pressed="true"]']
 
     def test_listing_url_without_link_selector_is_refused(self):
         with pytest.raises(VendorTargetConfigError, match="listing_link_selector"):
@@ -396,6 +411,15 @@ def payload(vendors, **overrides):
 
 
 class TestTargetEndpoints:
+    def test_variant_selectors_are_accepted_and_returned(self, api):
+        vendors, _, _ = api
+        created = run(
+            vendors.create_vendor_target(
+                payload(vendors, selectors={"price": [".price"], "variant": ["button[aria-pressed=true]"]})
+            )
+        )
+        assert created["selectors"]["variant"] == ["button[aria-pressed=true]"]
+
     def test_create_list_update_delete(self, api):
         vendors, repo, _ = api
         created = run(vendors.create_vendor_target(payload(vendors)))
