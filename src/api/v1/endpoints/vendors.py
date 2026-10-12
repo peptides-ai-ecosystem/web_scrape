@@ -111,6 +111,8 @@ class TargetSelectors(BaseModel):
     stock: List[str] = Field(default_factory=list)
     coa: List[str] = Field(default_factory=list)
     product_name: List[str] = Field(default_factory=list)
+    #: Optional: selected size/variant, appended to the product name.
+    variant: List[str] = Field(default_factory=list)
 
 
 class TargetPayload(BaseModel):

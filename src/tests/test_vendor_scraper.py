@@ -433,6 +433,65 @@ def test_configured_currency_is_only_a_fallback():
     assert fields.currency == "USD", "the page's own currency wins over our guess"
 
 
+VARIANT_SELECTOR = 'button[aria-pressed="true"]'
+
+
+def _variant_target(variant=(VARIANT_SELECTOR,)):
+    return make_target(
+        selectors=FieldSelectors(
+            price=("#price",), product_name=("h1",), variant=variant
+        )
+    )
+
+
+def test_variant_is_appended_to_a_sizeless_product_name():
+    # glpeptides.is: <h1>Retatrutide</h1> and the chosen size is a pressed button.
+    document = StaticPageDocument(
+        texts={"h1": "Retatrutide", VARIANT_SELECTOR: "  10mg\t ", "#price": "$99"}
+    )
+    fields = VendorListingExtractor().extract(document, _variant_target(), "https://s.test/p")
+    assert fields.product_name == "Retatrutide 10mg"
+
+
+def test_variant_already_in_the_name_is_not_repeated():
+    document = StaticPageDocument(
+        texts={"h1": "Retatrutide 10MG", VARIANT_SELECTOR: "10mg", "#price": "$99"}
+    )
+    fields = VendorListingExtractor().extract(document, _variant_target(), "https://s.test/p")
+    assert fields.product_name == "Retatrutide 10MG"
+
+
+def test_no_variant_selector_leaves_the_name_alone():
+    document = StaticPageDocument(
+        texts={"h1": "Retatrutide", VARIANT_SELECTOR: "10mg", "#price": "$99"}
+    )
+    fields = VendorListingExtractor().extract(document, _variant_target(()), "https://s.test/p")
+    assert fields.product_name == "Retatrutide"
+
+
+def test_variant_selector_matching_nothing_leaves_the_name_alone():
+    document = StaticPageDocument(texts={"h1": "Retatrutide", "#price": "$99"})
+    fields = VendorListingExtractor().extract(document, _variant_target(), "https://s.test/p")
+    assert fields.product_name == "Retatrutide"
+    assert "variant" not in fields.matches
+
+
+def test_variant_does_not_change_confidence():
+    document = StaticPageDocument(
+        texts={"h1": "Retatrutide", VARIANT_SELECTOR: "10mg", "#price": "$99"}
+    )
+    with_variant = VendorListingExtractor().extract(
+        document, _variant_target(), "https://s.test/p"
+    )
+    without = VendorListingExtractor().extract(
+        document, _variant_target(()), "https://s.test/p"
+    )
+    assert (
+        score_confidence(with_variant, _variant_target()).score
+        == score_confidence(without, _variant_target(())).score
+    )
+
+
 # ---------------------------------------------------------------------------
 # Confidence — scored on what matched, not on the run completing
 # ---------------------------------------------------------------------------

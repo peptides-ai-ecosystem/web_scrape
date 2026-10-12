@@ -233,6 +233,13 @@ class VendorListingExtractor:
         if name_text:
             fields.product_name = " ".join(name_text.split())
             fields.matches["product_name"] = FieldMatch(name_idx, name_sel or "", name_text)
+            # A multi-size page often names the product without a size
+            # (``<h1>Retatrutide</h1>``) and marks the chosen size elsewhere;
+            # append it so the name carries the size downstream parsers need.
+            variant_text, _, _ = _first_text(document, selectors.variant)
+            variant = " ".join((variant_text or "").split())
+            if variant and variant.lower() not in fields.product_name.lower():
+                fields.product_name = f"{fields.product_name} {variant}"
 
         # -- price ---------------------------------------------------------
         price_text, price_idx, price_sel = _first_text(document, selectors.price)
