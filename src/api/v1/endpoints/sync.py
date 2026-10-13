@@ -37,6 +37,17 @@ class SyncRequest(BaseModel):
         description="Specific peptide page URLs to scrape. When `null` or empty, URLs are auto-discovered via the peptide URL crawler.",
         examples=[None, ["https://pep-pedia.org/peptide/1", "https://pep-pedia.org/peptide/2"]],
     )
+    fill_empty_only: bool = Field(
+        False,
+        description=(
+            "Never overwrite curated data. `/core`: only empty columns of the matched peptide "
+            "row are filled (no insert), and child rows (benefits, side effects, interactions, "
+            "indications, references, protocols + dosages) are added only for kinds the peptide "
+            "has none of. `/graph`: PK curves are written only for peptides with no graph rows. "
+            "`/graph-missing` never overwrites, so the flag changes nothing there. "
+            "Default `false` keeps the existing behaviour."
+        ),
+    )
 
     @field_validator("limit")
     @classmethod
@@ -103,7 +114,7 @@ def _resolve_urls(requested_urls: Optional[List[str]], limit: Optional[int]) -> 
 # Core Sync (Scrape → Core DB Tables)
 # ---------------------------------------------------------------------------
 
-def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: Optional[int], db_url: str):
+def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: Optional[int], db_url: str, fill_empty_only: bool = False):
     """
     Background task: discover/resolve URLs → scrape → sync to core DB tables.
     """
@@ -153,7 +164,8 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
 
         # Step 4: Sync to core DB tables
         orchestrator = DbImportOrchestrator()
-        result = orchestrator.sync_to_db(db_url, rows, tracker=tracker, activity_type="manual") or {}
+        result = orchestrator.sync_to_db(db_url, rows, tracker=tracker, activity_type="manual",
+                                         fill_empty_only=fill_empty_only) or {}
 
         job.complete({
             "urls_scraped": len(urls),
@@ -181,7 +193,7 @@ def run_core_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: 
 # Graph Sync (Scrape → Graph DB Tables)
 # ---------------------------------------------------------------------------
 
-def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: Optional[int], db_url: str):
+def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit: Optional[int], db_url: str, fill_empty_only: bool = False):
     """
     Background task: discover/resolve URLs → scrape → sync to graph DB tables.
     Only processes graph data for peptides that already exist in the database.
@@ -234,7 +246,8 @@ def run_graph_sync_task(job_id: str, requested_urls: Optional[List[str]], limit:
         # Step 4: Sync graph data to DB (only peptide_graph table, NOT core tables)
         log_debug(f"Starting DB injection for {len(rows)} row(s) into peptide_graph table", "sync_endpoint")
         orchestrator = GraphImportOrchestrator()
-        result = orchestrator.sync_graph_data(db_url, rows, tracker=tracker, action_type="manual") or {}
+        result = orchestrator.sync_graph_data(db_url, rows, tracker=tracker, action_type="manual",
+                                              fill_empty_only=fill_empty_only) or {}
 
         job.complete({
             "urls_scraped": len(urls),
@@ -351,6 +364,8 @@ async def start_core_sync(request: SyncRequest, background_tasks: BackgroundTask
     ### Request Body
     - `urls`: explicit list of pep-pedia URLs, or `null` for auto-discovery
     - `limit`: cap the number of URLs (useful for testing)
+    - `fill_empty_only`: `true` = only fill empty peptide columns and add child-row kinds the
+      peptide has none of; never overwrite curated values (used after research approve)
 
     ### Responses
     - **202** → Accepted. Returns a `job_id` — poll `/api/v1/operations/job/{job_id}` for status.
@@ -371,8 +386,10 @@ async def start_core_sync(request: SyncRequest, background_tasks: BackgroundTask
         "limit": request.limit,
         "urls_provided": len(request.urls) if request.urls else 0,
         "mode": "targeted" if request.urls else "auto-discover",
+        "fill_empty_only": request.fill_empty_only,
     })
-    background_tasks.add_task(run_core_sync_task, job.job_id, request.urls, request.limit, db_url)
+    background_tasks.add_task(run_core_sync_task, job.job_id, request.urls, request.limit, db_url,
+                              fill_empty_only=request.fill_empty_only)
 
     return job.to_dict()
 
@@ -388,6 +405,9 @@ async def start_graph_sync(request: SyncRequest, background_tasks: BackgroundTas
     3. Syncs pharmacokinetics graph data to `peptide_graph` table
 
     **Only syncs graph data for peptides already present** in the core `peptides` table.
+
+    With `fill_empty_only: true`, a peptide that already has PK curves is skipped, so
+    existing curves are never overwritten.
 
     ### Responses
     - **202** → Accepted. Returns a `job_id` for polling.
@@ -408,8 +428,10 @@ async def start_graph_sync(request: SyncRequest, background_tasks: BackgroundTas
         "limit": request.limit,
         "urls_provided": len(request.urls) if request.urls else 0,
         "mode": "targeted" if request.urls else "auto-discover",
+        "fill_empty_only": request.fill_empty_only,
     })
-    background_tasks.add_task(run_graph_sync_task, job.job_id, request.urls, request.limit, db_url)
+    background_tasks.add_task(run_graph_sync_task, job.job_id, request.urls, request.limit, db_url,
+                              fill_empty_only=request.fill_empty_only)
 
     return job.to_dict()
 

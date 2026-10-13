@@ -183,6 +183,15 @@ class DbManager:
     def upsert_peptide_fill_nulls(self, payload: Dict[str, Any]) -> int:
         return self.service.peptide.upsert_fill_nulls(payload)
 
+    def get_peptide_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
+        return self.service.peptide.get_by_identifier(identifier)
+
+    def fill_empty_peptide_columns(self, peptide_id: int, payload: Dict[str, Any]) -> List[str]:
+        return self.service.peptide.fill_empty_columns(peptide_id, payload)
+
+    def get_child_kinds_present(self, peptide_id: int) -> Dict[str, bool]:
+        return self.service.peptide.get_child_kinds_present(peptide_id)
+
     def get_lookup_id(self, table: str, name: str) -> Optional[int]:
         return self.service.lookup.get_id_by_name(table, name)
 

@@ -1,6 +1,36 @@
 """Peptide repository for peptide entity operations."""
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from src.infrastructure.db.base_repository import BaseRepository
+
+
+# Columns a fill-empty sync must never write, even when they are empty.
+_FILL_EMPTY_PROTECTED = frozenset({"id", "slug", "name", "created_at", "updated_at"})
+
+# Child-row kinds of a peptide and the SQL that tells whether it has any.
+# A fill-empty sync adds a kind only when the peptide has none of it.
+CHILD_KIND_SQL = {
+    "benefits": "SELECT 1 FROM peptide_benefits WHERE peptide_id = %(id)s LIMIT 1",
+    "side_effects": "SELECT 1 FROM peptide_side_effects WHERE peptide_id = %(id)s LIMIT 1",
+    "interactions": (
+        "SELECT 1 FROM peptide_interactions "
+        "WHERE peptide_id_1 = %(id)s OR peptide_id_2 = %(id)s LIMIT 1"
+    ),
+    "indications": "SELECT 1 FROM peptide_research_indications WHERE peptide_id = %(id)s LIMIT 1",
+    "references": "SELECT 1 FROM peptide_references WHERE peptide_id = %(id)s LIMIT 1",
+    "protocols": "SELECT 1 FROM peptide_protocols WHERE peptide_id = %(id)s LIMIT 1",
+    "graph": "SELECT 1 FROM peptide_graph WHERE peptide_id = %(id)s LIMIT 1",
+}
+
+
+def is_empty_value(value: Any) -> bool:
+    """True for values a fill-empty sync may replace: NULL, blank text, empty JSON."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() in ("", "[]", "{}")
+    if isinstance(value, (list, dict, tuple)):
+        return len(value) == 0
+    return False
 
 
 class PeptideRepository(BaseRepository):
@@ -112,6 +142,54 @@ class PeptideRepository(BaseRepository):
                 self.log_operation("EXIST_PEPTIDE", "peptides", payload.get('name'))
             
             return peptide_id
+
+    def get_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
+        """Exact lookup by slug or lower-cased name (the keys of get_all_identifiers)."""
+        return self.execute_one(
+            "SELECT * FROM peptides WHERE slug = %s OR LOWER(name) = %s "
+            "ORDER BY (slug = %s) DESC LIMIT 1",
+            (identifier, identifier, identifier),
+        )
+
+    def fill_empty_columns(self, peptide_id: int, payload: Dict[str, Any]) -> List[str]:
+        """
+        Write payload values only into columns that are empty on the existing row.
+
+        Never inserts, never overwrites a non-empty value, never touches identity
+        columns, and ignores payload keys the row does not have. Returns the
+        names of the columns that were filled.
+        """
+        existing = self.get_by_id(peptide_id)
+        if not existing:
+            return []
+        updates = {
+            col: val
+            for col, val in payload.items()
+            if col in existing
+            and col not in _FILL_EMPTY_PROTECTED
+            and not is_empty_value(val)
+            and is_empty_value(existing.get(col))
+        }
+        if not updates:
+            self.log_operation("EXIST_PEPTIDE", "peptides", f"ID: {peptide_id} (nothing empty to fill)")
+            return []
+        set_clause = ", ".join(f"{col} = %s" for col in updates)
+        with self.get_cursor() as cur:
+            cur.execute(
+                f"UPDATE peptides SET {set_clause} WHERE id = %s",
+                list(updates.values()) + [peptide_id],
+            )
+            self._commit()
+        self.log_operation("FILL_EMPTY_PEPTIDE", "peptides",
+            f"ID: {peptide_id} filled {', '.join(updates)}")
+        return list(updates)
+
+    def get_child_kinds_present(self, peptide_id: int) -> Dict[str, bool]:
+        """For each child-row kind in CHILD_KIND_SQL, whether the peptide has any."""
+        return {
+            kind: self.execute_one(sql, {"id": peptide_id}) is not None
+            for kind, sql in CHILD_KIND_SQL.items()
+        }
 
     def update_activity_type(self, peptide_id: int, activity_type: str) -> bool:
         """

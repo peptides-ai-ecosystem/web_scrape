@@ -61,7 +61,7 @@ class DbImportOrchestrator:
             "protocols": protocols
         }
 
-    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, activity_type: Optional[str] = None) -> Dict[str, Any]:
+    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, activity_type: Optional[str] = None, fill_empty_only: bool = False) -> Dict[str, Any]:
         """
         Main entry point to sync rows using the grouped logic.
         Only processes peptides that already exist in the database.
@@ -75,6 +75,13 @@ class DbImportOrchestrator:
                            endpoint, pass 'manual' so the peptide is flagged as
                            endpoint-triggered. When called from other paths
                            (e.g. direct CSV import), leave None so it stays NULL.
+            fill_empty_only: Used after a curator approves a new peptide. The
+                           matched peptide row is never inserted or overwritten;
+                           only its empty columns are filled. Child rows
+                           (benefits, side effects, interactions, indications,
+                           references, protocols with their dosages) are added
+                           only for kinds the peptide has none of yet, and
+                           activity_type is stamped only when it is empty.
         """
         db = DbManager(db_url)
         try:
@@ -169,6 +176,19 @@ class DbImportOrchestrator:
                 print(f"\n{raw_name} : {mapped_method}")
                 log_debug(f"  ✓ MATCHED: '{raw_name}' → method='{mapped_method}', slug='{row_slug}'", "db_import_orchestrator")
 
+                # Fill-empty mode: resolve the existing row up front so a slug
+                # mismatch can never insert a second peptide, and record which
+                # child kinds already exist so they are left untouched.
+                existing_row = None
+                kinds_present: Dict[str, bool] = {}
+                if fill_empty_only:
+                    existing_row = db.get_peptide_by_identifier(row_slug)
+                    if not existing_row:
+                        skipped_count += 1
+                        skipped_peptides.append(f"{raw_name} (fill_empty_only: no peptide row for '{row_slug}')")
+                        continue
+                    kinds_present = db.get_child_kinds_present(existing_row["id"])
+
                 # Stage 1: Map raw row to payload
                 print(f"  Stage 1: Mapping raw row to structured payload")
                 try:
@@ -203,22 +223,28 @@ class DbImportOrchestrator:
                 # Stage 3: Upsert peptide record — check before to detect insert vs update
                 print(f"  Stage 3: Upserting peptide record")
                 try:
-                    peptide_slug = payload["group_b"]["peptide"].get("slug")
-                    pre_existing = db.get_peptide_by_slug(peptide_slug)
-                    peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
-                    if not pre_existing:
-                        print(f"         → inserted new peptide record")
+                    if fill_empty_only:
+                        # Never insert, never overwrite: fill empty columns only.
+                        peptide_id = existing_row["id"]
+                        filled_cols = db.fill_empty_peptide_columns(peptide_id, payload["group_b"]["peptide"])
+                        print(f"         → fill_empty_only: filled {len(filled_cols)} empty field(s)")
                     else:
-                        # Count how many fields were null before and now have values
-                        pep_payload = payload["group_b"]["peptide"]
-                        filled = sum(
-                            1 for col, val in pep_payload.items()
-                            if val and (pre_existing.get(col) is None or pre_existing.get(col) == "")
-                        )
-                        if filled:
-                            print(f"         → updated {filled} previously empty field(s)")
+                        peptide_slug = payload["group_b"]["peptide"].get("slug")
+                        pre_existing = db.get_peptide_by_slug(peptide_slug)
+                        peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
+                        if not pre_existing:
+                            print(f"         → inserted new peptide record")
                         else:
-                            print(f"         → already complete, no changes")
+                            # Count how many fields were null before and now have values
+                            pep_payload = payload["group_b"]["peptide"]
+                            filled = sum(
+                                1 for col, val in pep_payload.items()
+                                if val and (pre_existing.get(col) is None or pre_existing.get(col) == "")
+                            )
+                            if filled:
+                                print(f"         → updated {filled} previously empty field(s)")
+                            else:
+                                print(f"         → already complete, no changes")
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "group_b", e)
@@ -231,7 +257,10 @@ class DbImportOrchestrator:
                 # Stage 4: Link relations, protocols
                 print(f"  Stage 4: Linking relations and protocols")
                 try:
-                    r_count = self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], tracker=tracker, row_id=str(row_id))
+                    skip_kinds = {k for k, present in kinds_present.items() if present}
+                    if skip_kinds:
+                        print(f"         → fill_empty_only: keeping existing {', '.join(sorted(skip_kinds))}")
+                    r_count = self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], tracker=tracker, row_id=str(row_id), skip_kinds=skip_kinds)
                     print(f"         → {r_count} relation record(s) processed")
                 except Exception as e:
                     if tracker:
@@ -241,7 +270,8 @@ class DbImportOrchestrator:
                 synced_peptides.append({"name": raw_name, "slug": row_slug, "method": mapped_method})
                 # Mark as endpoint-triggered if activity_type is provided
                 if activity_type and peptide_id:
-                    db.update_peptide_activity_type(peptide_id, activity_type)
+                    if not fill_empty_only or not existing_row.get("activity_type"):
+                        db.update_peptide_activity_type(peptide_id, activity_type)
                 print(f"  ✓ SYNCED: '{raw_name}' (slug: {row_slug})")
                 log_success(f"Core sync — '{raw_name}' (slug: {row_slug}, method: {mapped_method})", "db_import_orchestrator")
 
@@ -358,17 +388,24 @@ class DbImportOrchestrator:
         parts = [f"{v} {k}" for k, v in counts.items() if v]
         return ", ".join(parts) if parts else "nothing to sync"
 
-    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, row_id: str = "") -> int:
+    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, row_id: str = "", skip_kinds: Optional[set] = None) -> int:
         """Sync relations and return total count of records processed.
 
         Each relation sub-type is isolated in its own try/except so a failure
         in one (e.g. a lookup that can't be linked) never blocks the others —
         most importantly the research indications, references, and protocols.
+
+        skip_kinds: relation kinds (benefits, side_effects, interactions,
+        indications, references, protocols) left completely untouched — used
+        by fill_empty_only for kinds the peptide already has.
         """
         count = 0
+        skip_kinds = skip_kinds or set()
 
         def _safe(label: str, fn) -> None:
             nonlocal count
+            if label in skip_kinds:
+                return
             try:
                 count += fn()
             except Exception as e:

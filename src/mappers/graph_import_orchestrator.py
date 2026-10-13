@@ -29,10 +29,14 @@ class GraphImportOrchestrator:
         """Map a scraped keyword to the canonical DB administration method name."""
         return GraphImportOrchestrator.METHOD_KEYWORD_MAP.get(method_name.strip().lower(), method_name.strip())
 
-    def sync_graph_data(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, action_type: str = 'manual'):
+    def sync_graph_data(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, action_type: str = 'manual', fill_empty_only: bool = False):
         """
         Main entry point to sync graph logic separately based on raw CSV data.
         Only processes graph data for peptides that already exist in the database.
+
+        fill_empty_only: a peptide that already has any PK graph rows is left
+        untouched (its curves are never overwritten); graph rows are written
+        only for peptides that have none yet.
         """
         db = DbManager(db_url)
         try:
@@ -84,6 +88,12 @@ class GraphImportOrchestrator:
                 
                 peptide_id = peptide_record["id"]
                 log_debug(f"  ✓ MATCHED: '{raw_name}' → peptide_id={peptide_id}, slug='{matched_identifier}'", "graph_import_orchestrator")
+
+                if fill_empty_only and db.get_child_kinds_present(peptide_id).get("graph"):
+                    skipped_count += 1
+                    skipped_peptides.append(f"{raw_name} (fill_empty_only: PK graph already present)")
+                    log_debug(f"  – SKIPPED: '{raw_name}' - fill_empty_only and peptide already has graph rows", "graph_import_orchestrator")
+                    continue
                 
                 # Retrieve Graph map
                 try:
