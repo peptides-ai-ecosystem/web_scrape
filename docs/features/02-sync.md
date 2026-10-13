@@ -399,3 +399,22 @@ uv run main.py --scrape --sync
 # POST /api/v1/sync/core
 # POST /api/v1/sync/graph
 ```
+
+## 8. Fill-empty-only mode (`fill_empty_only`)
+
+`POST /api/v1/sync/core` and `POST /api/v1/sync/graph` accept `"fill_empty_only": true`
+(default `false`, which keeps the behaviour above). The peptide-microservice sends it after a
+curator approves a new peptide (AAD-9a), so pep-pedia data can complete the record without
+replacing anything the curator approved:
+
+- `/core`: the matched peptide row is never inserted or overwritten; only columns that are
+  NULL, blank, `[]` or `{}` are filled (`id`, `slug`, `name` are never written). Child rows
+  (benefits, side effects, interactions, indications, references, protocols with their
+  dosages/steps) are added only for kinds the peptide has none of; existing ones are never
+  deleted, replaced or extended. `activity_type` is stamped only when it is empty.
+- `/graph`: a peptide that already has any `peptide_graph` rows is skipped, so curves are
+  never overwritten. `/graph-missing` already never overwrites, so the flag changes nothing there.
+
+```json
+{"urls": ["https://pep-pedia.org/peptides/klow"], "fill_empty_only": true}
+```
