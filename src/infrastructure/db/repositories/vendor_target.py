@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 _COLUMNS = """
     id, slug, name, enabled, product_urls, listing_url, listing_link_selector,
     selectors, currency, min_request_interval_seconds, max_products_per_run,
-    platform_vendor_slug, created_at, updated_at
+    platform_vendor_slug, store_url, review_state, approved_at, approved_by,
+    kind, created_at, updated_at
 """
 
 
@@ -51,6 +52,10 @@ def row_to_target(row: Dict[str, Any]) -> VendorTarget:
         "min_request_interval_seconds": float(interval) if interval is not None else 5.0,
         "max_products_per_run": row.get("max_products_per_run"),
         "platform_vendor_slug": row.get("platform_vendor_slug"),
+        "store_url": row.get("store_url"),
+        "review_state": row.get("review_state"),
+        "approved_at": row.get("approved_at"),
+        "approved_by": row.get("approved_by"),
     }
     return parse_target(raw, source="db")
 
@@ -67,6 +72,7 @@ def _params(target: VendorTarget) -> tuple:
         Decimal(str(target.min_request_interval_seconds)),
         target.max_products_per_run,
         target.platform_vendor_slug,
+        target.store_url,
     )
 
 
@@ -101,17 +107,25 @@ class VendorTargetRepository(BaseRepository):
                        (slug, name, enabled, product_urls, listing_url,
                         listing_link_selector, selectors, currency,
                         min_request_interval_seconds, max_products_per_run,
-                        platform_vendor_slug)
-                   VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                        platform_vendor_slug, store_url, review_state,
+                        approved_at, approved_by)
+                   VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s,
+                           %s, %s, %s, %s)
                    RETURNING {_COLUMNS}""",
-                (target.slug,) + _params(target),
+                (target.slug,)
+                + _params(target)
+                + (target.review_state.value, target.approved_at, target.approved_by),
             )
             row = cur.fetchone()
             self._commit()
         return row_to_target(row)
 
     def update(self, slug: str, target: VendorTarget) -> Optional[VendorTarget]:
-        """Replace every editable field; the slug itself is immutable."""
+        """Replace every editable field; the slug itself is immutable.
+
+        ``review_state`` is not an editable field: only :meth:`approve`
+        moves a draft to approved, so saving a draft never approves it.
+        """
         with self.get_cursor() as cur:
             cur.execute(
                 f"""UPDATE vendor_scrape_targets
@@ -120,10 +134,26 @@ class VendorTargetRepository(BaseRepository):
                            selectors = %s::jsonb, currency = %s,
                            min_request_interval_seconds = %s,
                            max_products_per_run = %s, platform_vendor_slug = %s,
+                           store_url = %s,
                            updated_at = now()
                      WHERE lower(slug) = lower(%s)
                  RETURNING {_COLUMNS}""",
                 _params(target) + (slug,),
+            )
+            row = cur.fetchone()
+            self._commit()
+        return row_to_target(row) if row else None
+
+    def approve(self, slug: str, approved_by: Optional[str] = None) -> Optional[VendorTarget]:
+        """Mark a target approved (AAD-1): scrape runs read it from now on."""
+        with self.get_cursor() as cur:
+            cur.execute(
+                f"""UPDATE vendor_scrape_targets
+                       SET review_state = 'approved', approved_at = now(),
+                           approved_by = %s, updated_at = now()
+                     WHERE lower(slug) = lower(%s)
+                 RETURNING {_COLUMNS}""",
+                (approved_by, slug),
             )
             row = cur.fetchone()
             self._commit()

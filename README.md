@@ -55,6 +55,7 @@ Each feature is documented in detail with business logic, architecture diagrams,
 | 3 | **📊 Evaluation** | [`docs/features/03-evaluation.md`](docs/features/03-evaluation.md) | `EvaluationEngine`, `CsvExpectationBuilder`, `DbActualFetcher`, `GraphEvaluator` |
 | 4 | **🚀 FastAPI & Scheduler & Operations** | [`docs/features/04-fastapi-schedule-operations.md`](docs/features/04-fastapi-schedule-operations.md) | `main.py`, APScheduler, `JobQueue`, async endpoints, visualization |
 | 5 | **🏷️ Competitor Vendor Pricing** | [`docs/features/05-vendor-scraping.md`](docs/features/05-vendor-scraping.md) | `VendorScrapeService`, `RobotsPolicy`, `HostRateLimiter`, `PlaywrightPageFetcher`, `DeltaReviewer` |
+| 5a | **🔗 Competitor from a URL only (no selectors)** | [`docs/features/url-only-discovery.md`](docs/features/url-only-discovery.md) | `UrlOnlyDiscovery`, `PoliteHttpClient`, Store API / products.json / sitemap / JSON-LD extractors |
 
 ---
 

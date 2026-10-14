@@ -1,0 +1,18 @@
+[
+  {
+    "id": 203, "name": "Retatrutide", "parent": 202, "type": "variation",
+    "permalink": "https://rival.example/product/retatrutide/?attribute_pa_size=10mg",
+    "sku": "RETA-10",
+    "prices": {"price": "8900", "price_range": null, "currency_code": "USD", "currency_minor_unit": 2},
+    "is_in_stock": true, "is_on_backorder": false,
+    "stock_availability": {"text": "In stock", "class": "in-stock"}
+  },
+  {
+    "id": 204, "name": "Retatrutide", "parent": 202, "type": "variation",
+    "permalink": "https://rival.example/product/retatrutide/?attribute_pa_size=20mg",
+    "sku": "RETA-20",
+    "prices": {"price": "15900", "price_range": null, "currency_code": "USD", "currency_minor_unit": 2},
+    "is_in_stock": false, "is_on_backorder": true,
+    "stock_availability": {"text": "Available on backorder", "class": "available-on-backorder"}
+  }
+]

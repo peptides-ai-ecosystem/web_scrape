@@ -1,0 +1,20 @@
+{
+  "products": [
+    {
+      "id": 7001, "title": "Semaglutide", "handle": "semaglutide", "vendor": "Rival",
+      "product_type": "Peptide",
+      "variants": [
+        {"id": 41001, "title": "5mg", "option1": "5mg", "sku": "SEMA-5", "available": true, "price": "79.00", "compare_at_price": null},
+        {"id": 41002, "title": "10mg", "option1": "10mg", "sku": "SEMA-10", "available": false, "price": "129.50", "compare_at_price": "149.00"}
+      ],
+      "options": [{"name": "Size", "position": 1, "values": ["5mg", "10mg"]}]
+    },
+    {
+      "id": 7002, "title": "BAC Water 10ml", "handle": "bac-water-10ml", "vendor": "Rival",
+      "variants": [
+        {"id": 41003, "title": "Default Title", "option1": "Default Title", "sku": "BAC10", "available": true, "price": "12.00"}
+      ],
+      "options": [{"name": "Title", "position": 1, "values": ["Default Title"]}]
+    }
+  ]
+}

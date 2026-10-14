@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
@@ -156,6 +156,20 @@ class RobotsPolicy:
         if entry.parser is None:
             return True
         return bool(entry.parser.can_fetch(self._user_agent, url))
+
+    @property
+    def user_agent(self) -> str:
+        return self._user_agent
+
+    def sitemaps(self, url: str) -> List[str]:
+        """``Sitemap:`` URLs the site's robots.txt lists (AAD-1 discovery)."""
+        entry = self._load(self._origin(url))
+        if entry.parser is None:
+            return []
+        try:
+            return [s for s in (entry.parser.site_maps() or []) if isinstance(s, str)]
+        except Exception:  # noqa: BLE001 — a malformed directive is just "none"
+            return []
 
     def crawl_delay(self, url: str) -> Optional[float]:
         """The site's requested Crawl-delay for us, in seconds, if any."""

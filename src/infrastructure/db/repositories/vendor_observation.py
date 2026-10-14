@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 _COLUMNS = """
     id, vendor, url, observed_at, status, product_name, price, currency,
     stock_status, coa_url, confidence, confidence_breakdown, review_status,
-    review_reason, review_note, reviewed_at, reviewed_by, failure_detail
+    review_reason, review_note, reviewed_at, reviewed_by, failure_detail,
+    variant_label, sku, extraction_method
 """
 
 
@@ -71,6 +72,9 @@ def _row_to_observation(row: Optional[Dict[str, Any]]) -> Optional[VendorObserva
         review_reason=_enum(ReviewReason, row.get("review_reason")),
         review_note=row.get("review_note"),
         failure_detail=row.get("failure_detail"),
+        variant_label=row.get("variant_label"),
+        sku=row.get("sku"),
+        extraction_method=row.get("extraction_method"),
     )
 
 
@@ -109,8 +113,10 @@ class VendorObservationRepository(BaseRepository):
                        (vendor, url, observed_at, status, product_name, price,
                         currency, stock_status, coa_url, confidence,
                         confidence_breakdown, review_status, review_reason,
-                        review_note, failure_detail)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        review_note, failure_detail, variant_label, sku,
+                        extraction_method)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                           %s, %s, %s)
                    RETURNING id""",
                 (
                     observation.vendor,
@@ -128,31 +134,39 @@ class VendorObservationRepository(BaseRepository):
                     observation.review_reason.value if observation.review_reason else None,
                     observation.review_note,
                     observation.failure_detail,
+                    observation.variant_label[:255] if observation.variant_label else None,
+                    observation.sku[:255] if observation.sku else None,
+                    observation.extraction_method,
                 ),
             )
             row = cur.fetchone()
             self._commit()
         return int(row["id"]) if row else 0
 
-    def list_flagged(self, limit: int = 100, vendor: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_flagged(
+        self, limit: int = 100, vendor: Optional[str] = None, offset: int = 0
+    ) -> List[Dict[str, Any]]:
         """The review queue, newest first."""
-        if vendor:
-            return self.execute_all(
-                f"""SELECT {_COLUMNS}
-                      FROM vendor_price_observations
-                     WHERE review_status = %s AND vendor = %s
-                     ORDER BY observed_at DESC
-                     LIMIT %s""",
-                (ReviewStatus.FLAGGED.value, vendor, limit),
-            )
+        vendor_clause = "AND vendor = %s" if vendor else ""
+        params: tuple = (ReviewStatus.FLAGGED.value,) + ((vendor,) if vendor else ())
         return self.execute_all(
             f"""SELECT {_COLUMNS}
                   FROM vendor_price_observations
-                 WHERE review_status = %s
-                 ORDER BY observed_at DESC
-                 LIMIT %s""",
-            (ReviewStatus.FLAGGED.value, limit),
+                 WHERE review_status = %s {vendor_clause}
+                 ORDER BY observed_at DESC, id DESC
+                 LIMIT %s OFFSET %s""",
+            params + (limit, offset),
         )
+
+    def count_flagged(self, vendor: Optional[str] = None) -> int:
+        """Size of the review queue (for pagination)."""
+        vendor_clause = "AND vendor = %s" if vendor else ""
+        params: tuple = (ReviewStatus.FLAGGED.value,) + ((vendor,) if vendor else ())
+        total = self.execute_scalar(
+            f"SELECT count(*) AS n FROM vendor_price_observations WHERE review_status = %s {vendor_clause}",
+            params,
+        )
+        return int(total or 0)
 
     def get_row(self, observation_id: int) -> Optional[Dict[str, Any]]:
         return self.execute_one(

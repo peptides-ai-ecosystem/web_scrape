@@ -143,6 +143,13 @@ class _PlaywrightPageDocument:
         value = (value or "").strip()
         return value or None
 
+    def html(self) -> Optional[str]:
+        """The rendered DOM as HTML (selector-free discovery reads JSON-LD from it)."""
+        try:
+            return self._page.content()
+        except Exception:  # noqa: BLE001
+            return None
+
     def query_all_attr(self, selector: str, attr: str) -> List[str]:
         """Attribute of every match, in document order (listing-page links)."""
         try:
@@ -174,6 +181,11 @@ class StaticPageDocument:
     attrs: Dict[str, Dict[str, str]] = field(default_factory=dict)
     #: ``{selector: {attr: [value, ...]}}`` for :meth:`query_all_attr`.
     attr_lists: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
+    #: Raw HTML for :meth:`html` (selector-free discovery).
+    raw_html: Optional[str] = None
+
+    def html(self) -> Optional[str]:
+        return self.raw_html
 
     def query_text(self, selector: str) -> Optional[str]:
         value = self.texts.get(selector)

@@ -9,6 +9,8 @@
 > **Entry points**: `POST /api/v1/vendors/scrape` (on demand) and the nightly APScheduler cron
 >
 > **Migration**: `migration_vendor_price_observations.sql`
+>
+> **Selector-free targets (AAD-1)**: [`url-only-discovery.md`](url-only-discovery.md)
 
 ---
 
@@ -193,16 +195,19 @@ cannot become the current price. Resolve one with
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/v1/vendors/targets` | Targets (DB + file fallback, `source` on each), plus the exact User-Agent we send |
+| `GET /api/v1/vendors/targets` | Targets (DB + file fallback, `source` on each), plus the exact User-Agent we send. Optional `?limit=&offset=&q=&review_state=&discovery_mode=`; returns `total`, `count` (this page), `draft_count`. Without `limit`, every target (the original behaviour) |
 | `GET /api/v1/vendors/targets/{slug}` | One target |
-| `POST /api/v1/vendors/targets` | Create (201; 409 on a duplicate slug; 422 without a price selector or any URL) |
+| `POST /api/v1/vendors/targets` | Create (201; 409 on a duplicate slug; 422 without any URL, or for one of our own stores). Without a price selector it is a selector-free **draft** — see [url-only-discovery.md](url-only-discovery.md) |
+| `POST /api/v1/vendors/targets/from-url` | AAD-1: draft competitor target from a bare store/shop/product URL (201; 409 duplicate; 422 own store or non-public URL) |
+| `POST /api/v1/vendors/targets/{slug}/approve` | AAD-1: approve a draft so runs read it (404 unknown; 409 file target) |
+| `POST /api/v1/vendors/discover` | AAD-1: dry-run discovery for one URL — readings per variant, nothing stored |
 | `PUT /api/v1/vendors/targets/{slug}` | Replace (slug immutable); takes a file-only target over into the DB |
 | `DELETE /api/v1/vendors/targets/{slug}` | Remove a DB target (204; 409 for a file-only target). Observations are kept |
 | `POST /api/v1/vendors/scrape` | On-demand run (all enabled, or `vendors: [...]`); **202** + `job_id`; **409** while another run is in flight |
 | `GET /api/v1/vendors/scrape/jobs` | Recent scrape jobs (summary) |
 | `GET /api/v1/vendors/scrape/jobs/{job_id}` | Job status: `progress` 0-100, `progress_detail` `{done, total}`, full report when done |
 | `GET /api/v1/vendors/observations` | Readings, newest first, `?vendor=&review_status=&status=&limit=&offset=` |
-| `GET /api/v1/vendors/observations/flagged` | The review queue |
+| `GET /api/v1/vendors/observations/flagged` | The review queue, `?limit=&offset=&vendor=`, with `total` |
 | `GET /api/v1/vendors/observations/accepted-latest` | Newest **accepted** priced reading per `(vendor, url)`, with `platform_vendor_slug` — the PeptiPrices import reads this |
 | `POST /api/v1/vendors/observations/{id}/review` | `accept` or `reject` one flagged reading (404 unknown; 409 already resolved, or accepting a reading with no price) |
 | `GET /api/v1/scheduler/vendor-scrape/status` | Nightly cron status |

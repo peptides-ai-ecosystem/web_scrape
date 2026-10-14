@@ -158,7 +158,18 @@ class TestTargetParsing:
 
     def test_listing_url_without_link_selector_is_refused(self):
         with pytest.raises(VendorTargetConfigError, match="listing_link_selector"):
-            parse_target({"slug": "rival", "listing_url": "https://rival.example/shop"})
+            parse_target(
+                {
+                    "slug": "rival",
+                    "listing_url": "https://rival.example/shop",
+                    "selectors": {"price": ".price"},
+                }
+            )
+
+    def test_selector_free_listing_url_needs_no_link_selector(self):
+        # AAD-1: with no price selector the listing URL is a discovery seed.
+        target = parse_target({"slug": "rival", "listing_url": "https://rival.example/shop"})
+        assert target.discovery_mode.value == "auto"
 
     def test_relative_listing_url_is_refused(self):
         with pytest.raises(VendorTargetConfigError, match="absolute"):
@@ -442,14 +453,18 @@ class TestTargetEndpoints:
             run(vendors.create_vendor_target(payload(vendors)))
         assert exc.value.status_code == 409
 
-    def test_target_without_price_selector_or_urls_is_422(self, api):
+    def test_target_without_urls_is_422(self, api):
         vendors, _, _ = api
-        with pytest.raises(HTTPException) as exc:
-            run(vendors.create_vendor_target(payload(vendors, selectors={"price": []})))
-        assert exc.value.status_code == 422
         with pytest.raises(HTTPException) as exc:
             run(vendors.create_vendor_target(payload(vendors, product_urls=[])))
         assert exc.value.status_code == 422
+
+    def test_target_without_price_selector_is_a_selector_free_draft(self, api):
+        # AAD-1: selectors are optional now; a URL-only target waits for approval.
+        vendors, _, _ = api
+        created = run(vendors.create_vendor_target(payload(vendors, selectors={"price": []})))
+        assert created["discovery_mode"] == "auto"
+        assert created["review_state"] == "draft"
 
     def test_slug_is_immutable(self, api):
         vendors, _, _ = api

@@ -1,0 +1,42 @@
+[
+  {
+    "id": 101,
+    "name": "BPC-157 &#8211; 5mg",
+    "slug": "bpc-157-5mg",
+    "parent": 0,
+    "type": "simple",
+    "variation": "",
+    "permalink": "https://rival.example/product/bpc-157-5mg/",
+    "sku": "BPC5",
+    "prices": {
+      "price": "3999", "regular_price": "4499", "sale_price": "3999", "price_range": null,
+      "currency_code": "USD", "currency_symbol": "$", "currency_minor_unit": 2,
+      "currency_decimal_separator": ".", "currency_thousand_separator": ",",
+      "currency_prefix": "$", "currency_suffix": ""
+    },
+    "is_purchasable": true, "is_in_stock": true, "is_on_backorder": false,
+    "stock_availability": {"text": "In stock", "class": "in-stock"},
+    "variations": []
+  },
+  {
+    "id": 202,
+    "name": "Retatrutide",
+    "slug": "retatrutide",
+    "parent": 0,
+    "type": "variable",
+    "variation": "",
+    "permalink": "https://rival.example/product/retatrutide/",
+    "sku": "RETA",
+    "prices": {
+      "price": "8900", "regular_price": "8900", "sale_price": "8900",
+      "price_range": {"min_amount": "8900", "max_amount": "15900"},
+      "currency_code": "USD", "currency_symbol": "$", "currency_minor_unit": 2
+    },
+    "is_purchasable": true, "is_in_stock": true, "is_on_backorder": false,
+    "stock_availability": {"text": "", "class": ""},
+    "variations": [
+      {"id": 203, "attributes": [{"name": "Size", "value": "10mg"}]},
+      {"id": 204, "attributes": [{"name": "Size", "value": "20mg"}]}
+    ]
+  }
+]
