@@ -653,6 +653,22 @@ class TestUrlOnlyEndpoints:
         )
         assert updated["review_state"] == "draft"
 
+    def test_a_client_without_store_url_does_not_wipe_it(self, api):
+        vendors, _ = api
+        run(vendors.create_target_from_url(vendors.FromUrlRequest(url="https://rival.example/")))
+        # Today's admin drawer sends no store_url; selectors added for an odd site.
+        updated = run(
+            vendors.update_vendor_target(
+                "rival-example",
+                vendors.TargetPayload(
+                    slug="rival-example", name="Rival",
+                    product_urls=["https://rival.example/p/1"], selectors={"price": [".price"]},
+                ),
+            )
+        )
+        assert updated["store_url"] == "https://rival.example/"
+        assert updated["discovery_mode"] == "selectors" and updated["review_state"] == "draft"
+
     def test_targets_pagination_is_backwards_compatible(self, api):
         vendors, _ = api
         for i in range(5):

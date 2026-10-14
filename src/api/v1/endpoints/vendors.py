@@ -425,6 +425,10 @@ async def update_vendor_target(slug: str, payload: TargetPayload) -> Dict[str, A
                 "approved_at": existing.approved_at,
                 "approved_by": existing.approved_by,
             }
+            if "store_url" not in payload.model_fields_set:
+                # A client that predates store_url (the admin drawer today)
+                # must not wipe it by saving the target.
+                state["store_url"] = existing.store_url
         elif not payload.selectors.price and not any(
             t.slug.lower() == slug.lower() for t in all_targets(include_disabled=True)
         ):

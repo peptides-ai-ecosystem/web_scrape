@@ -101,7 +101,7 @@ All discovery requests go through `PoliteHttpClient`:
 | `GET /api/v1/vendors/observations/flagged` | Adds `offset` and `total` |
 
 Target rows gain `store_url`, `discovery_mode`, `review_state`, `approved_at`, `approved_by`, `kind`.
-`TargetPayload.selectors` may now be empty. `PUT` accepts `store_url`.
+`TargetPayload.selectors` may now be empty. `PUT` accepts `store_url`; a `PUT` that omits the field keeps the stored value (so the current admin drawer cannot wipe it).
 
 ## 5. Schema
 
