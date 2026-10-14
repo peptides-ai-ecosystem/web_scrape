@@ -70,3 +70,11 @@ CREATE INDEX IF NOT EXISTS vendor_price_observations_review_idx
 
 CREATE INDEX IF NOT EXISTS vendor_price_observations_vendor_idx
     ON vendor_price_observations (vendor);
+
+-- AAD-1: one reading per variant/size from selector-free discovery. The size
+-- label is also in product_name (the platform import parses sizes from it);
+-- these columns keep it, the SKU and how the reading was made, separately.
+ALTER TABLE vendor_price_observations ADD COLUMN IF NOT EXISTS variant_label VARCHAR(255);
+ALTER TABLE vendor_price_observations ADD COLUMN IF NOT EXISTS sku VARCHAR(255);
+-- selectors | woo_store_api | shopify_json | json_ld | microdata | opengraph
+ALTER TABLE vendor_price_observations ADD COLUMN IF NOT EXISTS extraction_method VARCHAR(32);

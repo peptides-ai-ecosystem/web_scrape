@@ -25,7 +25,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import urlsplit
 
-from src.core.vendor_models import FieldSelectors, VendorTarget
+from datetime import datetime
+
+from src.core.owned_stores import owned_reason
+from src.core.vendor_models import FieldSelectors, TargetReviewState, VendorTarget
 from src.infrastructure.url_safety import UnsafeTargetURLError, check_url
 
 logger = logging.getLogger(__name__)
@@ -100,6 +103,25 @@ def check_target_addresses(target: VendorTarget) -> None:
         _refuse_internal(url, "product_urls", target.slug, resolve=True)
     if target.listing_url:
         _refuse_internal(target.listing_url, "listing_url", target.slug, resolve=True)
+    if target.store_url:
+        _refuse_internal(target.store_url, "store_url", target.slug, resolve=True)
+
+
+def target_urls(target: VendorTarget) -> List[str]:
+    """Every URL a target points at (store, listing and product URLs)."""
+    urls = [u for u in (target.store_url, target.listing_url) if u]
+    return urls + list(target.product_urls)
+
+
+def check_not_owned(target: VendorTarget) -> None:
+    """Refuse a "competitor" target that is really one of our own stores.
+
+    Competitor vendors stay separate from ours (AAD-1/AAD-2): our stores'
+    prices arrive through the store import, never through the scraper.
+    """
+    reason = owned_reason(target_urls(target), (target.slug, target.platform_vendor_slug))
+    if reason:
+        raise VendorTargetConfigError(f"target '{target.slug}': {reason}")
 
 
 def _optional_url(value: Any, field_name: str, slug: str) -> Optional[str]:
@@ -165,13 +187,35 @@ def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
     listing_url = _optional_url(raw.get("listing_url"), "listing_url", slug)
     link_selector = raw.get("listing_link_selector")
     link_selector = str(link_selector).strip() if link_selector else None
-    if listing_url and not link_selector:
+    if listing_url and not link_selector and selectors.price:
+        # A selector target reads product links off the listing page with
+        # this selector. A selector-free target (no price selector, AAD-1)
+        # uses the listing URL as a discovery seed instead and needs none.
         raise VendorTargetConfigError(
             f"target '{slug}': listing_url needs a listing_link_selector "
             "(the CSS selector for product links on that page)"
         )
 
     platform_vendor_slug = str(raw.get("platform_vendor_slug") or "").strip().lower() or None
+    store_url = _optional_url(raw.get("store_url"), "store_url", slug)
+
+    review_raw = str(raw.get("review_state") or TargetReviewState.APPROVED.value).strip().lower()
+    try:
+        review_state = TargetReviewState(review_raw)
+    except ValueError:
+        raise VendorTargetConfigError(
+            f"target '{slug}': review_state must be one of "
+            f"{sorted(s.value for s in TargetReviewState)}"
+        ) from None
+    approved_at = raw.get("approved_at")
+    if isinstance(approved_at, str):
+        try:
+            approved_at = datetime.fromisoformat(approved_at)
+        except ValueError:
+            approved_at = None
+    if not isinstance(approved_at, datetime):
+        approved_at = None
+    approved_by = str(raw.get("approved_by") or "").strip() or None
 
     return VendorTarget(
         slug=slug,
@@ -186,6 +230,10 @@ def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
         listing_link_selector=link_selector,
         platform_vendor_slug=platform_vendor_slug,
         source=source,
+        store_url=store_url,
+        review_state=review_state,
+        approved_at=approved_at,
+        approved_by=approved_by,
     )
 
 

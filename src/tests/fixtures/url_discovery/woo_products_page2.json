@@ -1,0 +1,15 @@
+[
+  {
+    "id": 301,
+    "name": "TB-500 10mg",
+    "slug": "tb-500-10mg",
+    "parent": 0,
+    "type": "simple",
+    "permalink": "https://rival.example/product/tb-500-10mg/",
+    "sku": "TB10",
+    "prices": {"price": "6500", "price_range": null, "currency_code": "USD", "currency_minor_unit": 2},
+    "is_purchasable": false, "is_in_stock": false, "is_on_backorder": false,
+    "stock_availability": {"text": "Out of stock", "class": "out-of-stock"},
+    "variations": []
+  }
+]

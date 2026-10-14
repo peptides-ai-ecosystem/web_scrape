@@ -75,6 +75,28 @@ class ReviewReason(str, Enum):
     CURRENCY_CHANGED = "currency_changed"
 
 
+class TargetReviewState(str, Enum):
+    """Whether an admin has validated a competitor target (AAD-1).
+
+    A target created from a bare store URL starts as ``draft``: it is listed in
+    the admin Scrape tab and can be previewed, but no scrape run reads it until
+    an admin approves it. Targets configured with selectors by an admin are
+    ``approved`` from the start, as they always were.
+    """
+
+    DRAFT = "draft"
+    APPROVED = "approved"
+
+
+class DiscoveryMode(str, Enum):
+    """How a target's prices are read."""
+
+    #: CSS selectors from the target's configuration (the original mode).
+    SELECTORS = "selectors"
+    #: No selectors: Store API / products.json / sitemap + JSON-LD (AAD-1).
+    AUTO = "auto"
+
+
 # ---------------------------------------------------------------------------
 # Target configuration (API-managed in the DB, with the file as seed/fallback —
 # see infrastructure/vendor_targets)
@@ -135,6 +157,24 @@ class VendorTarget:
     #: Where the target came from: ``db`` (managed through the API) or
     #: ``file`` (VENDOR_TARGETS_FILE, the seed / fallback).
     source: str = "file"
+    #: A store's home, shop or product URL for selector-free discovery (AAD-1).
+    store_url: Optional[str] = None
+    #: ``draft`` targets are never scraped by a run until an admin approves.
+    review_state: TargetReviewState = TargetReviewState.APPROVED
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[str] = None
+    #: Always ``competitor``: our own stores are refused as targets. Exposed so
+    #: the platform can tell scraped competitor vendors apart without env lists.
+    kind: str = "competitor"
+
+    @property
+    def discovery_mode(self) -> DiscoveryMode:
+        """Selectors when a price selector is configured, otherwise auto."""
+        return DiscoveryMode.SELECTORS if self.selectors.price else DiscoveryMode.AUTO
+
+    @property
+    def is_approved(self) -> bool:
+        return self.review_state is TargetReviewState.APPROVED
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -149,6 +189,12 @@ class VendorTarget:
             "max_products_per_run": self.max_products_per_run,
             "platform_vendor_slug": self.platform_vendor_slug,
             "source": self.source,
+            "store_url": self.store_url,
+            "discovery_mode": self.discovery_mode.value,
+            "review_state": self.review_state.value,
+            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
+            "approved_by": self.approved_by,
+            "kind": self.kind,
             "selectors": {
                 "price": list(self.selectors.price),
                 "stock": list(self.selectors.stock),
@@ -209,6 +255,31 @@ class ConfidenceBreakdown:
         }
 
 
+@dataclass(frozen=True)
+class ProductReading:
+    """One price reading for one variant, from selector-free discovery (AAD-1).
+
+    ``url`` identifies the variant, not just the page (``?variant=`` on
+    Shopify, ``#variant=`` otherwise), because the review gate and the
+    accepted-latest read both key on ``(vendor, url)`` and two sizes of one
+    product must not overwrite each other. ``product_name`` already carries
+    the size label so the platform import can parse the size from it.
+    """
+
+    url: str
+    product_name: Optional[str]
+    price: Optional[Decimal]
+    currency: Optional[str] = None
+    stock_status: Optional[StockStatus] = None
+    variant_label: Optional[str] = None
+    sku: Optional[str] = None
+    #: ``woo_store_api`` | ``shopify_json`` | ``json_ld`` | ``microdata`` | ``opengraph``
+    method: str = "json_ld"
+    confidence: float = 0.0
+    #: The product page the reading belongs to (``url`` minus the variant key).
+    page_url: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Observations
 # ---------------------------------------------------------------------------
@@ -241,6 +312,11 @@ class VendorObservation:
     review_note: Optional[str] = None
     #: Non-fatal detail for BLOCKED/ERROR rows.
     failure_detail: Optional[str] = None
+    #: Size/variant label read from a store API or structured data (AAD-1).
+    variant_label: Optional[str] = None
+    sku: Optional[str] = None
+    #: ``selectors`` or one of the :class:`ProductReading` methods.
+    extraction_method: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """JSON-safe projection. Absent values stay ``None``, never ""."""
@@ -261,6 +337,9 @@ class VendorObservation:
             "review_reason": self.review_reason.value if self.review_reason else None,
             "review_note": self.review_note,
             "failure_detail": self.failure_detail,
+            "variant_label": self.variant_label,
+            "sku": self.sku,
+            "extraction_method": self.extraction_method,
         }
 
 

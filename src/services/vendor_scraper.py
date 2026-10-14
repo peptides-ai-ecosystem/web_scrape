@@ -14,9 +14,17 @@ Order of operations per URL, and the order matters:
    overwrites.
 7. **Persist** — append-only, with the confidence and the review status.
 
-Every collaborator (fetcher, robots policy, rate limiter, repository, clock)
-is injected, so the whole flow is exercised in tests with no network, no
-browser and no database.
+A target with no price selector is read **without selectors** (AAD-1): its
+store URL / product URLs go through
+:class:`~src.services.url_discovery.UrlOnlyDiscovery` (WooCommerce Store API,
+Shopify products.json, sitemaps + JSON-LD, then rendering), one reading per
+variant, and each reading takes steps 5-7 exactly like a selector reading.
+Draft targets (created from a bare URL, not yet approved) and our own stores
+are never scraped.
+
+Every collaborator (fetcher, robots policy, rate limiter, repository, clock,
+discovery factory) is injected, so the whole flow is exercised in tests with
+no network, no browser and no database.
 """
 from __future__ import annotations
 
@@ -25,7 +33,10 @@ from datetime import datetime, timezone
 from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import urldefrag, urljoin, urlsplit
 
+from src.core.owned_stores import owned_reason
 from src.core.vendor_models import (
+    DiscoveryMode,
+    ProductReading,
     ReviewStatus,
     ScrapeStatus,
     VendorObservation,
@@ -36,6 +47,8 @@ from src.extractors.vendor_listing import VendorListingExtractor
 from src.infrastructure.playwright_fetcher import FetchResult, PageFetcher
 from src.infrastructure.rate_limiter import HostRateLimiter
 from src.infrastructure.robots import RobotsPolicy
+from src.infrastructure.vendor_targets import target_urls
+from src.services.url_discovery import DiscoveryResult, UrlOnlyDiscovery
 from src.services.vendor_confidence import DeltaReviewer, score_confidence
 
 logger = logging.getLogger(__name__)
@@ -58,6 +71,7 @@ class VendorScrapeService:
         extractor: Optional[VendorListingExtractor] = None,
         max_retries: int = 2,
         clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+        discovery_factory: Optional[Callable[[VendorTarget, Optional[int]], UrlOnlyDiscovery]] = None,
     ):
         self._fetcher = fetcher
         self._robots = robots
@@ -68,6 +82,9 @@ class VendorScrapeService:
         self._extractor = extractor or VendorListingExtractor()
         self._max_retries = max(0, max_retries)
         self._clock = clock
+        #: ``(target, max_products) -> UrlOnlyDiscovery`` for selector-free
+        #: targets; one per target so each store gets its own request budget.
+        self._discovery_factory = discovery_factory
 
     # -- public ------------------------------------------------------------
 
@@ -88,20 +105,41 @@ class VendorScrapeService:
         report = VendorScrapeReport(started_at=self._clock())
         try:
             plan: List[Tuple[VendorTarget, List[str]]] = []
+            auto_plan: List[Tuple[VendorTarget, List[ProductReading]]] = []
             for target in targets:
                 if not target.enabled:
                     logger.info("Vendor target %s is disabled — skipping.", target.slug)
+                    continue
+                if not target.is_approved:
+                    logger.info("Vendor target %s is a draft awaiting approval — skipping.", target.slug)
+                    continue
+                owned = owned_reason(target_urls(target), (target.slug, target.platform_vendor_slug))
+                if owned:
+                    where = (target_urls(target) or [target.slug])[0]
+                    report.observations.append(
+                        self._failed(target, where, ScrapeStatus.SKIPPED, f"not scraped: {owned}")
+                    )
+                    continue
+                if target.discovery_mode is DiscoveryMode.AUTO:
+                    readings, failures = self._discover(target, limit_per_target)
+                    report.observations.extend(failures)
+                    auto_plan.append((target, readings))
                     continue
                 urls, failures = self._resolve_urls(target, limit_per_target)
                 report.observations.extend(failures)
                 plan.append((target, urls))
 
-            total = sum(len(urls) for _, urls in plan)
+            total = sum(len(urls) for _, urls in plan) + sum(len(r) for _, r in auto_plan)
             done = 0
             self._notify(on_progress, done, total)
             for target, urls in plan:
                 for observation in self._run_target(target, urls):
                     report.observations.append(observation)
+                    done += 1
+                    self._notify(on_progress, done, total)
+            for target, readings in auto_plan:
+                for reading in readings:
+                    report.observations.append(self._observe_reading(target, reading))
                     done += 1
                     self._notify(on_progress, done, total)
         finally:
@@ -111,6 +149,94 @@ class VendorScrapeService:
                 logger.debug("Fetcher close failed", exc_info=True)
             report.finished_at = self._clock()
         return report
+
+    # -- selector-free targets (AAD-1) -------------------------------------
+
+    def _discover(
+        self, target: VendorTarget, limit: Optional[int]
+    ) -> Tuple[List[ProductReading], List[VendorObservation]]:
+        """Every variant reading for a selector-free target, plus failures.
+
+        The store URL (and a listing URL, if set) is crawled through the
+        catalogue sources; each configured product URL is read on its own.
+        Hosts are read one target at a time; the product cap is the smaller
+        of the target's ``max_products_per_run`` and the run's limit.
+        """
+        seeds = [u for u in (target.store_url, target.listing_url) if u]
+        if self._discovery_factory is None:
+            where = (seeds + list(target.product_urls) + [target.slug])[0]
+            return [], [
+                self._failed(
+                    target, where, ScrapeStatus.ERROR,
+                    "selector-free discovery is not configured for this run",
+                )
+            ]
+        caps = [c for c in (target.max_products_per_run, limit) if c]
+        discovery = self._discovery_factory(target, min(caps) if caps else None)
+        results: List[DiscoveryResult] = [discovery.discover(seed) for seed in seeds]
+        results += [discovery.read_product(url) for url in target.product_urls]
+
+        readings: List[ProductReading] = []
+        failures: List[VendorObservation] = []
+        seen: set = set()
+        for result in results:
+            logger.info(
+                "Discovery %s via %s: %d products, %d variants, %d requests.",
+                result.seed_url, result.method, result.products_seen,
+                len(result.readings), result.requests_made,
+            )
+            for failure in result.failures:
+                failures.append(self._failed(target, failure.url, failure.status, failure.detail))
+            for reading in result.readings:
+                if reading.url not in seen:
+                    seen.add(reading.url)
+                    readings.append(reading)
+            if not result.readings and not result.failures:
+                failures.append(
+                    self._failed(
+                        target, result.seed_url, ScrapeStatus.ERROR,
+                        "; ".join(result.notes) or "no products found at this URL",
+                    )
+                )
+        return readings, failures
+
+    def _observe_reading(self, target: VendorTarget, reading: ProductReading) -> VendorObservation:
+        observation = VendorObservation(
+            vendor=target.slug,
+            url=reading.url,
+            observed_at=self._clock(),
+            status=ScrapeStatus.OK,
+            product_name=reading.product_name,
+            price=reading.price,
+            currency=reading.currency or target.currency,
+            stock_status=reading.stock_status,
+            confidence=reading.confidence,
+            confidence_breakdown={
+                "score": round(reading.confidence, 4),
+                "method": reading.method,
+                "notes": [f"read from {reading.method.replace('_', ' ')} (no selectors)"],
+            },
+            variant_label=reading.variant_label,
+            sku=reading.sku,
+            extraction_method=reading.method,
+        )
+        return self._review_and_persist(target, observation)
+
+    def _review_and_persist(self, target: VendorTarget, observation: VendorObservation) -> VendorObservation:
+        previous = self._previous_accepted(target.slug, observation.url)
+        decision = self._reviewer.assess(observation, previous)
+        observation.review_status = decision.status
+        observation.review_reason = decision.reason
+        observation.review_note = decision.note
+
+        if decision.status is not ReviewStatus.ACCEPTED:
+            logger.warning(
+                "Flagged %s (%s): %s", observation.url,
+                decision.reason.value if decision.reason else "?", decision.note,
+            )
+
+        self._persist(observation)
+        return observation
 
     # -- per target --------------------------------------------------------
 
@@ -323,21 +449,9 @@ class VendorScrapeService:
             coa_url=fields.coa_url,
             confidence=breakdown.score,
             confidence_breakdown=breakdown.to_dict(),
+            extraction_method="selectors",
         )
-
-        previous = self._previous_accepted(target.slug, url)
-        decision = self._reviewer.assess(observation, previous)
-        observation.review_status = decision.status
-        observation.review_reason = decision.reason
-        observation.review_note = decision.note
-
-        if decision.status is not ReviewStatus.ACCEPTED:
-            logger.warning(
-                "Flagged %s (%s): %s", url, decision.reason.value if decision.reason else "?", decision.note
-            )
-
-        self._persist(observation)
-        return observation
+        return self._review_and_persist(target, observation)
 
     # -- helpers -----------------------------------------------------------
 

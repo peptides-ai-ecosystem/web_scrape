@@ -8,16 +8,22 @@ These are what the admin "Pepti.AI -> Scrape" tab drives, through the platform
 API and the orchestrator gateway (``/web_scrape/api/v1/vendors/...``):
 
 * targets CRUD (stored in ``vendor_scrape_targets``; the targets file is the
-  seed / fallback),
+  seed / fallback), paginated with ``limit``/``offset``,
+* URL-only targets (AAD-1): ``POST /targets/from-url`` creates a draft
+  competitor target from a bare store URL, ``POST /targets/{slug}/approve``
+  lets runs read it, ``POST /discover`` previews what a URL yields,
 * run a scrape now (all targets or named ones) and poll its job,
 * list observations with filters and resolve flagged ones,
 * ``observations/accepted-latest`` — the one read PeptiPrices imports from.
 """
 import os
-from typing import Any, Dict, List, Optional
+import re
+from typing import Annotated, Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 import psycopg2
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Response
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
 from src.config import (
@@ -31,18 +37,33 @@ from src.config import (
 )
 from src.core.job_queue import JobStatus, get_job_queue
 from src.core.sentry import capture_background_failure
-from src.core.vendor_models import ReviewStatus, ScrapeStatus, VendorTarget
+from src.core.owned_stores import owned_reason
+from src.core.vendor_models import (
+    DiscoveryMode,
+    ReviewStatus,
+    ScrapeStatus,
+    TargetReviewState,
+    VendorTarget,
+)
 from src.infrastructure.db.connection import DbConnection
 from src.infrastructure.db.repositories import (
     VendorObservationRepository,
     VendorTargetRepository,
 )
+from src.infrastructure.url_safety import UnsafeTargetURLError, check_url
 from src.infrastructure.vendor_targets import (
     VendorTargetConfigError,
+    check_not_owned,
     check_target_addresses,
     parse_target,
+    target_urls,
 )
-from src.services.vendor_scrape_runner import all_targets, run_vendor_scrape, select_targets
+from src.services.vendor_scrape_runner import (
+    all_targets,
+    preview_discovery,
+    run_vendor_scrape,
+    select_targets,
+)
 
 router = APIRouter()
 
@@ -116,7 +137,13 @@ class TargetSelectors(BaseModel):
 
 
 class TargetPayload(BaseModel):
-    """A competitor target as the admin drawer edits it."""
+    """A competitor target as the admin drawer edits it.
+
+    Selectors are optional (AAD-1): a target with no price selector is read
+    without selectors from its ``store_url`` / product URLs (WooCommerce Store
+    API, Shopify products.json, sitemaps + JSON-LD). ``review_state`` is not
+    editable here — see ``POST /targets/{slug}/approve``.
+    """
 
     slug: str = Field(
         ...,
@@ -137,16 +164,49 @@ class TargetPayload(BaseModel):
         max_length=255,
         description="Platform `vendors.slug` the prices are imported onto. Empty = slug.",
     )
+    store_url: Optional[str] = Field(
+        None,
+        max_length=2048,
+        description="AAD-1: a store's home, shop or product URL. With no price selector "
+        "the target is read without selectors from this URL.",
+    )
 
-    def to_target(self) -> VendorTarget:
-        if not self.selectors.price:
-            raise VendorTargetConfigError("at least one price selector is required")
-        if not self.product_urls and not self.listing_url:
-            raise VendorTargetConfigError("give product URLs, a listing URL, or both")
-        target = parse_target(self.model_dump(), source="db")
+    def to_target(self, **state: Any) -> VendorTarget:
+        if not self.product_urls and not self.listing_url and not self.store_url:
+            raise VendorTargetConfigError("give a store URL, product URLs or a listing URL")
+        target = parse_target({**self.model_dump(), **state}, source="db")
+        # Competitor vendors stay separate from ours (422).
+        check_not_owned(target)
         # SSRF: refuse hosts that resolve to internal addresses (422).
         check_target_addresses(target)
         return target
+
+
+class FromUrlRequest(BaseModel):
+    """AAD-1: a competitor target from nothing but a URL."""
+
+    url: str = Field(..., min_length=8, max_length=2048, description="Store home, shop or product URL.")
+    name: Optional[str] = Field(None, max_length=255, description="Defaults to the host name.")
+    slug: Optional[str] = Field(
+        None,
+        pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$",
+        description="Defaults to one derived from the host (glpeptides.is -> glpeptides-is).",
+    )
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    platform_vendor_slug: Optional[str] = Field(None, max_length=255)
+    max_products_per_run: Optional[int] = Field(None, ge=1, le=10000)
+
+
+class ApproveRequest(BaseModel):
+    approved_by: Optional[str] = Field(None, max_length=255, description="Recorded for the audit trail.")
+
+
+class DiscoverRequest(BaseModel):
+    """Dry-run discovery for one URL (nothing stored)."""
+
+    url: str = Field(..., min_length=8, max_length=2048)
+    max_products: int = Field(5, ge=1, le=25, description="Products (not variants) to read.")
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +231,33 @@ def _target_repository() -> VendorTargetRepository:
 
 def _target_view(target: VendorTarget) -> Dict[str, Any]:
     return target.to_dict()
+
+
+def slug_from_url(url: str) -> str:
+    """``https://www.glpeptides.is/shop`` -> ``glpeptides-is``."""
+    host = (urlsplit(url).hostname or "").lower().removeprefix("www.")
+    slug = re.sub(r"[^a-z0-9]+", "-", host).strip("-")[:64].strip("-")
+    return slug or "competitor"
+
+
+def _check_public_url(url: str) -> None:
+    """422 for anything that is not a public http(s) URL or is our own store."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise HTTPException(status_code=422, detail=f"'{url}' is not an absolute http(s) URL.")
+    owned = owned_reason([url])
+    if owned:
+        raise HTTPException(status_code=422, detail=owned)
+    try:
+        check_url(url)
+    except UnsafeTargetURLError as exc:
+        raise HTTPException(status_code=422, detail=f"'{url}' is not allowed: {exc}")
+
+
+def _matches(target: VendorTarget, q: str) -> bool:
+    needle = q.strip().lower()
+    haystack = [target.slug, target.name, target.platform_vendor_slug or ""] + target_urls(target)
+    return any(needle in (h or "").lower() for h in haystack)
 
 
 def _running_scrape_job():
@@ -221,26 +308,63 @@ def _run_scrape_task(job_id: str, vendors: Optional[List[str]], limit: Optional[
 # ---------------------------------------------------------------------------
 
 
+_TARGET_STATES = {s.value for s in TargetReviewState}
+_TARGET_MODES = {m.value for m in DiscoveryMode}
+
+
 @router.get("/targets")
-async def list_vendor_targets() -> Dict[str, Any]:
+async def list_vendor_targets(
+    limit: Annotated[
+        Optional[int],
+        Query(ge=1, le=500, description="Page size. Omitted = every target (the original behaviour)."),
+    ] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[
+        Optional[str], Query(max_length=255, description="Search slug, name, platform slug and URLs.")
+    ] = None,
+    review_state: Annotated[Optional[str], Query(description="draft | approved")] = None,
+    discovery_mode: Annotated[Optional[str], Query(description="selectors | auto")] = None,
+) -> Dict[str, Any]:
     """🎯 List competitor targets (DB-managed, plus file fallbacks).
 
     `source` says where each came from: `db` (managed here, editable) or
     `file` (`VENDOR_TARGETS_FILE`, used only while no DB target has its slug;
     saving it through `PUT /targets/{slug}` takes it over into the DB).
 
+    Paginated (AAD-1): `total` is the number matching the filters, `count`
+    the number on this page. Without `limit` every target is returned, as
+    before. `review_state=draft` lists URL-only targets awaiting approval.
+
     Also reports the exact User-Agent we send, which is deliberately honest and
     carries a contact URL, and the global politeness floor.
     """
-    targets = all_targets(include_disabled=True)
+    if review_state and review_state not in _TARGET_STATES:
+        raise HTTPException(status_code=422, detail=f"review_state must be one of {sorted(_TARGET_STATES)}")
+    if discovery_mode and discovery_mode not in _TARGET_MODES:
+        raise HTTPException(status_code=422, detail=f"discovery_mode must be one of {sorted(_TARGET_MODES)}")
+    everything = all_targets(include_disabled=True)
+    targets = list(everything)
+    if review_state:
+        targets = [t for t in targets if t.review_state.value == review_state]
+    if discovery_mode:
+        targets = [t for t in targets if t.discovery_mode.value == discovery_mode]
+    if q and q.strip():
+        targets = [t for t in targets if _matches(t, q)]
+    total = len(targets)
+    page = targets[offset: offset + limit] if limit is not None else targets[offset:]
     return {
         "targets_file": str(VENDOR_TARGETS_FILE),
         "user_agent": VENDOR_SCRAPER_USER_AGENT,
         "min_confidence": VENDOR_MIN_CONFIDENCE,
         "price_delta_threshold": VENDOR_PRICE_DELTA_THRESHOLD,
         "min_request_interval_floor_seconds": VENDOR_SCRAPE_MIN_INTERVAL_SECONDS,
-        "count": len(targets),
-        "targets": [_target_view(t) for t in targets],
+        "count": len(page),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        # Across every target, whatever the filters: the tab's "awaiting approval" badge.
+        "draft_count": sum(1 for t in everything if not t.is_approved),
+        "targets": [_target_view(t) for t in page],
     }
 
 
@@ -259,9 +383,17 @@ async def get_vendor_target(slug: str) -> Dict[str, Any]:
     responses={409: {"description": "A DB target with that slug exists."}, 422: {"description": "Invalid target."}},
 )
 async def create_vendor_target(payload: TargetPayload) -> Dict[str, Any]:
-    """➕ Add a competitor target (stored in `vendor_scrape_targets`)."""
+    """➕ Add a competitor target (stored in `vendor_scrape_targets`).
+
+    With a price selector it is approved at once, as before. Without one it is
+    a selector-free (URL-only) target and starts as a **draft**: no run reads
+    it until `POST /targets/{slug}/approve`. Our own stores are refused (422).
+    """
     try:
-        target = payload.to_target()
+        auto = not payload.selectors.price
+        target = payload.to_target(
+            review_state=(TargetReviewState.DRAFT if auto else TargetReviewState.APPROVED).value
+        )
     except VendorTargetConfigError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     repo = _target_repository()
@@ -281,12 +413,27 @@ async def update_vendor_target(slug: str, payload: TargetPayload) -> Dict[str, A
     """✏️ Replace a target. A file-only target is taken over into the DB."""
     if payload.slug.lower() != slug.lower():
         raise HTTPException(status_code=422, detail="The slug cannot be changed.")
-    try:
-        target = payload.to_target()
-    except VendorTargetConfigError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
     repo = _target_repository()
     try:
+        # review_state is not editable here: keep what the row has. A file
+        # target taken over keeps "approved" (file targets always were).
+        existing = repo.get(slug)
+        state: Dict[str, Any] = {}
+        if existing is not None:
+            state = {
+                "review_state": existing.review_state.value,
+                "approved_at": existing.approved_at,
+                "approved_by": existing.approved_by,
+            }
+        elif not payload.selectors.price and not any(
+            t.slug.lower() == slug.lower() for t in all_targets(include_disabled=True)
+        ):
+            # A brand-new selector-free target is a draft, however it is created.
+            state = {"review_state": TargetReviewState.DRAFT.value}
+        try:
+            target = payload.to_target(**state)
+        except VendorTargetConfigError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
         updated = repo.update(slug, target)
         if updated is None:
             updated = repo.create(target)
@@ -316,6 +463,111 @@ async def delete_vendor_target(slug: str) -> Response:
             )
         raise HTTPException(status_code=404, detail=f"No vendor target '{slug}'.")
     return Response(status_code=204)
+
+
+@router.post(
+    "/targets/from-url",
+    status_code=201,
+    responses={
+        409: {"description": "A target with that slug exists."},
+        422: {"description": "Not a public http(s) URL, or one of our own stores."},
+    },
+)
+async def create_target_from_url(payload: FromUrlRequest) -> Dict[str, Any]:
+    """🔗 AAD-1: a competitor target from a URL only — no selectors.
+
+    Give a store's home, shop or product URL. The target is created as a
+    **draft** competitor target (`review_state: draft`, `discovery_mode:
+    auto`): it shows in the Scrape tab and can be previewed with
+    `POST /discover`, but no scrape run reads it until an admin calls
+    `POST /targets/{slug}/approve`. Our own stores (arcane, ruo, bulk,
+    moglabs) are refused with 422 — competitor and own vendors stay separate.
+
+    A home/shop URL is read through the WooCommerce Store API, Shopify
+    `products.json` or the sitemap; a product URL reads just that product.
+    Selectors can still be added later with `PUT /targets/{slug}`.
+    """
+    url = payload.url.strip()
+    _check_public_url(url)
+    slug = payload.slug or slug_from_url(url)
+    body = {
+        "slug": slug,
+        "name": payload.name or (urlsplit(url).hostname or slug).removeprefix("www."),
+        "enabled": True,
+        "store_url": url,
+        "currency": payload.currency,
+        "platform_vendor_slug": payload.platform_vendor_slug,
+        "max_products_per_run": payload.max_products_per_run,
+        "review_state": TargetReviewState.DRAFT.value,
+    }
+    try:
+        target = parse_target(body, source="db")
+        check_not_owned(target)
+        check_target_addresses(target)
+    except VendorTargetConfigError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if any(t.slug.lower() == slug.lower() for t in all_targets(include_disabled=True)):
+        raise HTTPException(status_code=409, detail=f"Vendor target '{slug}' already exists.")
+    repo = _target_repository()
+    try:
+        created = repo.create(target)
+    except psycopg2.errors.UniqueViolation:
+        raise HTTPException(status_code=409, detail=f"Vendor target '{slug}' already exists.")
+    finally:
+        repo.connection.close()
+    log_info(f"Draft competitor target '{slug}' created from {url}", "vendors_endpoint")
+    return _target_view(created)
+
+
+@router.post(
+    "/targets/{slug}/approve",
+    responses={
+        404: {"description": "No DB target."},
+        409: {"description": "File targets are always approved."},
+        422: {"description": "The target points at one of our own stores."},
+    },
+)
+async def approve_vendor_target(slug: str, payload: Optional[ApproveRequest] = None) -> Dict[str, Any]:
+    """✅ AAD-1: approve a draft target so scrape runs read it.
+
+    Idempotent: approving an approved target refreshes `approved_at`/`by`.
+    """
+    repo = _target_repository()
+    try:
+        existing = repo.get(slug)
+        if existing is None:
+            if any(t.slug.lower() == slug.lower() for t in all_targets(include_disabled=True)):
+                raise HTTPException(status_code=409, detail=f"'{slug}' lives in VENDOR_TARGETS_FILE and is always approved.")
+            raise HTTPException(status_code=404, detail=f"No vendor target '{slug}'.")
+        try:
+            check_not_owned(existing)
+        except VendorTargetConfigError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        approved = repo.approve(slug, payload.approved_by if payload else None)
+    finally:
+        repo.connection.close()
+    if approved is None:
+        raise HTTPException(status_code=404, detail=f"No vendor target '{slug}'.")
+    return _target_view(approved)
+
+
+@router.post(
+    "/discover",
+    responses={422: {"description": "Not a public http(s) URL, or one of our own stores."}},
+)
+async def discover_from_url(payload: DiscoverRequest) -> Dict[str, Any]:
+    """🔎 AAD-1: preview selector-free discovery for a URL. Nothing is stored.
+
+    Tries the WooCommerce Store API, Shopify `products.json`, then sitemaps +
+    schema.org JSON-LD (microdata / OpenGraph as a last resort), and returns
+    one reading per variant with its size label, price, currency, stock and
+    the method used, plus the number of requests made. Same politeness as a
+    run (robots.txt, pacing, request budget, no retries), so a preview of a
+    sitemap-only store can take tens of seconds; keep `max_products` small.
+    """
+    url = payload.url.strip()
+    _check_public_url(url)
+    return await run_in_threadpool(preview_discovery, url, payload.max_products, payload.currency)
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +607,8 @@ async def trigger_vendor_scrape(
     if not targets:
         raise HTTPException(
             status_code=400,
-            detail="No enabled vendor targets match this request. Add or enable one first.",
+            detail="No enabled, approved vendor targets match this request. "
+            "Add, enable or approve one first.",
         )
 
     queue = get_job_queue()
@@ -445,6 +698,7 @@ async def list_observations(
 async def list_flagged_observations(
     limit: int = Query(50, ge=1, le=500, description="Maximum rows to return."),
     vendor: Optional[str] = Query(None, description="Restrict to one vendor slug."),
+    offset: Annotated[int, Query(ge=0, description="Rows to skip (pagination).")] = 0,
 ) -> Dict[str, Any]:
     """🚩 The review queue.
 
@@ -455,10 +709,18 @@ async def list_flagged_observations(
     """
     repo = _repository()
     try:
-        rows = repo.list_flagged(limit=limit, vendor=vendor)
+        rows = repo.list_flagged(limit=limit, vendor=vendor, offset=offset)
+        total = repo.count_flagged(vendor=vendor)
     finally:
         repo.connection.close()
-    return {"count": len(rows), "vendor": vendor, "observations": rows}
+    return {
+        "count": len(rows),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "vendor": vendor,
+        "observations": rows,
+    }
 
 
 @router.get("/observations/accepted-latest")

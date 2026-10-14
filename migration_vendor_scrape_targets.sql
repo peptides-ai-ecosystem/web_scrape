@@ -51,3 +51,19 @@ CREATE TABLE IF NOT EXISTS vendor_scrape_targets (
 
 CREATE UNIQUE INDEX IF NOT EXISTS vendor_scrape_targets_slug_uidx
     ON vendor_scrape_targets (lower(slug));
+
+-- AAD-1 (CEO final feedback): scrape a competitor from a URL only.
+--   store_url     a store's home, shop or product URL; with no price selector
+--                 the target is read through the WooCommerce Store API, Shopify
+--                 products.json or sitemaps + schema.org JSON-LD.
+--   review_state  'draft' targets (created from a bare URL) are listed and can
+--                 be previewed but are never scraped until an admin approves
+--                 them; existing rows were configured by an admin -> approved.
+--   kind          always 'competitor': our own stores are refused as targets.
+ALTER TABLE vendor_scrape_targets ADD COLUMN IF NOT EXISTS store_url TEXT;
+ALTER TABLE vendor_scrape_targets
+    ADD COLUMN IF NOT EXISTS review_state VARCHAR(16) NOT NULL DEFAULT 'approved';
+ALTER TABLE vendor_scrape_targets ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+ALTER TABLE vendor_scrape_targets ADD COLUMN IF NOT EXISTS approved_by VARCHAR(255);
+ALTER TABLE vendor_scrape_targets
+    ADD COLUMN IF NOT EXISTS kind VARCHAR(16) NOT NULL DEFAULT 'competitor';

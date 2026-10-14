@@ -100,6 +100,32 @@ class Settings:
         "VENDOR_PRODUCTS_PUBLISH_ENABLED", "false"
     ).strip().lower() in {"1", "true", "yes", "on"}
 
+    # ── URL-only competitor discovery (AAD-1) ─────────────────────────────
+    # A target saved with only a store URL (no CSS selectors) is read through
+    # the WooCommerce Store API, Shopify products.json, sitemaps + schema.org
+    # JSON-LD, in that order. See docs/features/url-only-discovery.md.
+    # Hard cap on HTTP requests one discovery may make against one store.
+    VENDOR_DISCOVERY_MAX_REQUESTS: int = int(os.getenv("VENDOR_DISCOVERY_MAX_REQUESTS", "60"))
+    # Cap on products (not variants) read per store per run when the target
+    # sets no max_products_per_run of its own.
+    VENDOR_DISCOVERY_MAX_PRODUCTS: int = int(os.getenv("VENDOR_DISCOVERY_MAX_PRODUCTS", "200"))
+    # In-flight requests against one host; clamped to 1..4. Hosts are read one
+    # at a time and the per-host rate limit still spaces request starts.
+    VENDOR_DISCOVERY_CONCURRENCY: int = int(os.getenv("VENDOR_DISCOVERY_CONCURRENCY", "2"))
+    VENDOR_DISCOVERY_TIMEOUT_SECONDS: float = float(
+        os.getenv("VENDOR_DISCOVERY_TIMEOUT_SECONDS", "15")
+    )
+    # Our own stores. A competitor target on one of these domains, or with one
+    # of these slugs, is refused (422) and never scraped: competitor and own
+    # vendors stay separate. Comma-separated; subdomains match too.
+    OWNED_STORE_DOMAINS: str = os.getenv(
+        "OWNED_STORE_DOMAINS",
+        "arcanepeptides.com,ruo.bio,bulkpeptides.com,moglabs.bio",
+    )
+    OWNED_STORE_VENDORS: str = os.getenv(
+        "OWNED_STORE_VENDORS", "arcane,ruo,bulk,bulkpeptides,moglabs"
+    )
+
     # Apply the idempotent competitor-scraping DDL
     # (migration_vendor_price_observations.sql, migration_vendor_scrape_targets.sql)
     # on startup. Set false where the DB role has no DDL rights.
@@ -164,6 +190,10 @@ VENDOR_SCRAPE_CRON_HOUR = settings.VENDOR_SCRAPE_CRON_HOUR
 VENDOR_SCRAPE_CRON_MINUTE = settings.VENDOR_SCRAPE_CRON_MINUTE
 VENDOR_PRODUCTS_PUBLISH_ENABLED = settings.VENDOR_PRODUCTS_PUBLISH_ENABLED
 VENDOR_SCHEMA_AUTO_CREATE = settings.VENDOR_SCHEMA_AUTO_CREATE
+VENDOR_DISCOVERY_MAX_REQUESTS = settings.VENDOR_DISCOVERY_MAX_REQUESTS
+VENDOR_DISCOVERY_MAX_PRODUCTS = settings.VENDOR_DISCOVERY_MAX_PRODUCTS
+VENDOR_DISCOVERY_CONCURRENCY = settings.VENDOR_DISCOVERY_CONCURRENCY
+VENDOR_DISCOVERY_TIMEOUT_SECONDS = settings.VENDOR_DISCOVERY_TIMEOUT_SECONDS
 
 
 # -------------------- LOGGING FUNCTIONS -------------------- #

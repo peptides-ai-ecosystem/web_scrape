@@ -12,6 +12,10 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from src.config import (
+    VENDOR_DISCOVERY_CONCURRENCY,
+    VENDOR_DISCOVERY_MAX_PRODUCTS,
+    VENDOR_DISCOVERY_MAX_REQUESTS,
+    VENDOR_DISCOVERY_TIMEOUT_SECONDS,
     VENDOR_MIN_CONFIDENCE,
     VENDOR_PRICE_DELTA_THRESHOLD,
     VENDOR_PRODUCTS_PUBLISH_ENABLED,
@@ -28,9 +32,11 @@ from src.infrastructure.db.repositories import (
     VendorTargetRepository,
 )
 from src.infrastructure.playwright_fetcher import PlaywrightPageFetcher
+from src.infrastructure.polite_http import PoliteHttpClient, Transport
 from src.infrastructure.rate_limiter import HostRateLimiter
 from src.infrastructure.robots import RobotsPolicy
 from src.infrastructure.vendor_targets import load_targets, merge_targets
+from src.services.url_discovery import UrlOnlyDiscovery
 from src.services.vendor_confidence import DeltaReviewer
 from src.services.vendor_products_publisher import VendorProductsPublisher
 from src.services.vendor_scraper import VendorScrapeService
@@ -68,15 +74,23 @@ def all_targets(*, include_disabled: bool = False) -> List[VendorTarget]:
 
 
 def select_targets(
-    vendors: Optional[Sequence[str]] = None, *, include_disabled: bool = False
+    vendors: Optional[Sequence[str]] = None,
+    *,
+    include_disabled: bool = False,
+    include_drafts: bool = False,
 ) -> List[VendorTarget]:
     """Configured targets, optionally narrowed to specific slugs.
 
     A slug that is not configured is dropped with a warning rather than
     guessed at — "scrape competitorX" for a competitorX we have no selectors
     for would produce a confident-looking empty result.
+
+    Draft targets (created from a bare URL, AAD-1) are left out until an
+    admin approves them, named or not.
     """
     targets = all_targets(include_disabled=include_disabled)
+    if not include_drafts:
+        targets = [t for t in targets if t.is_approved]
     if not vendors:
         return targets
 
@@ -88,29 +102,84 @@ def select_targets(
     return [by_slug[s] for s in sorted(wanted & set(by_slug))]
 
 
+def discovery_factory(
+    robots: RobotsPolicy,
+    limiter: HostRateLimiter,
+    renderer=None,
+    transport: Optional[Transport] = None,
+) -> Callable[[VendorTarget, Optional[int]], UrlOnlyDiscovery]:
+    """``(target, max_products) -> UrlOnlyDiscovery`` sharing the run's robots
+    cache and per-host rate limiter, with a fresh request budget per target."""
+
+    def build(target: VendorTarget, max_products: Optional[int]) -> UrlOnlyDiscovery:
+        client = PoliteHttpClient(
+            robots,
+            limiter,
+            transport=transport,
+            timeout_seconds=VENDOR_DISCOVERY_TIMEOUT_SECONDS,
+            max_requests=VENDOR_DISCOVERY_MAX_REQUESTS,
+            min_interval_seconds=target.min_request_interval_seconds,
+            concurrency=VENDOR_DISCOVERY_CONCURRENCY,
+        )
+        return UrlOnlyDiscovery(
+            client,
+            renderer=renderer,
+            max_products=max_products or VENDOR_DISCOVERY_MAX_PRODUCTS,
+            currency=target.currency,
+        )
+
+    return build
+
+
+def build_robots_and_limiter() -> tuple:
+    user_agent = VENDOR_SCRAPER_USER_AGENT
+    # Same user-agent string the fetchers send: obeying robots rules written
+    # for a different agent would be theatre.
+    robots = RobotsPolicy(user_agent=user_agent)
+    limiter = HostRateLimiter(
+        default_interval=VENDOR_SCRAPE_MIN_INTERVAL_SECONDS,
+        max_strikes=VENDOR_SCRAPE_MAX_RETRIES,
+        base_backoff=VENDOR_SCRAPE_BACKOFF_SECONDS,
+    )
+    return robots, limiter
+
+
 def build_service(repository=None, fetcher=None) -> VendorScrapeService:
     """Assemble the pipeline from settings."""
     user_agent = VENDOR_SCRAPER_USER_AGENT
+    page_fetcher = fetcher or PlaywrightPageFetcher(
+        user_agent=user_agent, timeout_ms=VENDOR_SCRAPE_TIMEOUT_MS
+    )
+    robots, limiter = build_robots_and_limiter()
     return VendorScrapeService(
-        fetcher=fetcher
-        or PlaywrightPageFetcher(
-            user_agent=user_agent, timeout_ms=VENDOR_SCRAPE_TIMEOUT_MS
-        ),
-        # Same user-agent string the fetcher sends: obeying robots rules
-        # written for a different agent would be theatre.
-        robots=RobotsPolicy(user_agent=user_agent),
-        rate_limiter=HostRateLimiter(
-            default_interval=VENDOR_SCRAPE_MIN_INTERVAL_SECONDS,
-            max_strikes=VENDOR_SCRAPE_MAX_RETRIES,
-            base_backoff=VENDOR_SCRAPE_BACKOFF_SECONDS,
-        ),
+        fetcher=page_fetcher,
+        robots=robots,
+        rate_limiter=limiter,
         reviewer=DeltaReviewer(
             min_confidence=VENDOR_MIN_CONFIDENCE,
             delta_threshold=VENDOR_PRICE_DELTA_THRESHOLD,
         ),
         repository=repository,
         max_retries=VENDOR_SCRAPE_MAX_RETRIES,
+        # Selector-free targets (AAD-1); the browser is the rendering fallback.
+        discovery_factory=discovery_factory(robots, limiter, renderer=page_fetcher),
     )
+
+
+def preview_discovery(url: str, max_products: int = 5, currency: Optional[str] = None) -> Dict[str, Any]:
+    """Dry run of selector-free discovery for one URL: nothing is stored.
+
+    Backs ``POST /api/v1/vendors/discover`` so an admin can see what a URL
+    yields before saving (or approving) a target. Same gates as a run:
+    robots.txt, the SSRF guard, pacing, a request budget, no retries. No
+    browser is started (a page needing scripts shows up as "no structured
+    price" in the notes).
+    """
+    robots, limiter = build_robots_and_limiter()
+    target = VendorTarget(slug="preview", name="preview", store_url=url, currency=currency)
+    discovery = discovery_factory(robots, limiter)(target, max_products)
+    result = discovery.discover(url)
+    return result.to_dict()
 
 
 def run_vendor_scrape(
