@@ -1,0 +1,38 @@
+# Test gate for pull requests into `staging` (the deploy pointer; `master` is
+# production). Runs the same local gate as developers: scripts/check.sh.
+# Needs no secrets: the suite is offline, Chromium-only tests skip themselves,
+# and the platform-schema contract test skips without a platform checkout.
+name: CI
+
+on:
+  pull_request:
+    branches: [staging]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: scripts/check.sh
+        run: bash scripts/check.sh

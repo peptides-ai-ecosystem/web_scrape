@@ -1,7 +1,7 @@
 """Repository for API-managed competitor scrape targets (CEO round 2, P2).
 
 Backed by ``vendor_scrape_targets`` in **this service's** database — see
-``migration_vendor_scrape_targets.sql``. Every row is validated through the
+``migrations/migration_vendor_scrape_targets.sql``. Every row is validated through the
 same :func:`~src.infrastructure.vendor_targets.parse_target` the file loader
 uses, so a target cannot be stored in a shape the scraper would refuse.
 """

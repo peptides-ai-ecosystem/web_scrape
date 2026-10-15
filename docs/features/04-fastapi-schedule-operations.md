@@ -1,6 +1,6 @@
 # Feature: FastAPI Server, Scheduler & Operations
 
-> **Module**: `main.py`, `viz_server.py`, `src/api/`, `src/core/scheduler.py`, `src/core/job_queue.py`
+> **Module**: `main.py`, `src/api/`, `src/core/scheduler.py`, `src/core/job_queue.py`
 >
 > **Entry Point**: `uv run main.py`
 
@@ -104,12 +104,8 @@ async def lifespan(app: FastAPI):
     _pool.close()         # Close all DB connections
 ```
 
-The server has two build variants:
-
-| Server | File | Purpose |
-|--------|------|---------|
-| **`main.py`** | The consolidated server | Full API + visualization (primary) |
-| **`viz_server.py`** | Visualization-only server | Lightweight graph dashboard only |
+`main.py` is the only server: full API plus the visualization dashboard
+(`viz_server.py` no longer exists in this repo).
 
 ### 3.2 API Endpoints Reference
 
@@ -463,13 +459,10 @@ services:
 ## 7. CLI Usage
 
 ```bash
-# Start the consolidated API server
+# Start the API server
 uv run main.py
 
-# Start visualization-only server
-uv run viz_server.py
-
-# Both servers run on http://localhost:8000 by default
+# Runs on http://localhost:8000 by default ($PORT overrides)
 # API docs available at http://localhost:8000/docs
 ```
 

@@ -30,18 +30,25 @@ def _ignored(name: str) -> bool:
 
 def test_schema_files_exist_in_the_repo():
     for path in VENDOR_SCHEMA_FILES:
+        assert path.parent == ROOT / "migrations", path
         assert path.is_file(), path
 
 
 def test_schema_files_are_not_excluded_from_the_build_context():
     for path in VENDOR_SCHEMA_FILES:
-        assert not _ignored(path.name), f"{path.name} is excluded by .dockerignore"
+        rel = path.relative_to(ROOT).as_posix()
+        assert not _ignored(rel), f"{rel} is excluded by .dockerignore"
 
 
-def test_dockerfile_copies_the_schema_files_next_to_main():
-    copies = " ".join(
-        line for line in (ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines()
-        if line.strip().startswith("COPY")
-    )
+def test_dockerfile_copies_the_schema_files_where_vendor_schema_reads_them():
+    # WORKDIR is /app; vendor_schema.py resolves <app root>/migrations/<file>.
+    copies = [
+        line.split() for line in (ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("COPY migrations/")
+    ]
+    assert copies, "Dockerfile does not COPY anything from migrations/"
     for path in VENDOR_SCHEMA_FILES:
-        assert path.name in copies, f"Dockerfile does not COPY {path.name}"
+        rel = path.relative_to(ROOT).as_posix()
+        assert any(rel in c[1:-1] and c[-1] == "./migrations/" for c in copies), (
+            f"Dockerfile does not COPY {rel} into ./migrations/"
+        )

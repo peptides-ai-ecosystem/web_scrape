@@ -12,7 +12,9 @@
 
 ## ☁️ Where the code runs on AWS
 
-The EC2 host does **not** hold this repository. Every push to `master` runs
+The EC2 host does **not** hold this repository. A push to `staging` deploys
+`web-scrape-staging` in the shared staging stack (orchestrator's
+`deploy/ms-staging/`). A push to `master` is a **production** deploy: it runs
 `.github/workflows/deploy.yml`, which:
 
 1. builds the image from the whole repository (Dockerfile) and pushes it to
@@ -72,7 +74,7 @@ Each feature is documented in detail with business logic, architecture diagrams,
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/sazzad1779-dev/web_scrape.git
+git clone https://github.com/peptides-ai-ecosystem/web_scrape.git
 cd web_scrape
 uv sync
 ```
@@ -92,48 +94,15 @@ TIMEOUT=10
 
 ### 3. Database Setup
 
-**Option A — Docker (recommended):**
+web_scrape writes into the **platform's** database: the `peptides` tables are
+defined by the peptides-platform Drizzle schema (cross-repo contract XR-8), not
+by this repo. For a local database:
 
-```bash
-# Start PostgreSQL
-docker compose up -d postgres
-
-# Restore initial schema + data
-docker exec -i postgres-container psql -U admin -d peptides < full_dump_main.sql
-
-# Apply graph table migration
-docker exec -i postgres-container psql -U admin -d peptides < migration_peptide_graph.sql
-```
-
-**Option B — Local PostgreSQL:**
-
-```bash
-
-# Before db create
-## Open the host auth file:
-sudo nano /var/lib/pgsql/data/pg_hba.conf
-
-##Make sure these lines exist, and replace any ident entries for localhost with these:
-host all all 127.0.0.1/32 scram-sha-256
-host all all ::1/128 scram-sha-256
-
-## Restart PostgreSQL:
-sudo systemctl restart postgresql
-
-
-# Create database
-sudo -i -u postgres psql -c "CREATE DATABASE peptides;"
-
-# Restore data
-sudo -i -u postgres psql -U postgres -d peptides < full_dump_main.sql
-sudo -i -u postgres psql -U postgres -d peptides < migration_peptide_graph.sql
-sudo -i -u postgres psql -U postgres -d peptides < migration_add_activity_type_to_peptides.sql
-sudo -i -u postgres psql -U postgres -d peptides < migration_add_molecular_fields_to_peptides.sql
-sudo -i -u postgres psql -U postgres -d peptides < migration_change_contraindications_stop_signs_to_jsonb.sql
-
-```
-
-> **💡 Detailed database guide**: See [`execution_guide.md`](execution_guide.md) for both Docker and local setup steps.
+1. Start PostgreSQL: `docker compose up -d postgres` (PostgreSQL 17 on host port 15432).
+2. Create the platform schema from the peptides-platform repo's migrations
+   (`apps/api/drizzle/`).
+3. Apply the hand-run files in [`migrations/`](migrations/README.md); the two
+   competitor tables are created on startup.
 
 ### 4. Run — Choose Your Path
 
@@ -159,6 +128,12 @@ uv run main.py --scrape --sync
 #### 🌐 Path B: the API server (`main.py`) — how this service runs
 
 `main.py` is the whole service: HTTP API, APScheduler, job tracking and the visualization dashboard.
+
+Ports: the app binds `$PORT` (default 8000). In Docker it listens on 8000 and
+the host publishes it on 8005 (`docker-compose.deploy.yml`); the gateway
+reaches it as `WEBSCRAPE_SERVICE_URL=http://web-scrape-service:8000`, or
+`http://web-scrape-staging:8000` on staging. Locally, chat already uses 8000,
+so run it with `--port 8005` when the gateway is also running.
 
 ```bash
 # Start the service (reload enabled; binds $PORT, default 8000)
@@ -268,19 +243,19 @@ graph TB
 
 ```
 ├── main.py                    # 🚀 FastAPI app (sync API, evaluation, graph, dashboard, scheduler)
-├── viz_server.py              # 📊 Legacy visualization-only server
 │
 ├── docs/
 │   ├── features/
 │   │   ├── 01-scrape.md           # 🕷️ Scrape feature deep-dive
 │   │   ├── 02-sync.md             # 🔄 Sync feature deep-dive
 │   │   ├── 03-evaluation.md       # 📊 Evaluation feature deep-dive
-│   │   └── 04-fastapi-schedule-operations.md  # 🚀 API & Operations deep-dive
-│   ├── graph_analysis.md
-│   ├── mapper.md
-│   ├── mapping_analysis.md
-│   ├── structure_data.md
-│   └── structured.md
+│   │   ├── 04-fastapi-schedule-operations.md  # 🚀 API & Operations deep-dive
+│   │   └── 05-vendor-scraping.md  # 🏷️ Competitor pricing
+│   ├── graph_analysis.md      # PK graph SVG coordinates (used by script.js)
+│   ├── mapper.md              # entity relations
+│   ├── structure_data.md      # CSV columns → payload
+│   ├── structured.md          # insertion order (mapper groups A–F)
+│   └── sync_field_mapping.md
 │
 ├── src/
 │   ├── core/                   # Data models, interfaces, job queue, scheduler
@@ -350,8 +325,7 @@ graph TB
 ├── pyproject.toml
 ├── Dockerfile                 # 🐳 Python + Chromium Docker image
 ├── docker-compose.yml         # PostgreSQL + scraper services
-├── full_dump_main.sql         # Initial database dump
-├── migration_peptide_graph.sql # Graph table migration
+├── migrations/                # SQL files; README says which run on startup
 └── sync_supabase.sh           # DB migration helper script
 ```
 
@@ -407,7 +381,8 @@ docker compose up --build
 
 | Document | Description |
 |----------|-------------|
-| [`execution_guide.md`](execution_guide.md) | Step-by-step database setup (Docker + local) |
+| [`migrations/README.md`](migrations/README.md) | Which SQL files run on startup and which by hand |
+| [`AGENTS.md`](AGENTS.md) | Agent guide: navigation, cross-repo contracts, safety rules |
 
 ---
 

@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 #
-# Single-container image for Railway.
+# Single-container image, deployed to the EC2 host by .github/workflows/deploy.yml
+# (docker-compose.deploy.yml for production, orchestrator's ms-staging for staging).
 #
 # This image bundles:
 #   * the FastAPI backend  (main.py + src/api/...)
@@ -9,9 +10,8 @@
 #     (Playwright, used by the competitor vendor scraper, launches this same
 #      Chromium via CHROME_BIN rather than downloading a second browser)
 #
-# The container binds to Railway's $PORT at runtime. Override CMD or set
-# `startCommand` in railway.json to disable the scheduler / scraper if you want
-# an API-only deploy.
+# The container binds $PORT at runtime (8000 by default; the host publishes it on
+# 8005). Set START_SCHEDULER=false for an API-only container.
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS base
 
@@ -49,13 +49,13 @@ COPY main.py ./
 # The competitor-scrape tables are created on boot from these two files
 # (src/infrastructure/db/vendor_schema.py). Without them in the image the
 # bootstrap fails and the admin Scrape tab has no tables to use.
-COPY migration_vendor_price_observations.sql migration_vendor_scrape_targets.sql ./
+COPY migrations/migration_vendor_price_observations.sql migrations/migration_vendor_scrape_targets.sql ./migrations/
 
 RUN uv sync --frozen --no-dev
 
 # ---------------------------------------------------------------------------
-# 4. Runtime directories (Railway ephemeral by default — mount a Volume at
-#    /app/output to persist the scraped CSV across deploys).
+# 4. Runtime directories (ephemeral — mount a volume at /app/output to persist
+#    the scraped CSV across deploys).
 # ---------------------------------------------------------------------------
 RUN mkdir -p /app/output /app/log
 
@@ -80,7 +80,7 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8000
 
 # ---------------------------------------------------------------------------
-# 6. Entrypoint — bind to Railway-provided $PORT (falls back to 8000 locally).
+# 6. Entrypoint — bind to $PORT (falls back to 8000).
 #    Using `sh -c` so ${PORT:-8000} is expanded at container start, not build.
 # ---------------------------------------------------------------------------
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]

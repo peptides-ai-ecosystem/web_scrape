@@ -1,3 +1,4 @@
+# XR-10 upstream (accepts the gateway X-Gateway-Token) — see orchestrator/docs/ecosystem/dependencies.md#xr-10
 """Gateway token authentication for API routes.
 
 The orchestrator gateway forwards requests to this service and presents the

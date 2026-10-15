@@ -1,7 +1,7 @@
 """Create the competitor-scraping tables on startup (CEO round 2, P2).
 
 This service has no migration runner — its schema changes ship as idempotent
-``migration_*.sql`` files applied by hand. The two competitor tables are the
+``migrations/migration_*.sql`` files applied by hand (see migrations/README.md). The two competitor tables are the
 exception: the admin "Scrape" tab calls straight into them, so a box whose
 operator never ran the SQL would answer every call with a 500. Both files are
 pure ``CREATE ... IF NOT EXISTS``, so applying them on every boot is safe.
@@ -18,10 +18,11 @@ from typing import List
 logger = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).resolve().parents[3]
+_MIGRATIONS = _ROOT / "migrations"
 
 VENDOR_SCHEMA_FILES: List[Path] = [
-    _ROOT / "migration_vendor_price_observations.sql",
-    _ROOT / "migration_vendor_scrape_targets.sql",
+    _MIGRATIONS / "migration_vendor_price_observations.sql",
+    _MIGRATIONS / "migration_vendor_scrape_targets.sql",
 ]
 
 

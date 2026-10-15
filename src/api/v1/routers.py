@@ -1,3 +1,4 @@
+# XR-14 owner (HTTP API used by platform and peptide) — see orchestrator/docs/ecosystem/dependencies.md#xr-14
 from fastapi import APIRouter, Depends
 
 from src.api.v1.endpoints import (

@@ -8,7 +8,7 @@
 >
 > **Entry points**: `POST /api/v1/vendors/scrape` (on demand) and the nightly APScheduler cron
 >
-> **Migration**: `migration_vendor_price_observations.sql`
+> **Migration**: `migrations/migration_vendor_price_observations.sql`
 >
 > **Selector-free targets (AAD-1)**: [`url-only-discovery.md`](url-only-discovery.md)
 
@@ -51,7 +51,7 @@ much it trusts each reading, and puts anything doubtful in a review queue instea
 ### 2.0 Targets are managed from the admin (CEO feedback round 2, P2)
 
 Targets now live primarily in the `vendor_scrape_targets` table
-(`migration_vendor_scrape_targets.sql`, created on startup while `VENDOR_SCHEMA_AUTO_CREATE=true`) and are
+(`migrations/migration_vendor_scrape_targets.sql`, created on startup while `VENDOR_SCHEMA_AUTO_CREATE=true`) and are
 edited from the admin **Pepti.AI -> Scrape** tab through `POST/PUT/DELETE /api/v1/vendors/targets`. Each
 target carries: slug, name, enabled, product URL list and/or a `listing_url` + `listing_link_selector`
 (product links are discovered from the listing page, same host only, through the same robots.txt and

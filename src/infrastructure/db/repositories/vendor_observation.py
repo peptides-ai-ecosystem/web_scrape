@@ -1,7 +1,7 @@
 """Repository for scraped competitor price observations (#288).
 
 Backed by ``vendor_price_observations`` in **this service's** database — see
-``migration_vendor_price_observations.sql``. Nothing here touches the
+``migrations/migration_vendor_price_observations.sql``. Nothing here touches the
 peptides-platform database or its ``vendor_products`` table.
 
 The one rule this repository enforces on behalf of the rest of the system:
