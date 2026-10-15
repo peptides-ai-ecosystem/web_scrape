@@ -194,7 +194,7 @@ percentage_remaining = ((35 - svgY) / (35 - yTop)) * 100
 ```
 ...where `yTop` depends on the graph's effective ceiling (approximately 6 for the visual area, but the curve peak goes as low as ~6.988 at most).
 
-Your [script.js](file:///c:/Users/Swift/Documents/sazzad/personal/web_scrape/graph/visualization/script.js#L214-L218) uses `yTop = 8` which is slightly off — the 100% label is at y=8, but the curve peak goes above that (to y≈6.99 in 24h view).
+Your [script.js](../src/visualization/script.js) uses `yTop = 8` which is slightly off — the 100% label is at y=8, but the curve peak goes above that (to y≈6.99 in 24h view).
 
 ### Problem 2: Data Points are NOT uniform in time across tabs
 
@@ -217,14 +217,14 @@ The website **directly places** the green/amber circles at specific (cx, cy) coo
 
 ### Problem 4: The viewBox mismatch
 
-The website uses `viewBox="0 0 100 45"` while your [index.html](file:///c:/Users/Swift/Documents/sazzad/personal/web_scrape/graph/visualization/index.html#L42) uses `viewBox="0 0 100 50"`. This stretches the graph vertically, shifting all marker and curve positions.
+The website uses `viewBox="0 0 100 45"` while your [index.html](../src/visualization/index.html) uses `viewBox="0 0 100 50"`. This stretches the graph vertically, shifting all marker and curve positions.
 
 > [!CAUTION]
 > **Change the viewBox to `"0 0 100 45"`** to match the website exactly. This is likely a significant part of the visual mismatch.
 
 ### Problem 5: Y-axis label positioning
 
-In [script.js](file:///c:/Users/Swift/Documents/sazzad/personal/web_scrape/graph/visualization/script.js#L113), x-axis labels are placed at y=40, but the website uses y=43. The x-axis labels in the website SVG are at y=43.
+In [script.js](../src/visualization/script.js), x-axis labels are placed at y=40, but the website uses y=43. The x-axis labels in the website SVG are at y=43.
 
 ---
 
