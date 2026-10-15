@@ -74,7 +74,7 @@ When transforming the flattened scraped data into structured insertion payloads,
 ```
 
 ### Dependency Insertion Order
-To maintain referential integrity, inserts must follow this hierarchy (detailed in [structured.md](file:///home/saif/Documents/web_scrape/structured.md)):
+To maintain referential integrity, inserts must follow this hierarchy (detailed in [structured.md](structured.md)):
 1.  **Lookups**: `categories`, `administration_methods`, `benefits`, `side_effects`, `dosages`, `schedules`, `application_places`, `research_studies`.
 2.  **Core**: `peptides`.
 3.  **Peptide Bridges**: `peptide_benefits`, `peptide_side_effects`, `peptide_interactions`, `peptide_research_indications`, `peptide_references`.

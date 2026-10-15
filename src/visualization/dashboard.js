@@ -1,7 +1,7 @@
 /**
  * Operations Dashboard
  *
- * Exposes every write/ops endpoint defined in api_server.py:
+ * Exposes every write/ops endpoint served by main.py (routers in src/api/v1/endpoints/):
  *   - Syncing:    POST /sync/core, /sync/graph, /sync/graph-missing
  *   - Evaluation: POST /evaluation/core, /evaluation/graph
  *   - Operations: GET /operations/jobs, GET /operations/job/{id},
