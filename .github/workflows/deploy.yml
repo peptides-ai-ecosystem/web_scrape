@@ -228,7 +228,7 @@ jobs:
             exit 1
 
       # -- staging: ~/ms-staging, service web-scrape-staging, nothing else --
-      # No migrations: web_scrape has no Alembic; its migration_*.sql files are
+      # No migrations: web_scrape has no Alembic; its migrations/*.sql files are
       # applied by hand. The ms-staging compose pins START_SCHEDULER and
       # VENDOR_SCRAPE_CRON_ENABLED to false, so the staging container boots idle.
       # Health is probed inside the container (ms-staging publishes no host port).

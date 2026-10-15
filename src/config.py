@@ -127,7 +127,7 @@ class Settings:
     )
 
     # Apply the idempotent competitor-scraping DDL
-    # (migration_vendor_price_observations.sql, migration_vendor_scrape_targets.sql)
+    # (migrations/migration_vendor_price_observations.sql, migrations/migration_vendor_scrape_targets.sql)
     # on startup. Set false where the DB role has no DDL rights.
     VENDOR_SCHEMA_AUTO_CREATE: bool = os.getenv(
         "VENDOR_SCHEMA_AUTO_CREATE", "true"

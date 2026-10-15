@@ -4,7 +4,7 @@
 >
 > **Entry Points**: `main.py --sync` (v1 sync), API endpoints (`/api/v1/sync/*`), Scheduler (automated)
 >
-> **Supporting Scripts**: `sync_supabase.sh`, `migration_peptide_graph.sql`
+> **Supporting Scripts**: `sync_supabase.sh`, `migrations/migration_peptide_graph.sql`
 
 ---
 
