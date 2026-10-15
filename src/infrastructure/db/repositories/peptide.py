@@ -1,3 +1,4 @@
+# XR-8 consumer (delete_peptide_cascading names platform tables) — see orchestrator/docs/ecosystem/dependencies.md#xr-8
 """Peptide repository for peptide entity operations."""
 from typing import Dict, Any, List, Optional
 from src.infrastructure.db.base_repository import BaseRepository
