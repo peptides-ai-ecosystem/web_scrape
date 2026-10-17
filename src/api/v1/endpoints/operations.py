@@ -5,8 +5,11 @@ All long-running operations (sync, evaluation) run as background tasks and
 return a job ID immediately. Use these endpoints to track progress, cancel
 stuck jobs, and monitor system health.
 """
-from fastapi import APIRouter, HTTPException, Query
-from src.core.job_queue import get_job_queue, JobStatus
+from fastapi import APIRouter, Query
+
+from src.api.errors import http_error
+from src.core.errors import ServiceError
+from src.services import job_service
 
 router = APIRouter()
 
@@ -66,22 +69,10 @@ async def list_jobs(
     ### Errors
     - **400** — Invalid status value (must be one of the allowed enum values).
     """
-    queue = get_job_queue()
-
     try:
-        filter_status = JobStatus(status) if status else None
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid status '{status}'. Must be one of: {', '.join([s.value for s in JobStatus])}",
-        )
-
-    jobs = queue.list_jobs(filter_status)
-    return {
-        "count": len(jobs),
-        "status_filter": status,
-        "jobs": [job.to_dict() for job in jobs],
-    }
+        return job_service.list_jobs(status)
+    except ServiceError as exc:
+        raise http_error(exc)
 
 
 @router.get(
@@ -122,13 +113,10 @@ async def get_job_status(job_id: str):
     ### Errors
     - **404** — Job ID not found (may have already been cleaned up).
     """
-    queue = get_job_queue()
-    job = queue.get_job(job_id)
-
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-
-    return job.to_dict()
+    try:
+        return job_service.get_job(job_id)
+    except ServiceError as exc:
+        raise http_error(exc)
 
 
 @router.delete(
@@ -169,24 +157,10 @@ async def cancel_job(job_id: str):
     - **400** — Job is already in `completed`, `failed`, or `cancelled` state.
     - **404** — Job ID not found.
     """
-    queue = get_job_queue()
-    job = queue.get_job(job_id)
-
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-
-    if job.status not in [JobStatus.PENDING, JobStatus.RUNNING]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel job in '{job.status.value}' status. "
-                   f"Only 'pending' or 'running' jobs can be cancelled.",
-        )
-
-    job.cancel()
-    return {
-        "message": f"Job {job_id} cancelled",
-        "job": job.to_dict(),
-    }
+    try:
+        return job_service.cancel_job(job_id)
+    except ServiceError as exc:
+        raise http_error(exc)
 
 
 @router.get(
@@ -223,19 +197,4 @@ async def system_health():
 
     Use for monitoring and load-balancer health probes.
     """
-    queue = get_job_queue()
-    jobs = queue.list_jobs()
-
-    stats = {
-        "pending": len([j for j in jobs if j.status == JobStatus.PENDING]),
-        "running": len([j for j in jobs if j.status == JobStatus.RUNNING]),
-        "completed": len([j for j in jobs if j.status == JobStatus.COMPLETED]),
-        "failed": len([j for j in jobs if j.status == JobStatus.FAILED]),
-        "cancelled": len([j for j in jobs if j.status == JobStatus.CANCELLED]),
-    }
-
-    return {
-        "status": "healthy",
-        "total_jobs": len(jobs),
-        "stats": stats,
-    }
+    return job_service.health()
