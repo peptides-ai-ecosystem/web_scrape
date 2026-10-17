@@ -46,10 +46,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 # ---------------------------------------------------------------------------
 COPY app/ ./app/
 COPY main.py ./
-# The competitor-scrape tables are created on boot from these two files
-# (app/infrastructure/db/vendor_schema.py). Without them in the image the
-# bootstrap fails and the admin Scrape tab has no tables to use.
-COPY migrations/migration_vendor_price_observations.sql migrations/migration_vendor_scrape_targets.sql ./migrations/
+# Alembic for this service's own tables (vendor_scrape_targets,
+# vendor_price_observations). The deploy runs `alembic upgrade head` in the
+# container; without these files the admin Scrape tab has no tables to use.
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
 
 RUN uv sync --frozen --no-dev
 
