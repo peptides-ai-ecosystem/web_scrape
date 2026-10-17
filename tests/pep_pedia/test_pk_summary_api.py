@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 import app.api.v1.endpoints.graph as graph_endpoints
 import app.services.graph_service as graph_service
-from app.infrastructure.db.repositories.graph import (
+from app.repositories.graph import (
     PK_SUMMARY_SQL,
     GraphRepository,
     pk_summary_row_to_dict,

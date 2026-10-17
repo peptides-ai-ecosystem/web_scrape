@@ -15,15 +15,15 @@ from fastapi.testclient import TestClient
 
 import app.api.v1.endpoints.sync as sync_endpoints
 import app.controllers.pep_pedia_sync_controller as sync_controller
-import app.mappers.db_import_orchestrator as core_module
-import app.mappers.graph_import_orchestrator as graph_module
-from app.infrastructure.db.repositories.peptide import (
+import app.services.sync.db_import_orchestrator as core_module
+import app.services.sync.graph_import_orchestrator as graph_module
+from app.repositories.peptide import (
     CHILD_KIND_SQL,
     PeptideRepository,
     is_empty_value,
 )
-from app.mappers.db_import_orchestrator import DbImportOrchestrator
-from app.mappers.graph_import_orchestrator import GraphImportOrchestrator
+from app.services.sync.db_import_orchestrator import DbImportOrchestrator
+from app.services.sync.graph_import_orchestrator import GraphImportOrchestrator
 
 
 # ---------------------------------------------------------------------------

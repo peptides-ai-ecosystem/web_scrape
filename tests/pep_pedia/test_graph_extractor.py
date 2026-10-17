@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from app.extractors.graph import GraphExtractor
+from app.scrapers.pep_pedia.extractors.graph import GraphExtractor
 from app.core.models import GraphPoint, AxisLabel
 
 
@@ -115,7 +115,9 @@ def test_scrape_current_view_mock():
     mock_label.text = "Dose"
     mock_svg.find_elements.return_value = [mock_label]
 
-    data = extractor._scrape_current_view(mock_container, "24h")
+    driver = MagicMock()
+    driver.execute_script.side_effect = lambda script, el: el.text
+    data, _path = extractor._scrape_current_view(driver, mock_container, "24h")
 
     assert data.peak == "2 hrs"
     assert len(data.points) == 1

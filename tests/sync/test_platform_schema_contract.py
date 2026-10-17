@@ -107,14 +107,14 @@ def _written_columns() -> dict[str, set[str]]:
                 for table, sets in _UPDATE_SET_RE.findall(node.value.replace("%s", "?")):
                     cols = {c.split("=")[0].strip() for c in sets.split(",") if "=" in c}
                     out.setdefault(table, set()).update(c for c in cols if re.fullmatch(r"[a-z_0-9]+", c))
-    from app.mappers.group_b.peptide_mapper import PeptideMapper
+    from app.services.sync.group_b.peptide_mapper import PeptideMapper
 
     out.setdefault("peptides", set()).update(PeptideMapper().map({}).keys())
     return out
 
 
 def _cascade_tables() -> list[str]:
-    source = (ROOT / "app/infrastructure/db/repositories/peptide.py").read_text(encoding="utf-8")
+    source = (ROOT / "app/repositories/peptide.py").read_text(encoding="utf-8")
     body = source[source.index("def delete_peptide_cascading"):]
     nxt = re.search(r"\n    def ", body[1:])
     body = body[: nxt.start() + 1] if nxt else body

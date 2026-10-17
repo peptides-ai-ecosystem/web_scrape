@@ -19,19 +19,19 @@ from app.core.vendor_models import (
     TargetReviewState,
     VendorTarget,
 )
-from app.extractors.store_api import (
+from app.scrapers.vendors.extractors.store_api import (
     looks_like_product_url,
     parse_sitemap,
     rank_child_sitemaps,
     woo_price,
 )
-from app.extractors.structured_data import compose_name, parse_product_page, to_price
+from app.scrapers.vendors.extractors.structured_data import compose_name, parse_product_page, to_price
 from app.infrastructure.polite_http import HttpResult, PoliteHttpClient
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
-from app.services.url_discovery import UrlOnlyDiscovery
-from app.services.vendor_confidence import DeltaReviewer
-from app.services.vendor_scraper import VendorScrapeService
+from app.scrapers.vendors.url_discovery import UrlOnlyDiscovery
+from app.scrapers.vendors.vendor_confidence import DeltaReviewer
+from app.scrapers.vendors.vendor_scraper import VendorScrapeService
 
 FIXTURES = Path(__file__).parent / "fixtures" / "url_discovery"
 ORIGIN = "https://rival.example"
@@ -145,7 +145,7 @@ class TestWooStoreApi:
         assert all(r.confidence >= 0.9 for r in result.readings)
 
     def test_follows_pages_until_total_pages(self, monkeypatch):
-        from app.services import url_discovery
+        from app.scrapers.vendors import url_discovery
 
         monkeypatch.setattr(url_discovery, "WOO_PAGE_SIZE", 2)
         routes = dict(WOO_ROUTES)
@@ -566,7 +566,7 @@ def run(coro):
 def api(monkeypatch):
     import app.services.vendor_scrape_runner as runner
     from app.api.v1.endpoints import vendors
-    from app.tests.test_vendor_targets_api import FakeTargetRepo
+    from tests.vendors.test_vendor_targets_api import FakeTargetRepo
 
     class ApprovingRepo(FakeTargetRepo):
         def approve(self, slug, approved_by=None):

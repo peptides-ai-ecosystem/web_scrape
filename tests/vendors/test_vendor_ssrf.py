@@ -13,12 +13,12 @@ import pytest
 from fastapi import HTTPException
 
 import app.infrastructure.url_safety as url_safety
-from app.config import settings
+from app.core.config import settings
 from app.infrastructure.playwright_fetcher import PlaywrightPageFetcher
 from app.infrastructure.robots import default_robots_fetcher
 from app.infrastructure.url_safety import UnsafeTargetURLError, check_url, is_public_address
 from app.infrastructure.vendor_targets import VendorTargetConfigError, parse_target
-from app.tests.test_vendor_targets_api import (  # noqa: F401 — `api` is a fixture
+from tests.vendors.test_vendor_targets_api import (  # noqa: F401 — `api` is a fixture
     _playwright_fetcher_or_skip,
     api,
     fixture_site,

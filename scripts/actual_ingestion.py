@@ -6,14 +6,14 @@ from typing import List, Dict, Any
 from dotenv import load_dotenv
 
 # Ensure project root is in path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Load environment variables from .env
 load_dotenv(os.path.join(project_root, ".env"))
 
-from app.mappers.db_import_orchestrator import DbImportOrchestrator
+from app.services.sync.db_import_orchestrator import DbImportOrchestrator
 from app.infrastructure.db import DbManager
 
 def test_actual_ingestion(db_url: str, csv_path: str, limit: int):

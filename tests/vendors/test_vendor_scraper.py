@@ -25,7 +25,7 @@ from app.core.vendor_models import (
     VendorObservation,
     VendorTarget,
 )
-from app.extractors.vendor_listing import (
+from app.scrapers.vendors.extractors.vendor_listing import (
     VendorListingExtractor,
     parse_price,
     parse_stock,
@@ -35,12 +35,12 @@ from app.infrastructure.playwright_fetcher import FetchResult, StaticPageDocumen
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
 from app.infrastructure.vendor_targets import load_targets, parse_target
-from app.services.vendor_confidence import DeltaReviewer, score_confidence
-from app.services.vendor_products_publisher import (
+from app.scrapers.vendors.vendor_confidence import DeltaReviewer, score_confidence
+from app.scrapers.vendors.vendor_products_publisher import (
     VendorProductsPublisher,
     VendorProductsPublishUnavailable,
 )
-from app.services.vendor_scraper import VendorScrapeService
+from app.scrapers.vendors.vendor_scraper import VendorScrapeService
 
 
 # ---------------------------------------------------------------------------

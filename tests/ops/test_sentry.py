@@ -21,7 +21,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.config import settings
+from app.core.config import settings
 from app.core import sentry as sentry_module
 
 FAKE_DSN = "https://publickey1234@o0.ingest.invalid/1"
@@ -235,7 +235,7 @@ class TestHttpCapture:
         try:
             raise ValueError("selector matched nothing")
         except ValueError:
-            logging.getLogger("app.services.vendor_scraper").exception("Extraction failed for https://x")
+            logging.getLogger("app.scrapers.vendors.vendor_scraper").exception("Extraction failed for https://x")
         logging.getLogger("scheduler").error("handled failure, logged only")
         assert sentry_capture == []
 

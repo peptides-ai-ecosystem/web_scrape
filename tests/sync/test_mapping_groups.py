@@ -1,5 +1,5 @@
 import json
-from app.mappers.db_import_orchestrator import DbImportOrchestrator
+from app.services.sync.db_import_orchestrator import DbImportOrchestrator
 
 def test_mapping():
     orchestrator = DbImportOrchestrator()

@@ -2,7 +2,7 @@
 admin-facing endpoints (CEO feedback round 2, P2).
 
 Everything here is offline except :class:`TestLocalFixtureSite`, which serves
-``app/tests/fixtures/competitor_site`` from a throwaway ``http.server`` on
+``tests/vendors/fixtures/competitor_site`` from a throwaway ``http.server`` on
 127.0.0.1 and points the real Playwright fetcher at it. **No test ever reaches
 a real competitor site.** That class skips itself when no Chromium can be
 launched (set ``CHROME_BIN`` to an installed Chromium to run it).
@@ -34,9 +34,9 @@ from app.infrastructure.vendor_targets import (
     merge_targets,
     parse_target,
 )
-from app.infrastructure.db.repositories.vendor_target import row_to_target
-from app.services.vendor_confidence import DeltaReviewer
-from app.services.vendor_scraper import VendorScrapeService
+from app.repositories.vendor_target import row_to_target
+from app.scrapers.vendors.vendor_confidence import DeltaReviewer
+from app.scrapers.vendors.vendor_scraper import VendorScrapeService
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "competitor_site"
 FIXED_NOW = datetime(2026, 9, 27, 3, 15, tzinfo=timezone.utc)
@@ -594,7 +594,7 @@ def _playwright_fetcher_or_skip():
 
 class TestLocalFixtureSite:
     def test_end_to_end_against_the_fixture_site(self, fixture_site, monkeypatch):
-        from app.config import settings
+        from app.core.config import settings
 
         # The fixture site is on 127.0.0.1, which the SSRF guard refuses by
         # default: opt in explicitly, for this test only.

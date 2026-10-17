@@ -5,16 +5,16 @@ End-to-end pipeline test: sync CSV data → DB → evaluate → verify.
 
 Usage:
     # Fast mode: sync existing CSV to DB, evaluate, query DB (no scraping)
-    uv run python -m app.tests.test_sync_pipeline --limit 2
+    uv run python -m scripts.sync_pipeline --limit 2
 
     # Full mode: scrape web + sync + evaluate + DB query
-    uv run python -m app.tests.test_sync_pipeline --scrape --limit 2
+    uv run python -m scripts.sync_pipeline --scrape --limit 2
 
     # Specify custom CSV
-    uv run python -m app.tests.test_sync_pipeline --csv output_dir/pep_pedia_enhanced.csv --limit 3
+    uv run python -m scripts.sync_pipeline --csv output_dir/pep_pedia_enhanced.csv --limit 3
 
     # Run all 4 rows
-    uv run python -m app.tests.test_sync_pipeline --limit 4
+    uv run python -m scripts.sync_pipeline --limit 4
 """
 
 import argparse
@@ -26,16 +26,16 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 # Ensure project root is in path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from dotenv import load_dotenv
 load_dotenv(os.path.join(project_root, ".env"))
 
-from app.config import DATABASE_URL, ENHANCED_CSV, GRAPH_CSV, OUTPUT_DIR
-from app.mappers.db_import_orchestrator import DbImportOrchestrator
-from app.mappers.graph_import_orchestrator import GraphImportOrchestrator
+from app.core.config import DATABASE_URL, ENHANCED_CSV, GRAPH_CSV, OUTPUT_DIR
+from app.services.sync.db_import_orchestrator import DbImportOrchestrator
+from app.services.sync.graph_import_orchestrator import GraphImportOrchestrator
 from app.evaluation.runner import run_evaluation as run_core_evaluation
 from app.evaluation.graph_evaluator import run_graph_evaluation
 from app.infrastructure.db import DbManager
