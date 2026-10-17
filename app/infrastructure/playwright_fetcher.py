@@ -25,7 +25,7 @@ import logging
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
-from app.infrastructure.page_models import FetchResult, PageDocument
+from app.infrastructure.page_models import FetchResult
 from app.infrastructure.url_safety import UnsafeTargetURLError, check_url
 
 logger = logging.getLogger(__name__)
@@ -323,10 +323,4 @@ class PlaywrightPageFetcher:
         self._pending_page = None
 
 
-__all__ = [
-    "FetchResult",
-    "PageDocument",
-    "PageFetcher",
-    "PlaywrightPageFetcher",
-    "StaticPageDocument",
-]
+__all__ = ["PlaywrightPageFetcher"]

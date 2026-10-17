@@ -38,12 +38,11 @@ import ipaddress
 import logging
 import socket
 from collections.abc import Callable, Iterable
-from typing import Union
 from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
-IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 Resolver = Callable[[str], Iterable[str]]
 
 

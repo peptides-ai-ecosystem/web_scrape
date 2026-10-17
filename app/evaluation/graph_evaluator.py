@@ -96,7 +96,7 @@ def _fetch_graph_rows(db: DbManager, peptide_id: int) -> list[dict[str, Any]]:
         if hasattr(rows[0], "keys"):
             return [dict(r) for r in rows]
         cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, row)) for row in rows]
+        return [dict(zip(cols, row, strict=False)) for row in rows]
 
 
 def _is_nonempty_json(value: Any) -> bool:

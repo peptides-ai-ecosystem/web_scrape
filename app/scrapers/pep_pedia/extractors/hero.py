@@ -14,7 +14,7 @@ class HeroExtractor(BaseExtractor):
         facts = []
         cards = hero.find_elements(By.XPATH, ".//div[contains(@class,'rounded-2xl')]")
         for card in cards:
-            lines = [l.strip() for l in card.text.split("\n") if l.strip()]
+            lines = [ln.strip() for ln in card.text.split("\n") if ln.strip()]
             if len(lines) >= 2:
                 facts.append(HeroFact(label=lines[0], value=lines[1], extra=lines[2] if len(lines) > 2 else ""))
         return HeroData(name=name, subtitle=subtitle, facts=facts, research_level=research_level)

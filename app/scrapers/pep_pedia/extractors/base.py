@@ -29,7 +29,7 @@ class BaseExtractor(IExtractor):
         try:
             driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
             wait.until(EC.element_to_be_clickable(element)).click()
-        except:
+        except Exception:
             driver.execute_script("arguments[0].click();", element)
 
     def wait_for_loading(self, seconds=0.3):

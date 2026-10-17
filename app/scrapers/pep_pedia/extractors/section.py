@@ -166,7 +166,7 @@ class SectionExtractor(BaseExtractor):
                         h4_text = self.get_text(driver, h4).strip().lower().replace(" ", "_").replace("/", "_")
                         try:
                             content = self.get_text(driver, h4.find_element(By.XPATH, "./following-sibling::p")).strip()
-                        except:
+                        except Exception:
                             content = self.get_text(driver, h4.find_element(By.XPATH, "./parent::div")).strip()
                         column_name = f"{h2_text}_{title}_({h4_text})"
                         section_data[column_name] = content
@@ -212,7 +212,7 @@ class SectionExtractor(BaseExtractor):
                 ).strip()
                 content = self.get_text(driver, container.find_element(By.TAG_NAME, "p")).strip()
                 section_data[f"{h2_text}_{step_num}"] = content
-            except:
+            except Exception:
                 continue
 
     def _process_checkmark_list(self, driver, section, h2_text, section_data):
@@ -226,7 +226,7 @@ class SectionExtractor(BaseExtractor):
                 h3_text = self.get_text(driver, content_div.find_element(By.TAG_NAME, "h3")).strip()
                 content = self.get_text(driver, content_div.find_element(By.TAG_NAME, "p")).strip()
                 section_data[f"{h2_text}_{h3_text}({icon})"] = content
-            except:
+            except Exception:
                 continue
 
     def _process_bullet_list(self, driver, section, h2_text, section_data):
@@ -242,7 +242,7 @@ class SectionExtractor(BaseExtractor):
                     h3_text = self.get_text(driver, h3).strip().lower().replace(" ", "_").replace("?", "")
                     content = self.get_text(driver, h3.find_element(By.XPATH, "./following-sibling::p")).strip()
                     section_data[f"{h2_text}_{h3_text}"] = content
-                except:
+                except Exception:
                     continue
         grid_divs = section.find_elements(
             By.XPATH, ".//div[contains(@class, 'grid')]//div/p[@class and contains(@class, 'text-xs')]"
@@ -253,7 +253,7 @@ class SectionExtractor(BaseExtractor):
                     label = self.get_text(driver, div).strip().lower().replace(" ", "_")
                     value = self.get_text(driver, div.find_element(By.XPATH, "./following-sibling::p")).strip()
                     section_data[f"{h2_text}_{label}"] = value
-                except:
+                except Exception:
                     continue
         # Extract label-value stat pairs from grid cards (e.g., Weight/Length/Type in Molecular Info)
         grid_cards = section.find_elements(By.XPATH, ".//div[contains(@class, 'grid')]/div[count(p)>=2]")
@@ -266,7 +266,7 @@ class SectionExtractor(BaseExtractor):
                     value = self.get_text(driver, card.find_element(By.XPATH, "./p[2]")).strip()
                     if label and value:
                         section_data[f"{h2_text}_{label}"] = value
-                except:
+                except Exception:
                     continue
         code_blocks = section.find_elements(By.XPATH, ".//div/p[contains(@class, 'font-mono')]")
         if code_blocks:

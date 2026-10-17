@@ -25,7 +25,7 @@ def crawl_peptide_urls():
         time.sleep(1)
 
         # Debug info — check what the page actually loaded
-        source = driver.page_source
+        _ = driver.page_source
         # print(f"[DEBUG] Page source length: {len(source)}")
         # print(f"[DEBUG] Page source snippet:\n{source[:1500]}\n")
 

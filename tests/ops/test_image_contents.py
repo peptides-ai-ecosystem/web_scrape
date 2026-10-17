@@ -46,6 +46,8 @@ def test_alembic_files_are_not_excluded_from_the_build_context():
 
 def test_dockerfile_copies_alembic_where_the_app_runs_it():
     # WORKDIR is /app; app/infrastructure/db/migrate.py resolves <app root>/alembic.ini.
-    lines = [l.split() for l in (ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines() if l.startswith("COPY ")]
+    lines = [
+        ln.split() for ln in (ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines() if ln.startswith("COPY ")
+    ]
     assert ["COPY", "alembic.ini", "./"] in lines
     assert ["COPY", "alembic/", "./alembic/"] in lines

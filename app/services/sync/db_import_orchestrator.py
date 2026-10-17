@@ -119,7 +119,6 @@ class DbImportOrchestrator(GroupSyncMixin):
             }
 
             skipped_count = 0
-            total = len(rows)
             synced_count = 0
             skipped_peptides = []
             synced_peptides = []

@@ -37,7 +37,7 @@ class DbConnection:
                 # Connection is stale, close it
                 try:
                     self.conn.close()
-                except:
+                except Exception:
                     pass
                 self.conn = None
 
@@ -66,7 +66,7 @@ class DbConnection:
         if self.conn and not self.conn.closed:
             try:
                 self.conn.close()
-            except:
+            except Exception:
                 pass
             self.conn = None
 
