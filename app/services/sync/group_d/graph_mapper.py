@@ -1,5 +1,6 @@
 import json
-from typing import Any, Dict, List
+from typing import Any
+
 from app.services.sync.base import BaseMapper
 
 
@@ -37,13 +38,13 @@ class GraphMapper(BaseMapper):
                 x_axis_labels (JSONB), y_axis_labels (JSONB), legend (JSONB)
     """
 
-    def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def map(self, row: dict[str, Any]) -> list[dict[str, Any]]:
         graph_data_list = []
         graph_data_json = row.get("graph_data_json", "")
 
         if not graph_data_json:
             return graph_data_list
-            
+
         try:
             # Deserialize the JSON string (stored in CSV column)
             data = json.loads(graph_data_json)
@@ -82,25 +83,27 @@ class GraphMapper(BaseMapper):
                 # --- Legend (marker type to color mapping) ---
                 legend = details.get("legend", {})
 
-                graph_data_list.append({
-                    "time_range": time_range,
-                    "method": method,
-                    "peak_concentration": peak,
-                    "half_life": half_life,
-                    "cleared_percentage": cleared,
-                    "path_data": path_data,
-                    "markers": json.dumps(markers),
-                    "points": json.dumps(points),
-                    "x_axis_labels": json.dumps(x_labels),
-                    "y_axis_labels": json.dumps(y_labels),
-                    "legend": json.dumps(legend),
-                })
+                graph_data_list.append(
+                    {
+                        "time_range": time_range,
+                        "method": method,
+                        "peak_concentration": peak,
+                        "half_life": half_life,
+                        "cleared_percentage": cleared,
+                        "path_data": path_data,
+                        "markers": json.dumps(markers),
+                        "points": json.dumps(points),
+                        "x_axis_labels": json.dumps(x_labels),
+                        "y_axis_labels": json.dumps(y_labels),
+                        "legend": json.dumps(legend),
+                    }
+                )
         except Exception as e:
             print(f"[WARNING] Failed to parse graph_data_json: {e}")
 
         return graph_data_list
 
-    def _normalize_labels(self, labels: List[Dict]) -> List[Dict]:
+    def _normalize_labels(self, labels: list[dict]) -> list[dict]:
         """Normalize axis label dicts to a consistent {pos, label} format.
 
         graph/scraper.py uses "text" as the label key.
@@ -111,8 +114,10 @@ class GraphMapper(BaseMapper):
         for item in labels:
             if not isinstance(item, dict):
                 continue
-            normalized.append({
-                "pos": item.get("pos", 0),
-                "label": item.get("label") or item.get("text", ""),
-            })
+            normalized.append(
+                {
+                    "pos": item.get("pos", 0),
+                    "label": item.get("label") or item.get("text", ""),
+                }
+            )
         return normalized

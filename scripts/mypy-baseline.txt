@@ -1,0 +1,64 @@
+# mypy baseline; shrink it, never grow it. Regenerate: uv run python scripts/mypy_ratchet.py --update
+app/api/v1/endpoints/scheduler.py: [arg-type] Argument "interval_hours" to "start_scheduler" has incompatible type "float | None"; expected "float"
+app/api/v1/endpoints/scheduler.py: [arg-type] Argument "interval_minutes" to "start_scheduler" has incompatible type "float | None"; expected "float"
+app/controllers/vendor_scrape_controller.py: [attr-defined] "Job" has no attribute "progress_detail"
+app/controllers/vendor_scrape_controller.py: [attr-defined] "Job" has no attribute "progress_detail"
+app/controllers/vendor_scrape_controller.py: [misc] "None" not callable
+app/core/sentry.py: [arg-type] Argument 4 to "capture_exception" has incompatible type "**dict[str, str]"; expected "dict[str, Any] | None"
+app/core/sentry.py: [arg-type] Argument 4 to "capture_exception" has incompatible type "**dict[str, str]"; expected "int | None"
+app/core/sentry.py: [arg-type] Argument 4 to "capture_exception" has incompatible type "**dict[str, str]"; expected "list[str] | None"
+app/factory.py: [arg-type] Argument 2 to "add_exception_handler" of "Starlette" has incompatible type "Callable[[Request[State], HTTPException], Coroutine[Any, Any, Any]]"; expected "Callable[[Request[State], Exception], Response | Awaitable[Response]] | Callable[[WebSocket[State], Exception], Awaitable[None]]"
+app/infrastructure/db/service.py: [assignment] Incompatible default for parameter "dosages" (default has type "None", parameter has type "list[dict[str, Any]]")
+app/infrastructure/db/service.py: [assignment] Incompatible default for parameter "quality_indicators" (default has type "None", parameter has type "list[dict[str, Any]]")
+app/infrastructure/db/service.py: [assignment] Incompatible default for parameter "reconstitution_steps" (default has type "None", parameter has type "list[dict[str, Any]]")
+app/infrastructure/db/service.py: [assignment] Incompatible default for parameter "references" (default has type "None", parameter has type "list[dict[str, Any]]")
+app/infrastructure/db/service.py: [no-redef] Name "DbPool" already defined (possibly by an import)
+app/infrastructure/url_safety.py: [misc] List comprehension has incompatible type List[str | int]; expected List[str]
+app/infrastructure/webdriver_factory.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "str")
+app/repositories/citation.py: [return-value] Incompatible return value type (got "int | None", expected "int")
+app/repositories/graph.py: [union-attr] Item "None" of "Any | None" has no attribute "isoformat"
+app/repositories/indication.py: [return-value] Incompatible return value type (got "int | None", expected "int")
+app/repositories/peptide.py: [arg-type] Argument 1 to "get_by_slug" of "PeptideRepository" has incompatible type "Any | None"; expected "str"
+app/repositories/peptide.py: [arg-type] Argument 2 to "execute_one" of "BaseRepository" has incompatible type "dict[str, int]"; expected "tuple[Any, ...]"
+app/repositories/peptide.py: [arg-type] Argument 3 to "log_operation" of "BaseRepository" has incompatible type "Any | None"; expected "str"
+app/repositories/peptide.py: [return-value] Incompatible return value type (got "int | None", expected "int")
+app/repositories/reference.py: [return-value] Incompatible return value type (got "int | None", expected "int")
+app/repositories/research_study.py: [return-value] Incompatible return value type (got "int | None", expected "int")
+app/scrapers/pep_pedia/extractors/graph.py: [var-annotated] Need type annotation for "all_graph_data" (hint: "all_graph_data: dict[<type>, <type>] = ...")
+app/scrapers/pep_pedia/extractors/graph.py: [var-annotated] Need type annotation for "old_d"
+app/scrapers/pep_pedia/extractors/section.py: [var-annotated] Need type annotation for "section_data" (hint: "section_data: dict[<type>, <type>] = ...")
+app/scrapers/pep_pedia/page_scraper.py: [override] Return type "tuple[list[PeptideData], list[dict[Any, Any]]]" of "scrape" incompatible with return type "tuple[list[PeptideData], str | None]" in supertype "app.core.interfaces.IScraper"
+app/scrapers/pep_pedia/page_scraper.py: [var-annotated] Need type annotation for "community"
+app/scrapers/pep_pedia/scraper_manager.py: [assignment] Incompatible default for parameter "tracker" (default has type "None", parameter has type "ErrorTracker")
+app/scrapers/pep_pedia/scraper_manager.py: [attr-defined] Pool? has no attribute "close"
+app/scrapers/pep_pedia/scraper_manager.py: [attr-defined] Pool? has no attribute "join"
+app/scrapers/pep_pedia/scraper_manager.py: [attr-defined] Pool? has no attribute "join"
+app/scrapers/pep_pedia/scraper_manager.py: [attr-defined] Pool? has no attribute "terminate"
+app/scrapers/pep_pedia/scraper_manager.py: [valid-type] Variable "multiprocessing.Pool" is not valid as a type
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_close_page"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_discovery_factory"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_discovery_factory"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_failed"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_failed"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_failed"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_failed"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_failed"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_failed"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_failed"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_fetcher"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_limiter"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_limiter"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_limiter"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_limiter"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_limiter"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_limiter"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_robots"
+app/scrapers/vendors/target_resolution.py: [attr-defined] "TargetResolutionMixin" has no attribute "_robots"
+app/scrapers/vendors/vendor_scraper.py: [arg-type] Argument 1 to "extract" of "VendorListingExtractor" has incompatible type "PageDocument | None"; expected "PageDocument"
+app/services/sync/db_import_orchestrator.py: [index] Value of type "dict[str, Any] | None" is not indexable
+app/services/sync/db_import_orchestrator.py: [union-attr] Item "None" of "dict[str, Any] | None" has no attribute "get"
+app/services/sync/group_b/peptide_mapper.py: [var-annotated] Need type annotation for "expectations" (hint: "expectations: dict[<type>, <type>] = ...")
+app/services/sync/group_d/graph_mapper.py: [var-annotated] Need type annotation for "graph_data_list" (hint: "graph_data_list: list[<type>] = ...")
+app/services/sync/group_d/protocol_mapper.py: [var-annotated] Need type annotation for "expectations" (hint: "expectations: dict[<type>, <type>] = ...")
+app/services/sync/group_e/detail_mappers.py: [var-annotated] Need type annotation for "current_step_desc" (hint: "current_step_desc: list[<type>] = ...")
+app/services/sync/group_sync.py: [arg-type] Argument 2 to "upsert_protocol" of "DbManager" has incompatible type "int | None"; expected "int"

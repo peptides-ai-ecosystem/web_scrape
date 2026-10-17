@@ -23,6 +23,7 @@ client fetches those with the same rules the browser path follows:
 The single-hop transport is injected, so tests replay recorded responses with
 no network at all.
 """
+
 from __future__ import annotations
 
 import json
@@ -109,9 +110,7 @@ def requests_transport(url: str, headers: dict[str, str], timeout: float) -> Htt
     import requests  # lazy, like the robots fetcher
 
     try:
-        with requests.get(
-            url, headers=headers, timeout=timeout, allow_redirects=False, stream=True
-        ) as resp:
+        with requests.get(url, headers=headers, timeout=timeout, allow_redirects=False, stream=True) as resp:
             resp_headers = {k.lower(): v for k, v in (resp.headers or {}).items()}
             chunks = []
             size = 0
@@ -119,7 +118,9 @@ def requests_transport(url: str, headers: dict[str, str], timeout: float) -> Htt
                 size += len(chunk)
                 if size > MAX_RESPONSE_BYTES:
                     return HttpResult(
-                        url=url, status=None, headers=resp_headers,
+                        url=url,
+                        status=None,
+                        headers=resp_headers,
                         error=f"response larger than {MAX_RESPONSE_BYTES} bytes",
                     )
                 chunks.append(chunk)
@@ -196,7 +197,9 @@ class PoliteHttpClient:
             return HttpResult(url=url, status=None, error=self._limiter.abandon_reason(host) or "host abandoned")
         if not self._robots.is_allowed(url):
             return HttpResult(
-                url=url, status=None, robots_disallowed=True,
+                url=url,
+                status=None,
+                robots_disallowed=True,
                 error="robots.txt disallows this path for our user-agent",
             )
         try:
@@ -206,7 +209,9 @@ class PoliteHttpClient:
         with self._lock:
             if self.requests_made >= self._max_requests:
                 return HttpResult(
-                    url=url, status=None, budget_exhausted=True,
+                    url=url,
+                    status=None,
+                    budget_exhausted=True,
                     error=f"request budget of {self._max_requests} spent",
                 )
             self.requests_made += 1

@@ -1,12 +1,14 @@
 """Indication repository for research indication operations."""
-from typing import Dict, Any, Optional
+
+from typing import Any
+
 from app.repositories.base import BaseRepository
 
 
 class IndicationRepository(BaseRepository):
     """Repository for peptide research indication operations."""
 
-    def upsert(self, peptide_id: int, indication: Dict[str, Any]) -> int:
+    def upsert(self, peptide_id: int, indication: dict[str, Any]) -> int:
         """
         Upserts a research indication.
         Returns the indication ID.
@@ -14,35 +16,40 @@ class IndicationRepository(BaseRepository):
         with self.get_cursor() as cur:
             cur.execute(
                 "SELECT id FROM peptide_research_indications WHERE peptide_id = %s AND indication_title = %s",
-                (peptide_id, indication['indication_title'])
+                (peptide_id, indication["indication_title"]),
             )
             row = cur.fetchone()
             if row:
-                self.log_operation("EXIST_INDICATION", "peptide_research_indications", 
-                    f"Peptide {peptide_id}: '{indication['indication_title']}'")
-                return row['id']
-            
+                self.log_operation(
+                    "EXIST_INDICATION",
+                    "peptide_research_indications",
+                    f"Peptide {peptide_id}: '{indication['indication_title']}'",
+                )
+                return row["id"]
+
             indication_id = self._insert_guarded(
                 cur,
                 "peptide_research_indications",
                 ["peptide_id", "indication_title", "effectiveness_tag", "description"],
-                [peptide_id, indication['indication_title'], indication['effectiveness_tag'], indication['description']]
+                [
+                    peptide_id,
+                    indication["indication_title"],
+                    indication["effectiveness_tag"],
+                    indication["description"],
+                ],
             )
             self._commit()
-            self.log_operation("INSERT_INDICATION", "peptide_research_indications", 
-                f"Added '{indication['indication_title']}' for peptide {peptide_id}")
+            self.log_operation(
+                "INSERT_INDICATION",
+                "peptide_research_indications",
+                f"Added '{indication['indication_title']}' for peptide {peptide_id}",
+            )
             return indication_id
 
     def get_by_peptide_id(self, peptide_id: int) -> list:
         """Get all indications for a peptide."""
-        return self.execute_all(
-            "SELECT * FROM peptide_research_indications WHERE peptide_id = %s",
-            (peptide_id,)
-        )
+        return self.execute_all("SELECT * FROM peptide_research_indications WHERE peptide_id = %s", (peptide_id,))
 
-    def get_by_id(self, indication_id: int) -> Optional[Dict[str, Any]]:
+    def get_by_id(self, indication_id: int) -> dict[str, Any] | None:
         """Get indication by ID."""
-        return self.execute_one(
-            "SELECT * FROM peptide_research_indications WHERE id = %s",
-            (indication_id,)
-        )
+        return self.execute_one("SELECT * FROM peptide_research_indications WHERE id = %s", (indication_id,))

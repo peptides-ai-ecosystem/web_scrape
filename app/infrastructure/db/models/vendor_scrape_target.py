@@ -3,6 +3,7 @@
 Mirrors the baseline revision (``alembic/versions/4b1d0c2e9f10_*``). Columns are
 documented in that revision.
 """
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -47,9 +48,7 @@ class VendorScrapeTarget(Base):
 
     __table_args__ = (
         CheckConstraint("length(trim(slug)) > 0", name="vendor_scrape_targets_slug_not_empty"),
-        CheckConstraint(
-            "min_request_interval_seconds >= 0", name="vendor_scrape_targets_interval_non_negative"
-        ),
+        CheckConstraint("min_request_interval_seconds >= 0", name="vendor_scrape_targets_interval_non_negative"),
         CheckConstraint(
             "max_products_per_run IS NULL OR max_products_per_run >= 1",
             name="vendor_scrape_targets_max_products_positive",

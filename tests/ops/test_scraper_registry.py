@@ -1,4 +1,5 @@
 """Every dotted path in the scraper registry must import, and the registry names the two hosted scrapers."""
+
 import importlib
 
 import pytest

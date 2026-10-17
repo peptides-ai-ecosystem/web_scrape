@@ -5,6 +5,7 @@ here, with the version table ``alembic_version_web_scrape``. The database is
 the platform's (``DATABASE_URL``), so autogenerate is limited to OWN_TABLES:
 it must never emit DDL for a platform table (XR-8) or another service's table.
 """
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool

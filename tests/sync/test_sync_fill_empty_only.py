@@ -6,6 +6,7 @@ columns of the existing peptide row may be filled, and a child-row kind
 (benefits, protocols, references, PK graph, ...) may be added only when the
 peptide has none of that kind. Offline: the DB layer is replaced by fakes.
 """
+
 from contextlib import contextmanager
 from unittest.mock import MagicMock
 
@@ -25,10 +26,10 @@ from app.repositories.peptide import (
 from app.services.sync.db_import_orchestrator import DbImportOrchestrator
 from app.services.sync.graph_import_orchestrator import GraphImportOrchestrator
 
-
 # ---------------------------------------------------------------------------
 # Repository: fill_empty_columns / is_empty_value
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("value", [None, "", "   ", "[]", "{}", [], {}])
 def test_empty_values(value):
@@ -64,20 +65,31 @@ def _repo_with_row(row):
 
 def test_fill_empty_columns_never_overwrites_curated_values():
     row = {
-        "id": 223, "name": "KLOW", "slug": "klow",
-        "overview": "Curator text", "half_life": None, "cycle_length": "",
-        "stop_signs": [], "storage": "Fridge",
+        "id": 223,
+        "name": "KLOW",
+        "slug": "klow",
+        "overview": "Curator text",
+        "half_life": None,
+        "cycle_length": "",
+        "stop_signs": [],
+        "storage": "Fridge",
     }
     repo, cur = _repo_with_row(row)
 
-    filled = repo.fill_empty_columns(223, {
-        "name": "Klow (blend)", "slug": "klow-blend",       # identity: never written
-        "overview": "Scraped text", "storage": "Freezer",   # curated: kept
-        "half_life": "8 hrs", "cycle_length": "4 weeks",    # empty: filled
-        "stop_signs": '["rash"]',                           # empty JSON: filled
-        "not_a_column": "x",                                # unknown: ignored
-        "safety": "",                                       # empty value: ignored
-    })
+    filled = repo.fill_empty_columns(
+        223,
+        {
+            "name": "Klow (blend)",
+            "slug": "klow-blend",  # identity: never written
+            "overview": "Scraped text",
+            "storage": "Freezer",  # curated: kept
+            "half_life": "8 hrs",
+            "cycle_length": "4 weeks",  # empty: filled
+            "stop_signs": '["rash"]',  # empty JSON: filled
+            "not_a_column": "x",  # unknown: ignored
+            "safety": "",  # empty value: ignored
+        },
+    )
 
     assert sorted(filled) == ["cycle_length", "half_life", "stop_signs"]
     assert len(cur.calls) == 1
@@ -103,8 +115,13 @@ def test_fill_empty_columns_missing_row_never_inserts():
 
 def test_child_kinds_cover_every_relation_kind_and_graph():
     assert set(CHILD_KIND_SQL) == {
-        "benefits", "side_effects", "interactions", "indications",
-        "references", "protocols", "graph",
+        "benefits",
+        "side_effects",
+        "interactions",
+        "indications",
+        "references",
+        "protocols",
+        "graph",
     }
 
 
@@ -112,11 +129,17 @@ def test_child_kinds_cover_every_relation_kind_and_graph():
 # Core orchestrator
 # ---------------------------------------------------------------------------
 
+
 def _payload(slug="klow"):
     return {
         "group_a": {
-            "administration_methods": [], "benefits": [], "side_effects": [],
-            "dosages": [], "schedules": [], "studies": [], "application_places": [],
+            "administration_methods": [],
+            "benefits": [],
+            "side_effects": [],
+            "dosages": [],
+            "schedules": [],
+            "studies": [],
+            "application_places": [],
         },
         "group_b": {"peptide": {"name": "KLOW", "slug": slug, "half_life": "8 hrs"}},
         "relations": {
@@ -126,11 +149,15 @@ def _payload(slug="klow"):
             "indications": [{"indication_title": "Wounds"}],
             "references": [],
         },
-        "protocols": [{
-            "administration_method_name": "Injectable",
-            "reconstitution_steps": [], "quality_indicators": [],
-            "application_places": [], "dosages": [{"amount": "250mcg"}],
-        }],
+        "protocols": [
+            {
+                "administration_method_name": "Injectable",
+                "reconstitution_steps": [],
+                "quality_indicators": [],
+                "application_places": [],
+                "dosages": [{"amount": "250mcg"}],
+            }
+        ],
     }
 
 
@@ -152,8 +179,10 @@ def _run_core(monkeypatch, db, payload, **kwargs):
     orch = DbImportOrchestrator()
     monkeypatch.setattr(orch, "map_row", lambda _row: payload)
     return orch.sync_to_db(
-        "postgres://fake", [{"Peptide_Name": "KLOW", "Method": "Injectable"}],
-        activity_type="manual", **kwargs,
+        "postgres://fake",
+        [{"Peptide_Name": "KLOW", "Method": "Injectable"}],
+        activity_type="manual",
+        **kwargs,
     )
 
 
@@ -224,6 +253,7 @@ def test_core_default_mode_is_unchanged(monkeypatch):
 # Graph orchestrator
 # ---------------------------------------------------------------------------
 
+
 def _run_graph(monkeypatch, has_graph, **kwargs):
     db = MagicMock()
     db.get_all_peptide_identifiers.return_value = {"klow"}
@@ -258,6 +288,7 @@ def test_graph_default_mode_still_upserts(monkeypatch):
 # Endpoints pass the flag through
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgres://fake")
@@ -267,10 +298,13 @@ def client(monkeypatch):
 
 
 @pytest.mark.parametrize("path,task", [("/core", "run_core_sync_task"), ("/graph", "run_graph_sync_task")])
-@pytest.mark.parametrize("body,expected", [
-    ({"urls": ["https://pep-pedia.org/peptides/klow"], "fill_empty_only": True}, True),
-    ({"urls": ["https://pep-pedia.org/peptides/klow"]}, False),
-])
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        ({"urls": ["https://pep-pedia.org/peptides/klow"], "fill_empty_only": True}, True),
+        ({"urls": ["https://pep-pedia.org/peptides/klow"]}, False),
+    ],
+)
 def test_endpoint_passes_flag(client, monkeypatch, path, task, body, expected):
     calls = []
     monkeypatch.setattr(sync_controller, task, lambda *a, **kw: calls.append(kw))

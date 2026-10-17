@@ -1,9 +1,13 @@
+import time
+
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from app.infrastructure.webdriver_factory import WebDriverFactory
-from app.core.logging import log_debug, log_error
 from tqdm import tqdm
-import time
+
+from app.core.logging import log_debug
+from app.infrastructure.webdriver_factory import WebDriverFactory
+
+
 def crawl_peptide_urls():
     log_debug("Starting peptide URL crawl", "crawl_peptide_urls")
     driver, wait = WebDriverFactory.create_driver()
@@ -21,7 +25,7 @@ def crawl_peptide_urls():
         time.sleep(1)
 
         # Debug info — check what the page actually loaded
-        source = driver.page_source
+        _ = driver.page_source
         # print(f"[DEBUG] Page source length: {len(source)}")
         # print(f"[DEBUG] Page source snippet:\n{source[:1500]}\n")
 

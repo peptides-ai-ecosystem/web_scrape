@@ -1,4 +1,5 @@
 """pep-pedia sync endpoints: validate the body, then one call to ``PepPediaSyncController``."""
+
 from fastapi import APIRouter, BackgroundTasks
 
 from app.api.errors import http_error
@@ -12,6 +13,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.post("/core", status_code=202)
 async def start_core_sync(request: SyncRequest, background_tasks: BackgroundTasks):
@@ -105,6 +107,3 @@ async def start_graph_sync_missing(request: SyncRequest, background_tasks: Backg
         return PepPediaSyncController(background_tasks.add_task).start_graph_missing(request)
     except ServiceError as exc:
         raise http_error(exc)
-
-
-

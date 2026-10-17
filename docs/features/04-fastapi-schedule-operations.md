@@ -96,12 +96,12 @@ flowchart TB
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # On startup:
-    get_pool()          # Warm up DB connection pool
-    start_scheduler()   # Start APScheduler
+    get_pool()  # Warm up DB connection pool
+    start_scheduler()  # Start APScheduler
     yield
     # On shutdown:
     shutdown_scheduler()  # Gracefully stop scheduler
-    _pool.close()         # Close all DB connections
+    _pool.close()  # Close all DB connections
 ```
 
 `main.py` is the only server: full API plus the visualization dashboard
@@ -328,12 +328,12 @@ A lightweight **in-memory** job tracking system.
 
 ```python
 class Job:
-    job_id: str          # Unique ID (endpoint + timestamp + uuid)
-    endpoint: str        # Which endpoint created this job
-    status: JobStatus    # pending → running → completed/failed/cancelled
-    progress: int        # 0-100
-    result: Any          # Final result payload
-    error: str           # Error message if failed
+    job_id: str  # Unique ID (endpoint + timestamp + uuid)
+    endpoint: str  # Which endpoint created this job
+    status: JobStatus  # pending → running → completed/failed/cancelled
+    progress: int  # 0-100
+    result: Any  # Final result payload
+    error: str  # Error message if failed
 ```
 
 **Key Methods**:
@@ -387,11 +387,11 @@ app.mount("/visualization", StaticFiles(directory=visualization_path, html=True)
 
 ```python
 api_router = APIRouter()
-api_router.include_router(sync.router,        prefix="/sync",        tags=["Syncing"])
-api_router.include_router(evaluation.router,  prefix="/evaluation",  tags=["Evaluation"])
-api_router.include_router(graph.router,                              tags=["Graph"])
-api_router.include_router(operations.router,  prefix="/operations",  tags=["Operations"])
-api_router.include_router(scheduler.router,   prefix="/scheduler",   tags=["Scheduler"])
+api_router.include_router(sync.router, prefix="/sync", tags=["Syncing"])
+api_router.include_router(evaluation.router, prefix="/evaluation", tags=["Evaluation"])
+api_router.include_router(graph.router, tags=["Graph"])
+api_router.include_router(operations.router, prefix="/operations", tags=["Operations"])
+api_router.include_router(scheduler.router, prefix="/scheduler", tags=["Scheduler"])
 ```
 
 Final URL structure:

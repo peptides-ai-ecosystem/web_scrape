@@ -32,13 +32,14 @@ Every event is tagged ``service=web_scrape`` plus ``trace_id`` (the incoming
 ``X-Trace-Id``) and ``request_id``, so one search finds the Sentry event and
 the gateway's log lines for the same request.
 """
+
 from __future__ import annotations
 
 import logging
 import os
 import re
 import socket
-from typing import Any, Optional
+from typing import Any
 
 from app.core.config import settings
 from app.core.redaction import MASK, redact, secret_literals
@@ -116,9 +117,7 @@ def _scrub(value: Any, literals: list[str], depth: int = 0) -> Any:
     if isinstance(value, dict):
         return {k: (MASK if _is_sensitive_name(k) else _scrub(v, literals, depth + 1)) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        items = [
-            [item[0], MASK] if _is_sensitive_pair(item) else _scrub(item, literals, depth + 1) for item in value
-        ]
+        items = [[item[0], MASK] if _is_sensitive_pair(item) else _scrub(item, literals, depth + 1) for item in value]
         return tuple(items) if isinstance(value, tuple) else items
     if isinstance(value, str):
         return redact(value, literals)
@@ -170,7 +169,7 @@ def _context_tags() -> dict[str, str]:
 # ── init ─────────────────────────────────────────────────────────────────────
 
 
-def _release() -> Optional[str]:
+def _release() -> str | None:
     explicit = settings.SENTRY_RELEASE.strip()
     if explicit:
         return explicit

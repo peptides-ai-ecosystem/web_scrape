@@ -17,20 +17,30 @@ below the acceptance threshold so a human looks at it before it is used.
 
 Pure functions over strings — no I/O — so they are tested on recorded pages.
 """
+
 from __future__ import annotations
 
-import html as html_lib
 import json
 import logging
 import re
 from collections.abc import Iterable
-from decimal import Decimal, InvalidOperation
-from html.parser import HTMLParser
+from decimal import Decimal
 from typing import Any
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit
 
-from app.core.vendor_models import ProductReading, StockStatus
-from app.scrapers.vendors.extractors.vendor_listing import MAX_PLAUSIBLE_PRICE
+from app.core.vendor_models import ProductReading
+from app.scrapers.vendors.extractors.page_scan import PageScan
+from app.scrapers.vendors.extractors.value_parsing import (
+    availability_of,
+    clean_text,
+    compose_name,
+    label_from_names,
+    strip_fragment,
+    to_currency,
+    to_price,
+    usable_label,
+    variant_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,194 +56,6 @@ CONFIDENCE = {
 #: Several prices on one page that we cannot tell apart by size, or only a
 #: price range: kept, but flagged for a human.
 AMBIGUOUS_CONFIDENCE = 0.5
-
-_PLACEHOLDER_LABELS = {"default title", "default", "title", "-"}
-
-_AVAILABILITY = {
-    "instock": StockStatus.IN_STOCK,
-    "instoreonly": StockStatus.IN_STOCK,
-    "onlineonly": StockStatus.IN_STOCK,
-    "limitedavailability": StockStatus.IN_STOCK,
-    "outofstock": StockStatus.OUT_OF_STOCK,
-    "soldout": StockStatus.OUT_OF_STOCK,
-    "discontinued": StockStatus.OUT_OF_STOCK,
-    "backorder": StockStatus.ON_BACKORDER,
-    "preorder": StockStatus.ON_BACKORDER,
-    "presale": StockStatus.ON_BACKORDER,
-}
-
-
-# ---------------------------------------------------------------------------
-# Small shared helpers (also used by the store API parsers)
-# ---------------------------------------------------------------------------
-
-
-def clean_text(value: Any) -> str | None:
-    if value is None or isinstance(value, (dict, list)):
-        return None
-    text = html_lib.unescape(str(value))
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = " ".join(text.split())
-    return text or None
-
-
-def to_price(value: Any) -> Decimal | None:
-    """A plausible positive price from a number or a machine-readable string."""
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float, Decimal)):
-        raw = str(value)
-    else:
-        raw = str(value).strip().replace(" ", "").replace(" ", "")
-        raw = re.sub(r"[^\d.,]", "", raw)
-        if "," in raw and "." in raw:
-            # 1,234.56 vs 1.234,56: the last separator is the decimal one.
-            raw = raw.replace(",", "") if raw.rfind(".") > raw.rfind(",") else raw.replace(".", "").replace(",", ".")
-        elif "," in raw:
-            head, _, tail = raw.rpartition(",")
-            raw = f"{head.replace(',', '')}.{tail}" if len(tail) in (1, 2) else raw.replace(",", "")
-    try:
-        price = Decimal(raw)
-    except (InvalidOperation, ValueError):
-        return None
-    if not price.is_finite() or price <= 0 or price > MAX_PLAUSIBLE_PRICE:
-        return None
-    exponent = price.as_tuple().exponent
-    return price.quantize(Decimal("0.01")) if isinstance(exponent, int) and exponent < -2 else price
-
-
-def to_currency(value: Any) -> str | None:
-    text = clean_text(value)
-    if text and re.fullmatch(r"[A-Za-z]{3}", text):
-        return text.upper()
-    return None
-
-
-def availability_of(value: Any) -> StockStatus | None:
-    text = clean_text(value)
-    if not text:
-        return None
-    key = text.rstrip("/").rsplit("/", 1)[-1].replace(" ", "").replace("_", "").lower()
-    return _AVAILABILITY.get(key)
-
-
-def usable_label(label: Any) -> str | None:
-    text = clean_text(label)
-    if not text or text.lower() in _PLACEHOLDER_LABELS:
-        return None
-    return text
-
-
-def compose_name(base: str | None, label: str | None) -> str | None:
-    """``"Retatrutide" + "10mg" -> "Retatrutide 10mg"``; no repeat if already in the name.
-
-    The platform import parses the size out of the product name, so the size
-    has to be in it.
-    """
-    base = clean_text(base)
-    label = usable_label(label)
-    if not label:
-        return base
-    if not base:
-        return label
-    if label.lower() in base.lower():
-        return base
-    return f"{base} {label}"
-
-
-def label_from_names(base: str | None, variant_name: str | None) -> str | None:
-    """What a variant's name adds to the product's: ``"Reta - 10mg"`` -> ``"10mg"``."""
-    base = clean_text(base) or ""
-    name = clean_text(variant_name)
-    if not name:
-        return None
-    if base and name.lower().startswith(base.lower()):
-        rest = name[len(base):].strip(" -–—:|,/()")
-        return rest or None
-    if base and name.lower() == base.lower():
-        return None
-    return name
-
-
-def variant_url(page_url: str, key: str | None) -> str:
-    """The page URL keyed by variant (``#variant=``), so sizes stay separate."""
-    if not key:
-        return page_url
-    parts = urlsplit(page_url)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, f"variant={key}"))
-
-
-def strip_fragment(url: str) -> str:
-    parts = urlsplit(url)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, ""))
-
-
-# ---------------------------------------------------------------------------
-# HTML scan: JSON-LD blocks, microdata, meta tags
-# ---------------------------------------------------------------------------
-
-
-class _PageScan(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.ld_blocks: list[str] = []
-        self.meta: dict[str, str] = {}
-        self.microdata: dict[str, str] = {}
-        self.title: str | None = None
-        self.h1: str | None = None
-        self._in_ld = False
-        self._ld_buf: list[str] = []
-        self._capture: str | None = None
-        self._capture_buf: list[str] = []
-        self._in_title = False
-        self._in_h1 = False
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        a = {k.lower(): (v or "") for k, v in attrs}
-        if tag == "script" and "ld+json" in a.get("type", "").lower():
-            self._in_ld = True
-            self._ld_buf = []
-            return
-        if tag == "meta":
-            key = (a.get("property") or a.get("name") or a.get("itemprop") or "").lower()
-            if key and "content" in a and key not in self.meta:
-                self.meta[key] = a["content"]
-        if tag == "title":
-            self._in_title = True
-        if tag == "h1" and self.h1 is None:
-            self._in_h1 = True
-            self._capture_buf = []
-        prop = a.get("itemprop", "").strip()
-        if prop in ("price", "priceCurrency", "availability", "name", "sku", "lowPrice"):
-            value = a.get("content") or (a.get("href") if prop == "availability" else None)
-            if value:
-                self.microdata.setdefault(prop, value)
-            elif prop not in self.microdata and tag != "meta":
-                self._capture = prop
-                self._capture_buf = []
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "script" and self._in_ld:
-            self._in_ld = False
-            self.ld_blocks.append("".join(self._ld_buf))
-        if tag == "title":
-            self._in_title = False
-        if self._capture is not None:
-            text = " ".join("".join(self._capture_buf).split())
-            if text:
-                self.microdata.setdefault(self._capture, text)
-            self._capture = None
-        if tag == "h1" and self._in_h1:
-            self._in_h1 = False
-            self.h1 = " ".join("".join(self._capture_buf).split()) or None
-
-    def handle_data(self, data: str) -> None:
-        if self._in_ld:
-            self._ld_buf.append(data)
-        elif self._capture is not None or self._in_h1:
-            self._capture_buf.append(data)
-        elif self._in_title:
-            self.title = ((self.title or "") + data).strip() or None
 
 
 def _load_ld(block: str) -> list[Any]:
@@ -350,8 +172,12 @@ def _product_readings(
         if many and offer_label is None:
             offer_label = (
                 label_from_names(base, clean_text(offer.get("name")))
-                or label_from_names(base, clean_text((offer.get("itemOffered") or {}).get("name"))
-                                    if isinstance(offer.get("itemOffered"), dict) else None)
+                or label_from_names(
+                    base,
+                    clean_text((offer.get("itemOffered") or {}).get("name"))
+                    if isinstance(offer.get("itemOffered"), dict)
+                    else None,
+                )
                 or usable_label(offer.get("size"))
             )
         offer_sku = clean_text(offer.get("sku")) or sku
@@ -426,7 +252,10 @@ def json_ld_readings(
                     if urlsplit(candidate).netloc == urlsplit(page_url).netloc:
                         variant_page = candidate
                 found = _product_readings(
-                    variant, variant_page, default_currency, base_name=group_name,
+                    variant,
+                    variant_page,
+                    default_currency,
+                    base_name=group_name,
                     variant_key=key if variant_page == page_url else None,
                 )
                 readings.extend(found)
@@ -444,13 +273,11 @@ def json_ld_readings(
     return list(unique.values())
 
 
-def parse_product_page(
-    html: str, page_url: str, default_currency: str | None = None
-) -> list[ProductReading]:
+def parse_product_page(html: str, page_url: str, default_currency: str | None = None) -> list[ProductReading]:
     """Every price reading a product page publishes, best source first."""
     if not html:
         return []
-    scan = _PageScan()
+    scan = PageScan()
     try:
         scan.feed(html)
         scan.close()
@@ -461,9 +288,12 @@ def parse_product_page(
     if readings:
         return readings
 
-    fallback_name = clean_text(scan.microdata.get("name")) or clean_text(scan.h1) or clean_text(
-        scan.meta.get("og:title")
-    ) or clean_text(scan.title)
+    fallback_name = (
+        clean_text(scan.microdata.get("name"))
+        or clean_text(scan.h1)
+        or clean_text(scan.meta.get("og:title"))
+        or clean_text(scan.title)
+    )
 
     price = to_price(scan.microdata.get("price")) or to_price(scan.microdata.get("lowPrice"))
     if price is not None:

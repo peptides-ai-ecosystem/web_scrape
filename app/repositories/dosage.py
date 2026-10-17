@@ -1,29 +1,31 @@
 """Dosage repository for dosage and protocol dosage operations."""
-from typing import Dict, Any, Optional
-from app.repositories.base import BaseRepository
+
 import re
+from typing import Any
+
+from app.repositories.base import BaseRepository
 
 
 class DosageRepository(BaseRepository):
     """Repository for dosage and protocol dosage operations."""
 
-    def get_or_create_dosage_id(self, amount_str: str, create: bool = True) -> Optional[int]:
+    def get_or_create_dosage_id(self, amount_str: str, create: bool = True) -> int | None:
         """
         Get or create a dosage ID.
-        
+
         Normalizes and parses dosage strings (e.g., "10-20mg", "10 - 20 mg", "10 to 20mg").
         """
         if not amount_str:
             return None
-        
+
         # Normalize and Parse: Handle ranges like "10-20mg", "10 - 20 mg", "10 to 20mg"
         normalized = amount_str.lower().replace(" to ", "-").strip()
-        
-        # Regex captures: 
+
+        # Regex captures:
         # Group 1: Numeric part or Range (e.g. "10", "10-20", "10.5-20.5")
         # Group 2: Optional Unit part (e.g. "mg", "ml", "mcg")
         match = re.search(r"([\d\.]+(?:\s*-\s*[\d\.]+)?)\s*([a-zA-Z%/]+)?", normalized)
-        
+
         if match:
             # Extract numeric part; if a range like "10-20" is present, take the first number
             raw_val = match.group(1).replace(" ", "")
@@ -42,7 +44,7 @@ class DosageRepository(BaseRepository):
             else:
                 val = "1.0"
                 unit = amount_str[:20] if amount_str else "unit"
-        
+
         # Convert to float and cap at maximum NUMERIC(10,4) value
         try:
             val_float = float(val)
@@ -52,76 +54,79 @@ class DosageRepository(BaseRepository):
             val = "1.0"
 
         with self.get_cursor() as cur:
-            # Strict lookup: Check for exact match of name, amount, and unit 
+            # Strict lookup: Check for exact match of name, amount, and unit
             cur.execute(
-                "SELECT id FROM dosages WHERE name = %s AND amount = %s AND unit = %s", 
-                (amount_str[:100], str(val), unit[:20])
+                "SELECT id FROM dosages WHERE name = %s AND amount = %s AND unit = %s",
+                (amount_str[:100], str(val), unit[:20]),
             )
             row = cur.fetchone()
             if row:
                 if create:
                     self.log_operation("EXIST_DOSAGE", "dosages", f"{amount_str} (ID: {row['id']})")
-                return row['id']
+                return row["id"]
 
             if not create:
                 return None
 
             # Create new if missing
             new_id = self._insert_guarded(
-                cur,
-                "dosages",
-                ["name", "amount", "unit"],
-                [amount_str[:100], str(val), unit[:20]]
+                cur, "dosages", ["name", "amount", "unit"], [amount_str[:100], str(val), unit[:20]]
             )
             self._commit()
             self.log_operation("INSERT_DOSAGE", "dosages", f"{amount_str} (ID: {new_id})")
             return new_id
 
-    def upsert_protocol_dosage(self, protocol_id: int, dosage: Dict[str, Any]):
+    def upsert_protocol_dosage(self, protocol_id: int, dosage: dict[str, Any]):
         """Upserts a protocol dosage with lookups for dosage_id and schedule_id."""
-        amount_str = dosage.get('amount', '')
-        freq_str = dosage.get('frequency', '')
-        notes = dosage.get('notes', f"Amount: {amount_str}, Freq: {freq_str}")
-        
+        amount_str = dosage.get("amount", "")
+        freq_str = dosage.get("frequency", "")
+        notes = dosage.get("notes", f"Amount: {amount_str}, Freq: {freq_str}")
+
         # 1. Get Dosage ID (only lookup, no create here)
         dosage_id = self.get_or_create_dosage_id(amount_str, create=False)
-        
+
         # 2. Get Schedule ID (lookup)
         schedule_id = self._get_schedule_id(freq_str)
-        
+
         if not dosage_id or not schedule_id:
-            self.log_operation("WARNING", "protocol_dosages", 
-                f"Missing lookup data dosage_id ({dosage_id}) or schedule_id ({schedule_id})")
+            self.log_operation(
+                "WARNING",
+                "protocol_dosages",
+                f"Missing lookup data dosage_id ({dosage_id}) or schedule_id ({schedule_id})",
+            )
             return
 
         with self.get_cursor() as cur:
             cur.execute(
                 "SELECT id FROM protocol_dosages WHERE protocol_id = %s AND dosage_id = %s AND schedule_id = %s",
-                (protocol_id, dosage_id, schedule_id)
+                (protocol_id, dosage_id, schedule_id),
             )
             row = cur.fetchone()
             if row:
-                self.log_operation("EXIST_DOSAGE", "protocol_dosages", 
-                    f"Protocol {protocol_id}: dosage_id={dosage_id}, schedule_id={schedule_id}")
+                self.log_operation(
+                    "EXIST_DOSAGE",
+                    "protocol_dosages",
+                    f"Protocol {protocol_id}: dosage_id={dosage_id}, schedule_id={schedule_id}",
+                )
                 return
-            
+
             self._insert_guarded(
                 cur,
                 "protocol_dosages",
                 ["protocol_id", "dosage_id", "schedule_id", "is_default", "notes"],
-                [protocol_id, dosage_id, schedule_id, dosage.get('is_default', False), notes]
+                [protocol_id, dosage_id, schedule_id, dosage.get("is_default", False), notes],
             )
             self._commit()
-            self.log_operation("INSERT_DOSAGE", "protocol_dosages", 
-                f"Protocol {protocol_id}: Linked dosage {dosage_id} with schedule {schedule_id}")
+            self.log_operation(
+                "INSERT_DOSAGE",
+                "protocol_dosages",
+                f"Protocol {protocol_id}: Linked dosage {dosage_id} with schedule {schedule_id}",
+            )
 
-    def _get_schedule_id(self, freq_str: str) -> Optional[int]:
+    def _get_schedule_id(self, freq_str: str) -> int | None:
         """Get schedule ID by frequency name."""
         return self.execute_scalar("SELECT id FROM schedules WHERE name = %s", (freq_str,))
 
     def get_by_protocol_id(self, protocol_id: int) -> list:
         """Get all dosages for a protocol."""
-        return self.execute_all(
-            "SELECT * FROM protocol_dosages WHERE protocol_id = %s",
-            (protocol_id,)
-        )
+        return self.execute_all("SELECT * FROM protocol_dosages WHERE protocol_id = %s", (protocol_id,))

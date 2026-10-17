@@ -1,4 +1,5 @@
 """Give every test the marker of its theme folder (``tests/<theme>/``), so ``pytest -m vendors`` works."""
+
 import pytest
 
 THEMES = {"pep_pedia", "vendors", "sync", "evaluation", "ops"}

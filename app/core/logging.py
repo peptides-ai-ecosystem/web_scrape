@@ -26,7 +26,6 @@ explicitly at application startup to control settings.
 
 import logging
 import sys
-from typing import Optional
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -40,6 +39,7 @@ _FORMATTER = logging.Formatter(_LOG_FORMAT, _DATE_FORMAT)
 # ---------------------------------------------------------------------------
 # One-shot configuration
 # ---------------------------------------------------------------------------
+
 
 def setup_logging(
     log_dir: str | Path = "log",
@@ -95,6 +95,7 @@ def setup_logging(
 # Convenience factory
 # ---------------------------------------------------------------------------
 
+
 def get_logger(name: str) -> logging.Logger:
     """Return a logger for *name* (typically ``__name__``).
 
@@ -115,27 +116,27 @@ def get_logger(name: str) -> logging.Logger:
 _log = get_logger("config")  # module-level logger for config.py itself
 
 
-def log_error(message: str, filename: Optional[str] = None) -> None:
+def log_error(message: str, filename: str | None = None) -> None:
     """Log an error message (backward-compatible wrapper)."""
     get_logger(filename or "app").error(message)
 
 
-def log_warning(message: str, filename: Optional[str] = None) -> None:
+def log_warning(message: str, filename: str | None = None) -> None:
     """Log a warning message."""
     get_logger(filename or "app").warning(message)
 
 
-def log_info(message: str, filename: Optional[str] = None) -> None:
+def log_info(message: str, filename: str | None = None) -> None:
     """Log an info message."""
     get_logger(filename or "app").info(message)
 
 
-def log_debug(message: str, filename: Optional[str] = None) -> None:
+def log_debug(message: str, filename: str | None = None) -> None:
     """Log a debug message (backward-compatible wrapper)."""
     get_logger(filename or "app").debug(message)
 
 
-def log_success(message: str, filename: Optional[str] = None) -> None:
+def log_success(message: str, filename: str | None = None) -> None:
     """Log a success signal at INFO level with a ✓ prefix."""
     get_logger(filename or "app").info(f"✓ {message}")
 

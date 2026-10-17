@@ -1,15 +1,12 @@
 # Test gate for pull requests into `staging` (the deploy pointer; `master` is
 # production). Runs the same local gate as developers: scripts/check.sh.
 # Needs no secrets: the suite is offline, Chromium-only tests skip themselves,
-# and the platform-schema contract test skips without a platform checkout.
+# and the platform-schema contract test runs against the vendored snapshot (contracts/platform-schema/).
 name: CI
 
 on:
   pull_request:
     branches: [staging]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
 
 permissions:
   contents: read

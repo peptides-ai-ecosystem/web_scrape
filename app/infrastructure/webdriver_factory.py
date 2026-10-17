@@ -1,9 +1,11 @@
-import os
 import logging
+import os
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
+
 from app.core.config import TIMEOUT
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ def _locate_chromium_binary() -> str | None:
             return path
     # Last resort — check PATH
     import shutil
+
     return shutil.which("chromium-browser") or shutil.which("chromium") or shutil.which("google-chrome")
 
 
@@ -71,7 +74,7 @@ class WebDriverFactory:
         # Further mask automation fingerprints
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
-            {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"}
+            {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
         )
 
         wait = WebDriverWait(driver, TIMEOUT)
@@ -91,9 +94,11 @@ class WebDriverFactory:
             from webdriver_manager.core.os_manager import ChromeType
 
             # Pick CHROMIUM if the binary path contains "chromium", else GOOGLE
-            chrome_type = ChromeType.CHROMIUM if (
-                options.binary_location and "chromium" in options.binary_location
-            ) else ChromeType.GOOGLE
+            chrome_type = (
+                ChromeType.CHROMIUM
+                if (options.binary_location and "chromium" in options.binary_location)
+                else ChromeType.GOOGLE
+            )
 
             driver_path = ChromeDriverManager(chrome_type=chrome_type).install()
             service = Service(executable_path=driver_path)
@@ -111,6 +116,7 @@ class WebDriverFactory:
 
         # --- Strategy 3: Look for chromedriver on PATH ---
         import shutil
+
         driver_path = shutil.which("chromedriver")
         if driver_path:
             return webdriver.Chrome(service=Service(executable_path=driver_path), options=options)

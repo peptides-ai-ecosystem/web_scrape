@@ -1,4 +1,5 @@
 """scripts/ops/sync_supabase.sh restores a dump over its target; it must refuse a non-staging host."""
+
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,7 +15,9 @@ pytestmark = pytest.mark.skipif(BASH is None, reason="needs bash")
 def _run(target, **env):
     return subprocess.run(
         [BASH, str(SCRIPT), "postgres://u:p@src.example:5432/db", target],
-        capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", **env},
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", **env},
     )
 
 

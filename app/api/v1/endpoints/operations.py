@@ -5,6 +5,7 @@ All long-running operations (sync, evaluation) run as background tasks and
 return a job ID immediately. Use these endpoints to track progress, cancel
 stuck jobs, and monitor system health.
 """
+
 from fastapi import APIRouter, Query
 
 from app.api.errors import http_error
@@ -49,11 +50,11 @@ async def list_jobs(
     status: str = Query(
         None,
         description="Filter by job status. Valid values:\n"
-                    "- `pending` — queued, not yet started\n"
-                    "- `running` — currently executing\n"
-                    "- `completed` — finished successfully\n"
-                    "- `failed` — terminated with an error\n"
-                    "- `cancelled` — aborted by user",
+        "- `pending` — queued, not yet started\n"
+        "- `running` — currently executing\n"
+        "- `completed` — finished successfully\n"
+        "- `failed` — terminated with an error\n"
+        "- `cancelled` — aborted by user",
         examples=["running", "completed", "failed"],
     ),
 ):

@@ -9,7 +9,8 @@ The tests that matter most are the guard tests — robots refusal, the delta
 gate, and the "store nothing rather than a placeholder" rule. Break any one of
 those and the corresponding test must fail.
 """
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -25,23 +26,22 @@ from app.core.vendor_models import (
     VendorObservation,
     VendorTarget,
 )
+from app.infrastructure.page_models import FetchResult, StaticPageDocument
+from app.infrastructure.rate_limiter import HostRateLimiter
+from app.infrastructure.robots import RobotsPolicy
+from app.infrastructure.vendor_targets import load_targets, parse_target
 from app.scrapers.vendors.extractors.vendor_listing import (
     VendorListingExtractor,
     parse_price,
     parse_stock,
     resolve_coa_url,
 )
-from app.infrastructure.playwright_fetcher import FetchResult, StaticPageDocument
-from app.infrastructure.rate_limiter import HostRateLimiter
-from app.infrastructure.robots import RobotsPolicy
-from app.infrastructure.vendor_targets import load_targets, parse_target
 from app.scrapers.vendors.vendor_confidence import DeltaReviewer, score_confidence
 from app.scrapers.vendors.vendor_products_publisher import (
     VendorProductsPublisher,
     VendorProductsPublishUnavailable,
 )
 from app.scrapers.vendors.vendor_scraper import VendorScrapeService
-
 
 # ---------------------------------------------------------------------------
 # Doubles
@@ -108,7 +108,7 @@ def instant_limiter(**kwargs):
     return HostRateLimiter(clock=clock, sleeper=sleeper, **kwargs)
 
 
-FIXED_NOW = datetime(2026, 9, 18, 3, 15, tzinfo=timezone.utc)
+FIXED_NOW = datetime(2026, 9, 18, 3, 15, tzinfo=UTC)
 
 
 def make_target(**overrides):
@@ -159,8 +159,7 @@ def build_service(fetcher, repo=None, robots=None, reviewer=None, limiter=None, 
 def test_targets_load_from_file(tmp_path):
     cfg = tmp_path / "targets.json"
     cfg.write_text(
-        '{"targets": [{"slug": "a", "product_urls": ["https://a.test/p"],'
-        ' "selectors": {"price": "#p"}}]}',
+        '{"targets": [{"slug": "a", "product_urls": ["https://a.test/p"], "selectors": {"price": "#p"}}]}',
         encoding="utf-8",
     )
     targets = load_targets(cfg)
@@ -401,9 +400,7 @@ def test_coa_url_is_absolutised_and_non_http_rejected():
 
 
 def test_extractor_reads_price_stock_and_coa():
-    fields = VendorListingExtractor().extract(
-        good_page(), make_target(), "https://shop.example.com/p/bpc-157"
-    )
+    fields = VendorListingExtractor().extract(good_page(), make_target(), "https://shop.example.com/p/bpc-157")
     assert fields.product_name == "BPC-157 5mg"
     assert fields.price == Decimal("129.99")
     assert fields.currency == "USD"
@@ -421,15 +418,11 @@ def test_a_price_selector_that_matches_junk_records_no_match():
 
 def test_configured_currency_is_only_a_fallback():
     document = StaticPageDocument(texts={"#price": "129.99"})
-    fields = VendorListingExtractor().extract(
-        document, make_target(currency="EUR"), "https://s.test/p"
-    )
+    fields = VendorListingExtractor().extract(document, make_target(currency="EUR"), "https://s.test/p")
     assert fields.currency == "EUR"
 
     document = StaticPageDocument(texts={"#price": "$129.99"})
-    fields = VendorListingExtractor().extract(
-        document, make_target(currency="EUR"), "https://s.test/p"
-    )
+    fields = VendorListingExtractor().extract(document, make_target(currency="EUR"), "https://s.test/p")
     assert fields.currency == "USD", "the page's own currency wins over our guess"
 
 
@@ -437,34 +430,24 @@ VARIANT_SELECTOR = 'button[aria-pressed="true"]'
 
 
 def _variant_target(variant=(VARIANT_SELECTOR,)):
-    return make_target(
-        selectors=FieldSelectors(
-            price=("#price",), product_name=("h1",), variant=variant
-        )
-    )
+    return make_target(selectors=FieldSelectors(price=("#price",), product_name=("h1",), variant=variant))
 
 
 def test_variant_is_appended_to_a_sizeless_product_name():
     # glpeptides.is: <h1>Retatrutide</h1> and the chosen size is a pressed button.
-    document = StaticPageDocument(
-        texts={"h1": "Retatrutide", VARIANT_SELECTOR: "  10mg\t ", "#price": "$99"}
-    )
+    document = StaticPageDocument(texts={"h1": "Retatrutide", VARIANT_SELECTOR: "  10mg\t ", "#price": "$99"})
     fields = VendorListingExtractor().extract(document, _variant_target(), "https://s.test/p")
     assert fields.product_name == "Retatrutide 10mg"
 
 
 def test_variant_already_in_the_name_is_not_repeated():
-    document = StaticPageDocument(
-        texts={"h1": "Retatrutide 10MG", VARIANT_SELECTOR: "10mg", "#price": "$99"}
-    )
+    document = StaticPageDocument(texts={"h1": "Retatrutide 10MG", VARIANT_SELECTOR: "10mg", "#price": "$99"})
     fields = VendorListingExtractor().extract(document, _variant_target(), "https://s.test/p")
     assert fields.product_name == "Retatrutide 10MG"
 
 
 def test_no_variant_selector_leaves_the_name_alone():
-    document = StaticPageDocument(
-        texts={"h1": "Retatrutide", VARIANT_SELECTOR: "10mg", "#price": "$99"}
-    )
+    document = StaticPageDocument(texts={"h1": "Retatrutide", VARIANT_SELECTOR: "10mg", "#price": "$99"})
     fields = VendorListingExtractor().extract(document, _variant_target(()), "https://s.test/p")
     assert fields.product_name == "Retatrutide"
 
@@ -477,18 +460,11 @@ def test_variant_selector_matching_nothing_leaves_the_name_alone():
 
 
 def test_variant_does_not_change_confidence():
-    document = StaticPageDocument(
-        texts={"h1": "Retatrutide", VARIANT_SELECTOR: "10mg", "#price": "$99"}
-    )
-    with_variant = VendorListingExtractor().extract(
-        document, _variant_target(), "https://s.test/p"
-    )
-    without = VendorListingExtractor().extract(
-        document, _variant_target(()), "https://s.test/p"
-    )
+    document = StaticPageDocument(texts={"h1": "Retatrutide", VARIANT_SELECTOR: "10mg", "#price": "$99"})
+    with_variant = VendorListingExtractor().extract(document, _variant_target(), "https://s.test/p")
+    without = VendorListingExtractor().extract(document, _variant_target(()), "https://s.test/p")
     assert (
-        score_confidence(with_variant, _variant_target()).score
-        == score_confidence(without, _variant_target(())).score
+        score_confidence(with_variant, _variant_target()).score == score_confidence(without, _variant_target(())).score
     )
 
 
@@ -505,9 +481,7 @@ def _fields(**matches):
 
 
 def test_full_match_scores_one():
-    breakdown = score_confidence(
-        _fields(price=0, stock=0, coa=0, product_name=0), make_target()
-    )
+    breakdown = score_confidence(_fields(price=0, stock=0, coa=0, product_name=0), make_target())
     assert breakdown.score == pytest.approx(1.0)
 
 
@@ -569,17 +543,13 @@ def test_first_good_reading_is_accepted():
 
 
 def test_small_move_is_accepted():
-    decision = DeltaReviewer(delta_threshold=0.25).assess(
-        _observation("110.00"), _observation("100.00")
-    )
+    decision = DeltaReviewer(delta_threshold=0.25).assess(_observation("110.00"), _observation("100.00"))
     assert decision.status is ReviewStatus.ACCEPTED
 
 
 def test_large_move_is_flagged_not_applied():
     """THE delta guard. Break it and this test must fail."""
-    decision = DeltaReviewer(delta_threshold=0.25).assess(
-        _observation("40.00"), _observation("100.00")
-    )
+    decision = DeltaReviewer(delta_threshold=0.25).assess(_observation("40.00"), _observation("100.00"))
     assert decision.status is ReviewStatus.FLAGGED
     assert decision.reason is ReviewReason.PRICE_DELTA
     assert decision.supersedes_previous is False
@@ -587,20 +557,14 @@ def test_large_move_is_flagged_not_applied():
 
 
 def test_large_upward_move_is_flagged_too():
-    decision = DeltaReviewer(delta_threshold=0.25).assess(
-        _observation("500.00"), _observation("100.00")
-    )
+    decision = DeltaReviewer(delta_threshold=0.25).assess(_observation("500.00"), _observation("100.00"))
     assert decision.reason is ReviewReason.PRICE_DELTA
 
 
 def test_delta_is_measured_exactly_at_the_threshold():
     reviewer = DeltaReviewer(delta_threshold=0.25)
-    assert reviewer.assess(_observation("125.00"), _observation("100.00")).status is (
-        ReviewStatus.ACCEPTED
-    )
-    assert reviewer.assess(_observation("125.01"), _observation("100.00")).status is (
-        ReviewStatus.FLAGGED
-    )
+    assert reviewer.assess(_observation("125.00"), _observation("100.00")).status is (ReviewStatus.ACCEPTED)
+    assert reviewer.assess(_observation("125.01"), _observation("100.00")).status is (ReviewStatus.FLAGGED)
 
 
 def test_no_price_is_flagged_and_never_a_placeholder():
@@ -611,16 +575,12 @@ def test_no_price_is_flagged_and_never_a_placeholder():
 
 
 def test_low_confidence_is_flagged_even_when_the_price_barely_moved():
-    decision = DeltaReviewer(min_confidence=0.6).assess(
-        _observation("101.00", confidence=0.3), _observation("100.00")
-    )
+    decision = DeltaReviewer(min_confidence=0.6).assess(_observation("101.00", confidence=0.3), _observation("100.00"))
     assert decision.reason is ReviewReason.LOW_CONFIDENCE
 
 
 def test_currency_change_is_flagged_rather_than_compared():
-    decision = DeltaReviewer().assess(
-        _observation("100.00", currency="EUR"), _observation("100.00", currency="USD")
-    )
+    decision = DeltaReviewer().assess(_observation("100.00", currency="EUR"), _observation("100.00", currency="USD"))
     assert decision.reason is ReviewReason.CURRENCY_CHANGED
 
 
@@ -631,9 +591,7 @@ def test_service_flags_a_large_delta_against_the_last_accepted_price():
         texts={"h1": "BPC-157 5mg", "#price": "$19.99", ".stock": "In stock"},
         attrs={"a.coa": {"href": "/coa/x.pdf"}},
     )
-    previous = _observation(
-        "129.99", when=FIXED_NOW - timedelta(days=1)
-    )
+    previous = _observation("129.99", when=FIXED_NOW - timedelta(days=1))
     repo = FakeRepo(accepted={("example-vendor", url): previous})
     fetcher = FakeFetcher({url: FetchResult(200, document)})
 
@@ -665,18 +623,14 @@ def test_a_clean_reading_is_accepted_and_stored():
 
 
 def test_report_counts_summarise_the_run():
-    target = make_target(
-        product_urls=("https://shop.example.com/p/a", "https://other.example.com/p/b")
-    )
+    target = make_target(product_urls=("https://shop.example.com/p/a", "https://other.example.com/p/b"))
     fetcher = FakeFetcher(
         {
             "https://shop.example.com/p/a": FetchResult(200, good_page()),
             "https://other.example.com/p/b": FetchResult(500),
         }
     )
-    report = build_service(fetcher, max_retries=0, limiter=instant_limiter(max_strikes=0)).run(
-        [target]
-    )
+    report = build_service(fetcher, max_retries=0, limiter=instant_limiter(max_strikes=0)).run([target])
     payload = report.to_dict()
     assert payload["urls_processed"] == 2
     assert payload["status_counts"]["ok"] == 1

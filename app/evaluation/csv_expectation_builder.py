@@ -4,12 +4,12 @@ CsvExpectationBuilder
 Reuses the existing mapper stack (DbImportOrchestrator) to derive the
 *expected* database state from a raw CSV row, with no new parsing logic.
 """
+
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.services.sync.db_import_orchestrator import DbImportOrchestrator
 from app.services.sync.group_d.graph_mapper import GraphMapper
-
 
 # Mirror of the METHOD_KEYWORD_MAP defined in DbImportOrchestrator.sync_to_db
 METHOD_KEYWORD_MAP = {
@@ -35,7 +35,7 @@ class CsvExpectationBuilder:
         self._orchestrator = DbImportOrchestrator()
         self._graph_mapper = GraphMapper()
 
-    def resolve_method(self, row: Dict[str, Any]) -> Optional[str]:
+    def resolve_method(self, row: dict[str, Any]) -> str | None:
         """Return the canonical DB method name or None if unmappable."""
         raw_method = str(row.get("Method") or "").strip()
         first_part = raw_method.split(",")[0].strip().lower()
@@ -44,7 +44,7 @@ class CsvExpectationBuilder:
                 return method_name
         return None
 
-    def build(self, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def build(self, row: dict[str, Any]) -> dict[str, Any] | None:
         """
         Build the expected payload from a CSV row.
 

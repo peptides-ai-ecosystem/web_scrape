@@ -11,14 +11,14 @@ field is therefore ``Optional`` and there is no "0.00", no "unknown" and no
 empty-string sentinel anywhere in this module. A price we could not read is
 ``None``, and a ``None`` price must never be rendered as if it were free.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
-
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Vocabulary
@@ -114,14 +114,14 @@ class FieldSelectors:
     page" is a weaker claim than "we found the element we were told to read".
     """
 
-    price: Tuple[str, ...] = ()
-    stock: Tuple[str, ...] = ()
-    coa: Tuple[str, ...] = ()
-    product_name: Tuple[str, ...] = ()
+    price: tuple[str, ...] = ()
+    stock: tuple[str, ...] = ()
+    coa: tuple[str, ...] = ()
+    product_name: tuple[str, ...] = ()
     #: Optional: the selected size/variant (e.g. ``button[aria-pressed=true]``
     #: on a multi-size page whose ``<h1>`` carries no size). Its text is
     #: appended to the product name; it is not scored for confidence.
-    variant: Tuple[str, ...] = ()
+    variant: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -135,34 +135,34 @@ class VendorTarget:
 
     slug: str
     name: str
-    product_urls: Tuple[str, ...] = ()
+    product_urls: tuple[str, ...] = ()
     selectors: FieldSelectors = field(default_factory=FieldSelectors)
     #: ISO-4217 fallback used only when the page states no currency symbol.
-    currency: Optional[str] = None
+    currency: str | None = None
     enabled: bool = True
     #: Politeness floor for this host, in seconds between requests. The
     #: effective delay is the larger of this and robots.txt's Crawl-delay.
     min_request_interval_seconds: float = 5.0
     #: Hard cap on URLs fetched from this host in one run.
-    max_products_per_run: Optional[int] = None
+    max_products_per_run: int | None = None
     #: Optional category/listing page. When set, product URLs are discovered
     #: from it (links matching ``listing_link_selector`` on the same host) in
     #: addition to ``product_urls``. The listing page itself goes through the
     #: same robots.txt and rate-limit gates as a product page.
-    listing_url: Optional[str] = None
-    listing_link_selector: Optional[str] = None
+    listing_url: str | None = None
+    listing_link_selector: str | None = None
     #: ``vendors.slug`` on the platform this competitor's prices land on when
     #: an admin imports them into PeptiPrices. ``None`` means "same as slug".
-    platform_vendor_slug: Optional[str] = None
+    platform_vendor_slug: str | None = None
     #: Where the target came from: ``db`` (managed through the API) or
     #: ``file`` (VENDOR_TARGETS_FILE, the seed / fallback).
     source: str = "file"
     #: A store's home, shop or product URL for selector-free discovery (AAD-1).
-    store_url: Optional[str] = None
+    store_url: str | None = None
     #: ``draft`` targets are never scraped by a run until an admin approves.
     review_state: TargetReviewState = TargetReviewState.APPROVED
-    approved_at: Optional[datetime] = None
-    approved_by: Optional[str] = None
+    approved_at: datetime | None = None
+    approved_by: str | None = None
     #: Always ``competitor``: our own stores are refused as targets. Exposed so
     #: the platform can tell scraped competitor vendors apart without env lists.
     kind: str = "competitor"
@@ -176,7 +176,7 @@ class VendorTarget:
     def is_approved(self) -> bool:
         return self.review_state is TargetReviewState.APPROVED
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "slug": self.slug,
             "name": self.name,
@@ -218,7 +218,7 @@ class FieldMatch:
     selector_index: int
     selector: str
     #: The text we read before parsing, kept for debugging a bad extraction.
-    raw: Optional[str] = None
+    raw: str | None = None
 
 
 @dataclass
@@ -231,12 +231,12 @@ class ExtractedFields:
     no match, so it cannot inflate confidence.
     """
 
-    product_name: Optional[str] = None
-    price: Optional[Decimal] = None
-    currency: Optional[str] = None
-    stock_status: Optional[StockStatus] = None
-    coa_url: Optional[str] = None
-    matches: Dict[str, FieldMatch] = field(default_factory=dict)
+    product_name: str | None = None
+    price: Decimal | None = None
+    currency: str | None = None
+    stock_status: StockStatus | None = None
+    coa_url: str | None = None
+    matches: dict[str, FieldMatch] = field(default_factory=dict)
 
 
 @dataclass
@@ -244,10 +244,10 @@ class ConfidenceBreakdown:
     """Per-field contributions to the score, so a low score is explainable."""
 
     score: float
-    contributions: Dict[str, float] = field(default_factory=dict)
-    notes: List[str] = field(default_factory=list)
+    contributions: dict[str, float] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "score": round(self.score, 4),
             "contributions": {k: round(v, 4) for k, v in self.contributions.items()},
@@ -267,17 +267,17 @@ class ProductReading:
     """
 
     url: str
-    product_name: Optional[str]
-    price: Optional[Decimal]
-    currency: Optional[str] = None
-    stock_status: Optional[StockStatus] = None
-    variant_label: Optional[str] = None
-    sku: Optional[str] = None
+    product_name: str | None
+    price: Decimal | None
+    currency: str | None = None
+    stock_status: StockStatus | None = None
+    variant_label: str | None = None
+    sku: str | None = None
     #: ``woo_store_api`` | ``shopify_json`` | ``json_ld`` | ``microdata`` | ``opengraph``
     method: str = "json_ld"
     confidence: float = 0.0
     #: The product page the reading belongs to (``url`` minus the variant key).
-    page_url: Optional[str] = None
+    page_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -299,26 +299,26 @@ class VendorObservation:
     url: str
     observed_at: datetime
     status: ScrapeStatus = ScrapeStatus.OK
-    product_name: Optional[str] = None
-    price: Optional[Decimal] = None
-    currency: Optional[str] = None
-    stock_status: Optional[StockStatus] = None
-    coa_url: Optional[str] = None
+    product_name: str | None = None
+    price: Decimal | None = None
+    currency: str | None = None
+    stock_status: StockStatus | None = None
+    coa_url: str | None = None
     confidence: float = 0.0
-    confidence_breakdown: Dict[str, Any] = field(default_factory=dict)
+    confidence_breakdown: dict[str, Any] = field(default_factory=dict)
     review_status: ReviewStatus = ReviewStatus.FLAGGED
-    review_reason: Optional[ReviewReason] = None
+    review_reason: ReviewReason | None = None
     #: Free text for the reviewer — e.g. "price moved 62% vs last accepted".
-    review_note: Optional[str] = None
+    review_note: str | None = None
     #: Non-fatal detail for BLOCKED/ERROR rows.
-    failure_detail: Optional[str] = None
+    failure_detail: str | None = None
     #: Size/variant label read from a store API or structured data (AAD-1).
-    variant_label: Optional[str] = None
-    sku: Optional[str] = None
+    variant_label: str | None = None
+    sku: str | None = None
     #: ``selectors`` or one of the :class:`ProductReading` methods.
-    extraction_method: Optional[str] = None
+    extraction_method: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """JSON-safe projection. Absent values stay ``None``, never ""."""
         return {
             "vendor": self.vendor,
@@ -347,23 +347,23 @@ class VendorObservation:
 class VendorScrapeReport:
     """Aggregate outcome of one run, per :class:`ScrapeStatus`."""
 
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    finished_at: Optional[datetime] = None
-    observations: List[VendorObservation] = field(default_factory=list)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    finished_at: datetime | None = None
+    observations: list[VendorObservation] = field(default_factory=list)
 
-    def counts(self) -> Dict[str, int]:
-        out: Dict[str, int] = {s.value: 0 for s in ScrapeStatus}
+    def counts(self) -> dict[str, int]:
+        out: dict[str, int] = {s.value: 0 for s in ScrapeStatus}
         for obs in self.observations:
             out[obs.status.value] += 1
         return out
 
-    def review_counts(self) -> Dict[str, int]:
-        out: Dict[str, int] = {s.value: 0 for s in ReviewStatus}
+    def review_counts(self) -> dict[str, int]:
+        out: dict[str, int] = {s.value: 0 for s in ReviewStatus}
         for obs in self.observations:
             out[obs.review_status.value] += 1
         return out
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "started_at": self.started_at.isoformat(),
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,

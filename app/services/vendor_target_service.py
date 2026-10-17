@@ -6,9 +6,10 @@ target has the same slug. Slug checks, the views the admin Scrape tab reads
 and every repository call are here; the endpoints only map errors to status
 codes.
 """
+
 import os
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.parse import urlsplit
 
 import psycopg2
@@ -20,12 +21,11 @@ from app.core.config import (
     VENDOR_SCRAPER_USER_AGENT,
     VENDOR_TARGETS_FILE,
 )
-from app.core.logging import log_info
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError, ServiceUnavailableError
+from app.core.logging import log_info
 from app.core.owned_stores import owned_reason
 from app.core.vendor_models import DiscoveryMode, TargetReviewState, VendorTarget
 from app.infrastructure.db.connection import DbConnection
-from app.repositories import VendorTargetRepository
 from app.infrastructure.url_safety import UnsafeTargetURLError, check_url
 from app.infrastructure.vendor_targets import (
     VendorTargetConfigError,
@@ -35,6 +35,7 @@ from app.infrastructure.vendor_targets import (
     target_urls,
 )
 from app.models.vendors import FromUrlRequest, TargetPayload
+from app.repositories import VendorTargetRepository
 from app.services.vendor_scrape_runner import all_targets, preview_discovery
 
 _TARGET_STATES = {s.value for s in TargetReviewState}
@@ -58,7 +59,7 @@ def _target_repository() -> VendorTargetRepository:
     return VendorTargetRepository(DbConnection(db_url()))
 
 
-def _target_view(target: VendorTarget) -> Dict[str, Any]:
+def _target_view(target: VendorTarget) -> dict[str, Any]:
     return target.to_dict()
 
 
@@ -99,12 +100,12 @@ def _in_any_source(slug: str) -> bool:
 
 
 def list_targets(
-    limit: Optional[int],
+    limit: int | None,
     offset: int,
-    q: Optional[str],
-    review_state: Optional[str],
-    discovery_mode: Optional[str],
-) -> Dict[str, Any]:
+    q: str | None,
+    review_state: str | None,
+    discovery_mode: str | None,
+) -> dict[str, Any]:
     """A page of targets (DB + file fallbacks) plus the politeness settings the tab shows."""
     if review_state and review_state not in _TARGET_STATES:
         raise InvalidInputError(f"review_state must be one of {sorted(_TARGET_STATES)}")
@@ -119,7 +120,7 @@ def list_targets(
     if q and q.strip():
         targets = [t for t in targets if _matches(t, q)]
     total = len(targets)
-    page = targets[offset: offset + limit] if limit is not None else targets[offset:]
+    page = targets[offset : offset + limit] if limit is not None else targets[offset:]
     return {
         "targets_file": str(VENDOR_TARGETS_FILE),
         "user_agent": VENDOR_SCRAPER_USER_AGENT,
@@ -136,7 +137,7 @@ def list_targets(
     }
 
 
-def get_target(slug: str) -> Dict[str, Any]:
+def get_target(slug: str) -> dict[str, Any]:
     """One target by slug (DB first, then the file); 404 when neither has it."""
     for target in all_targets(include_disabled=True):
         if target.slug.lower() == slug.lower():
@@ -144,7 +145,7 @@ def get_target(slug: str) -> Dict[str, Any]:
     raise NotFoundError(f"No vendor target '{slug}'.")
 
 
-def discover(url: str, max_products: int, currency: Optional[str]) -> Dict[str, Any]:
+def discover(url: str, max_products: int, currency: str | None) -> dict[str, Any]:
     """Dry-run selector-free discovery for one URL; nothing is stored. Blocking (network)."""
     url = url.strip()
     _check_public_url(url)
@@ -156,13 +157,11 @@ def discover(url: str, max_products: int, currency: Optional[str]) -> Dict[str, 
 # ---------------------------------------------------------------------------
 
 
-def create_target(payload: TargetPayload) -> Dict[str, Any]:
+def create_target(payload: TargetPayload) -> dict[str, Any]:
     """Store a new target. With a price selector it is approved at once; without one it is a draft."""
     try:
         auto = not payload.selectors.price
-        target = payload.to_target(
-            review_state=(TargetReviewState.DRAFT if auto else TargetReviewState.APPROVED).value
-        )
+        target = payload.to_target(review_state=(TargetReviewState.DRAFT if auto else TargetReviewState.APPROVED).value)
     except VendorTargetConfigError as exc:
         raise InvalidInputError(str(exc))
     repo = _target_repository()
@@ -177,7 +176,7 @@ def create_target(payload: TargetPayload) -> Dict[str, Any]:
     return _target_view(created)
 
 
-def update_target(slug: str, payload: TargetPayload) -> Dict[str, Any]:
+def update_target(slug: str, payload: TargetPayload) -> dict[str, Any]:
     """Replace a target; a file-only target is taken over into the DB. The slug is immutable."""
     if payload.slug.lower() != slug.lower():
         raise InvalidInputError("The slug cannot be changed.")
@@ -186,7 +185,7 @@ def update_target(slug: str, payload: TargetPayload) -> Dict[str, Any]:
         # review_state is not editable here: keep what the row has. A file
         # target taken over keeps "approved" (file targets always were).
         existing = repo.get(slug)
-        state: Dict[str, Any] = {}
+        state: dict[str, Any] = {}
         if existing is not None:
             state = {
                 "review_state": existing.review_state.value,
@@ -221,13 +220,11 @@ def delete_target(slug: str) -> None:
         repo.connection.close()
     if not deleted:
         if _in_any_source(slug):
-            raise ConflictError(
-                f"'{slug}' is defined in VENDOR_TARGETS_FILE; save it disabled to pause it."
-            )
+            raise ConflictError(f"'{slug}' is defined in VENDOR_TARGETS_FILE; save it disabled to pause it.")
         raise NotFoundError(f"No vendor target '{slug}'.")
 
 
-def create_target_from_url(payload: FromUrlRequest) -> Dict[str, Any]:
+def create_target_from_url(payload: FromUrlRequest) -> dict[str, Any]:
     """AAD-1: a draft, selector-free competitor target from a bare store URL."""
     url = payload.url.strip()
     _check_public_url(url)
@@ -261,7 +258,7 @@ def create_target_from_url(payload: FromUrlRequest) -> Dict[str, Any]:
     return _target_view(created)
 
 
-def approve_target(slug: str, approved_by: Optional[str]) -> Dict[str, Any]:
+def approve_target(slug: str, approved_by: str | None) -> dict[str, Any]:
     """AAD-1: approve a draft so scrape runs read it. Idempotent."""
     repo = _target_repository()
     try:

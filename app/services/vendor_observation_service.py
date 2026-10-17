@@ -3,7 +3,8 @@
 Reads and the human review of flagged readings, over
 ``vendor_price_observations`` (this service's own table).
 """
-from typing import Any, Dict, Optional
+
+from typing import Any
 
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError
 from app.core.vendor_models import ReviewStatus, ScrapeStatus
@@ -21,8 +22,8 @@ def _repository() -> VendorObservationRepository:
 
 
 def list_observations(
-    vendor: Optional[str], review_status: Optional[str], status: Optional[str], limit: int, offset: int
-) -> Dict[str, Any]:
+    vendor: str | None, review_status: str | None, status: str | None, limit: int, offset: int
+) -> dict[str, Any]:
     """Every reading, newest first, filtered by vendor / review status / scrape status."""
     if review_status and review_status not in _REVIEW_VALUES:
         raise InvalidInputError(f"review_status must be one of {sorted(_REVIEW_VALUES)}")
@@ -43,7 +44,7 @@ def list_observations(
     }
 
 
-def list_flagged(limit: int, vendor: Optional[str], offset: int) -> Dict[str, Any]:
+def list_flagged(limit: int, vendor: str | None, offset: int) -> dict[str, Any]:
     """The review queue: readings not trusted enough to replace an accepted value."""
     repo = _repository()
     try:
@@ -61,7 +62,7 @@ def list_flagged(limit: int, vendor: Optional[str], offset: int) -> Dict[str, An
     }
 
 
-def list_latest_accepted(vendor: Optional[str]) -> Dict[str, Any]:
+def list_latest_accepted(vendor: str | None) -> dict[str, Any]:
     """The newest accepted reading per ``(vendor, url)`` with its target's names attached."""
     repo = _repository()
     try:
@@ -72,13 +73,11 @@ def list_latest_accepted(vendor: Optional[str]) -> Dict[str, Any]:
     for row in rows:
         target = mapping.get(str(row.get("vendor") or "").lower())
         row["vendor_name"] = target.name if target else None
-        row["platform_vendor_slug"] = (
-            (target.platform_vendor_slug or target.slug) if target else row.get("vendor")
-        )
+        row["platform_vendor_slug"] = (target.platform_vendor_slug or target.slug) if target else row.get("vendor")
     return {"count": len(rows), "vendor": vendor, "observations": rows}
 
 
-def review(observation_id: int, decision: str, reviewer: Optional[str]) -> Dict[str, Any]:
+def review(observation_id: int, decision: str, reviewer: str | None) -> dict[str, Any]:
     """Accept or reject one flagged reading; 404 unknown, 409 already resolved or no price."""
     repo = _repository()
     try:

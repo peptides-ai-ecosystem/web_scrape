@@ -282,16 +282,16 @@ A facade that coordinates all repositories:
 class DbManager:
     # Connection management
     connect() / close()
-    
+
     # Peptide operations
     get_all_peptide_identifiers()  # Returns list of slugs
-    get_peptide_by_slug(slug)      # Returns peptide dict
-    upsert_peptide_fill_nulls()    # Idempotent insert/update
-    
+    get_peptide_by_slug(slug)  # Returns peptide dict
+    upsert_peptide_fill_nulls()  # Idempotent insert/update
+
     # Lookup operations
-    get_lookup_id(table, name)     # Returns ID by name
+    get_lookup_id(table, name)  # Returns ID by name
     get_all_administration_methods()
-    
+
     # Graph operations
     get_methods_for_peptide(peptide_id)
     upsert_graph_data(peptide_id, am_id, graph_data)

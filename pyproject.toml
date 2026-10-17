@@ -8,7 +8,6 @@ dependencies = [
     "alembic>=1.13.0",
     "apscheduler>=3.11.2",
     "fastapi>=0.136.1",
-    "openpyxl>=3.1.5",
     "pandas>=3.0.0",
     "playwright>=1.49.0",
     "psycopg2-binary>=2.9.12",
@@ -24,5 +23,73 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "mypy>=1.13",
     "pytest>=9.0.3",
+    "ruff==0.17.0",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv", "alembic/versions"]
+
+[tool.ruff.lint]
+# Ecosystem rule set (orchestrator CODING_STANDARDS.python.md): errors, pyflakes,
+# import order, pyupgrade, bugbear, blind except (BLE001) and try/except/pass (S110).
+select = ["E", "F", "W", "I", "UP", "B", "BLE001", "S110"]
+
+[tool.ruff.lint.per-file-ignores]
+# BASELINE (recorded 2026-10-17, ruff 0.17.0): findings that existed before the gate was added.
+# Each entry is a ratchet: fix the findings in a file, then delete its line. Never add a line here
+# for new code; fix the finding instead. The counts are the findings at the time of recording.
+"app/api/openapi_docs.py" = ["E501"]  # E501 x17
+"app/api/v1/endpoints/core.py" = ["B904", "BLE001"]  # B904 x6, BLE001 x4
+"app/api/v1/endpoints/csv_inspector.py" = ["B904"]  # B904 x3
+"app/api/v1/endpoints/evaluation.py" = ["B904"]  # B904 x2
+"app/api/v1/endpoints/graph.py" = ["B904", "BLE001"]  # B904 x6, BLE001 x4
+"app/api/v1/endpoints/operations.py" = ["B904"]  # B904 x3
+"app/api/v1/endpoints/sync.py" = ["B904"]  # B904 x3
+"app/api/v1/endpoints/vendors.py" = ["B904"]  # B904 x12
+"app/controllers/pep_pedia_sync_controller.py" = ["BLE001", "E501"]  # BLE001 x3, E501 x6
+"app/core/job_queue.py" = ["UP042"]  # UP042 x1
+"app/core/scheduler.py" = ["BLE001"]  # BLE001 x2
+"app/core/sentry.py" = ["BLE001", "S110"]  # BLE001 x5, S110 x1
+"app/core/vendor_models.py" = ["UP042"]  # UP042 x6
+"app/evaluation/graph_evaluator.py" = ["BLE001"]  # BLE001 x1
+"app/infrastructure/csv_storage.py" = ["BLE001"]  # BLE001 x1
+"app/infrastructure/db/connection.py" = ["BLE001", "S110"]  # BLE001 x4, S110 x4
+"app/infrastructure/db/service.py" = ["F811"]  # F811 x1
+"app/infrastructure/playwright_fetcher.py" = ["S110"]  # S110 x5
+"app/infrastructure/webdriver_factory.py" = ["BLE001"]  # BLE001 x2
+"app/models/sync.py" = ["E501"]  # E501 x2
+"app/repositories/graph.py" = ["E501"]  # E501 x2
+"app/repositories/interaction.py" = ["BLE001"]  # BLE001 x1
+"app/repositories/peptide_inspector.py" = ["BLE001"]  # BLE001 x1
+"app/scrapers/pep_pedia/crawl_peptide_urls.py" = ["BLE001", "S110"]  # BLE001 x1, S110 x1
+"app/scrapers/pep_pedia/extractors/base.py" = ["BLE001"]  # BLE001 x2
+"app/scrapers/pep_pedia/extractors/community.py" = ["BLE001", "E501"]  # BLE001 x2, E501 x1
+"app/scrapers/pep_pedia/extractors/graph.py" = ["BLE001", "S110"]  # BLE001 x11, S110 x5
+"app/scrapers/pep_pedia/extractors/section.py" = ["B023", "BLE001", "E501", "S110"]  # B023 x1, BLE001 x9, E501 x1, S110 x1
+"app/scrapers/pep_pedia/page_scraper.py" = ["BLE001"]  # BLE001 x3
+"app/scrapers/pep_pedia/scraper_manager.py" = ["BLE001"]  # BLE001 x1
+"app/services/evaluation_service.py" = ["BLE001"]  # BLE001 x2
+"app/services/job_service.py" = ["B904"]  # B904 x1
+"app/services/sync/db_import_orchestrator.py" = ["BLE001", "E501"]  # BLE001 x4, E501 x1
+"app/services/sync/graph_import_orchestrator.py" = ["BLE001", "E501"]  # BLE001 x2, E501 x8
+"app/services/sync/group_a/lookup_mappers.py" = ["BLE001"]  # BLE001 x1
+"app/services/sync/group_d/graph_mapper.py" = ["BLE001"]  # BLE001 x1
+"app/services/sync/group_sync.py" = ["BLE001"]  # BLE001 x8
+"app/services/vendor_target_service.py" = ["B904"]  # B904 x7
+"scripts/actual_ingestion.py" = ["BLE001", "E402"]  # BLE001 x2, E402 x1
+"scripts/sync_pipeline.py" = ["E402", "E501"]  # E402 x8, E501 x3
+"tests/ops/test_alembic_baseline.py" = ["BLE001"]  # BLE001 x1
+"tests/ops/test_sentry.py" = ["B904", "BLE001"]  # B904 x1, BLE001 x1
+"tests/pep_pedia/test_graph_extractor.py" = ["E501"]  # E501 x1
+"tests/vendors/test_vendor_ssrf.py" = ["F811"]  # F811 x4
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app", "main.py"]
+ignore_missing_imports = true
+show_error_codes = true
+no_error_summary = true

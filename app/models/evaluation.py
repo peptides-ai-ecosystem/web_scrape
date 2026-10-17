@@ -1,5 +1,4 @@
 """Request model for the sync-quality evaluation API (``/api/v1/evaluation``)."""
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -11,16 +10,17 @@ class EvaluationRequest(BaseModel):
     - `limit` restricts how many peptides from the CSV are checked.
     - `output_json` optionally writes the full report to a JSON file on the server.
     """
-    limit: Optional[int] = Field(
+
+    limit: int | None = Field(
         None,
         description="Number of peptides (CSV rows) to evaluate. `null` means all available.",
         ge=1,
         examples=[None, 10, 50, 100],
     )
-    output_json: Optional[str] = Field(
+    output_json: str | None = Field(
         None,
         description="Optional server-side file path to write the full evaluation report as JSON. "
-                    "If `null`, results are only returned in the job result on retrieval.",
+        "If `null`, results are only returned in the job result on retrieval.",
         examples=[None, "/tmp/core_eval_report.json", "/tmp/graph_eval_report.json"],
     )
 
@@ -40,4 +40,3 @@ class EvaluationRequest(BaseModel):
             ]
         }
     }
-

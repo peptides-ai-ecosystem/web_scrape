@@ -1,17 +1,17 @@
 # XR-14 owner (HTTP API used by platform and peptide) — see orchestrator/docs/ecosystem/dependencies.md#xr-14
 from fastapi import APIRouter, Depends
 
+from app.api.gateway_auth import require_gateway_token
 from app.api.v1.endpoints import (
-    sync,
+    core,
+    csv_inspector,
     evaluation,
     graph,
     operations,
     scheduler,
-    core,
-    csv_inspector,
+    sync,
     vendors,
 )
-from app.api.gateway_auth import require_gateway_token
 
 api_router = APIRouter(dependencies=[Depends(require_gateway_token)])
 

@@ -8,6 +8,7 @@ own connection so cursors never collide.
 The app's lifespan warms it on startup (``get_pool()``) and closes it on
 shutdown (``close_pool()``).
 """
+
 import os
 
 from app.infrastructure.db.service import DbPool

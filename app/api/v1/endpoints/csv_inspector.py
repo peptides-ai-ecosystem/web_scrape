@@ -8,7 +8,6 @@ so the operator can spot ingestion gaps between scrape and DB injection.
 
 The reading, caching and grouping live in `app/services/csv_inspector_service.py`.
 """
-from typing import Optional
 
 from fastapi import APIRouter, Query
 
@@ -32,9 +31,12 @@ router = APIRouter()
             "content": {
                 "application/json": {
                     "example": [
-                        {"name": "BPC-157", "method": "Injectable",
-                         "url": "https://pep-pedia.org/peptide/bpc-157",
-                         "slug": "bpc-157"},
+                        {
+                            "name": "BPC-157",
+                            "method": "Injectable",
+                            "url": "https://pep-pedia.org/peptide/bpc-157",
+                            "slug": "bpc-157",
+                        },
                     ]
                 }
             },
@@ -43,7 +45,7 @@ router = APIRouter()
     },
 )
 async def list_csv_peptides(
-    q: Optional[str] = Query(
+    q: str | None = Query(
         None,
         description="Case-insensitive substring filter applied to `Peptide_Name`.",
     ),
@@ -76,7 +78,7 @@ async def get_csv_peptide(
         description="Peptide name (case-insensitive). Slug also accepted.",
         examples=["BPC-157", "bpc-157", "MK-677"],
     ),
-    method: Optional[str] = Query(
+    method: str | None = Query(
         None,
         description="Optional administration method to disambiguate when a peptide has multiple rows.",
         examples=["Injectable", "Oral"],

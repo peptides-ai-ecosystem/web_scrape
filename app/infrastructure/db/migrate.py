@@ -5,6 +5,7 @@ setting is off by default, like peptide: the deploy runs ``alembic upgrade
 head`` itself). It never raises: a failure is logged and the service still
 boots, as the former boot-time SQL runner did.
 """
+
 import logging
 from pathlib import Path
 
@@ -16,8 +17,9 @@ _ROOT = Path(__file__).resolve().parents[3]
 def upgrade_to_head() -> bool:
     """Apply every pending revision. Returns True on success, False if it failed."""
     try:
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         cfg = Config(str(_ROOT / "alembic.ini"))
         cfg.set_main_option("script_location", str(_ROOT / "alembic"))

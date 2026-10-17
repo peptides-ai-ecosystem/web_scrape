@@ -3,6 +3,7 @@
 Mirrors the baseline revision (``alembic/versions/4b1d0c2e9f10_*``). Readers
 must filter on ``review_status = 'accepted'``.
 """
+
 from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, Index, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -37,12 +38,8 @@ class VendorPriceObservation(Base):
 
     __table_args__ = (
         CheckConstraint("price IS NULL OR price > 0", name="vendor_price_observations_price_positive"),
-        CheckConstraint(
-            "confidence >= 0 AND confidence <= 1", name="vendor_price_observations_confidence_range"
-        ),
-        Index(
-            "vendor_price_observations_current_idx", vendor, url, review_status, observed_at.desc()
-        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="vendor_price_observations_confidence_range"),
+        Index("vendor_price_observations_current_idx", vendor, url, review_status, observed_at.desc()),
         Index("vendor_price_observations_review_idx", review_status, observed_at.desc()),
         Index("vendor_price_observations_vendor_idx", vendor),
     )

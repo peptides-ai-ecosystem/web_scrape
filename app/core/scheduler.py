@@ -1,20 +1,21 @@
+import os
+from pathlib import Path
+
+from apscheduler.events import EVENT_JOB_ERROR
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.jobstores.base import JobLookupError
-from apscheduler.events import EVENT_JOB_ERROR
-import os
 
+from app.core.config import FULL_CSV, OUTPUT_DIR
+from app.core.logging import log_debug, log_error
+from app.core.sentry import capture_background_failure, capture_job_error
+from app.infrastructure.csv_storage import CSVStorage
 from app.scrapers.pep_pedia.crawl_peptide_urls import crawl_peptide_urls
 from app.scrapers.pep_pedia.scraper_manager import ScraperManager
-from app.infrastructure.csv_storage import CSVStorage
 from app.services.sync.db_import_orchestrator import DbImportOrchestrator
 from app.services.sync.graph_import_orchestrator import GraphImportOrchestrator
 from app.utils.error_tracker import ErrorTracker
-from pathlib import Path
-from app.core.config import OUTPUT_DIR, FULL_CSV
-from app.core.logging import log_debug, log_error
-from app.core.sentry import capture_background_failure, capture_job_error
 
 # Keep a global instance of the scheduler
 scheduler = AsyncIOScheduler()
@@ -24,6 +25,7 @@ scheduler = AsyncIOScheduler()
 scheduler.add_listener(capture_job_error, EVENT_JOB_ERROR)
 SYNC_JOB_ID = "scheduled_combined_sync"
 VENDOR_SCRAPE_JOB_ID = "nightly_vendor_scrape"
+
 
 def run_combined_sync_job(limit: int | None = None):
     """
@@ -38,39 +40,39 @@ def run_combined_sync_job(limit: int | None = None):
     tracker = ErrorTracker()
     try:
         log_debug("Starting scheduled combined sync...", "scheduler")
-        
+
         # 1. Discover URLs
         urls = crawl_peptide_urls()
         if not urls:
             log_debug("No URLs discovered during scheduled sync.", "scheduler")
             return
-            
+
         if limit and limit > 0:
             urls = urls[:limit]
             log_debug(f"Limited scheduled sync to {limit} URLs.", "scheduler")
-            
+
         # 2. Scrape CSV (full mode — all extractors)
         manager = ScraperManager(csv_path=Path(FULL_CSV))
         # Scheduled job runs till completion
         manager.run(urls, tracker=tracker)
-        
+
         # 3. Read Data
         csv_store = CSVStorage(csv_path=Path(FULL_CSV))
         rows = csv_store.read()
         if not rows:
             log_debug("No scraped rows during scheduled sync.", "scheduler")
             return
-            
+
         # 4. Core Sync
         db_orchestrator = DbImportOrchestrator()
         db_orchestrator.sync_to_db(db_url, rows, tracker=tracker)
-        
+
         # 5. Graph Missing Sync
         graph_orchestrator = GraphImportOrchestrator()
         graph_orchestrator.sync_graph_missing_data(db_url, rows, tracker=tracker, action_type="scraped")
-        
+
         log_debug("Completed scheduled combined sync successfully.", "scheduler")
-        
+
     except Exception as e:
         trace_id = capture_background_failure(e, job=SYNC_JOB_ID)
         log_error(f"Fatal error during scheduled combined sync (trace_id={trace_id}): {e}", "scheduler")
@@ -83,17 +85,19 @@ def run_combined_sync_job(limit: int | None = None):
 def start_scheduler(interval_hours: float = 12.0, interval_minutes: float = 0.0, limit: int | None = None):
     if not scheduler.running:
         scheduler.start()
-    
+
     # Try to add or replace the job
     scheduler.add_job(
         run_combined_sync_job,
         trigger=IntervalTrigger(hours=interval_hours, minutes=interval_minutes),
         args=[limit],
         id=SYNC_JOB_ID,
-        replace_existing=True
+        replace_existing=True,
     )
-    log_debug(f"Scheduler started/updated: {interval_hours}h {interval_minutes}m interval, limit: {limit}.", "scheduler")
-    
+    log_debug(
+        f"Scheduler started/updated: {interval_hours}h {interval_minutes}m interval, limit: {limit}.", "scheduler"
+    )
+
 
 def pause_scheduler():
     try:
@@ -102,17 +106,19 @@ def pause_scheduler():
     except JobLookupError:
         pass
 
+
 def resume_scheduler():
     try:
         scheduler.resume_job(SYNC_JOB_ID)
         log_debug("Scheduler resumed.", "scheduler")
     except JobLookupError:
         pass
-        
+
+
 def get_scheduler_status() -> dict:
     job = scheduler.get_job(SYNC_JOB_ID)
     if job:
-        interval_td = getattr(job.trigger, 'interval', None)
+        interval_td = getattr(job.trigger, "interval", None)
         if interval_td:
             total_seconds = interval_td.total_seconds()
             hours = total_seconds // 3600
@@ -120,18 +126,19 @@ def get_scheduler_status() -> dict:
         else:
             hours = 0
             minutes = 0
-            
+
         limit = job.args[0] if job.args else None
         next_run = job.next_run_time.isoformat() if job.next_run_time else None
         return {
-            "status": "running" if job.next_run_time else "paused", 
-            "interval_hours": hours, 
+            "status": "running" if job.next_run_time else "paused",
+            "interval_hours": hours,
             "interval_minutes": minutes,
             "limit": limit,
-            "next_run_time": next_run
+            "next_run_time": next_run,
         }
     else:
         return {"status": "not_configured"}
+
 
 # ---------------------------------------------------------------------------
 # Nightly competitor vendor scrape (peptides-platform#288)

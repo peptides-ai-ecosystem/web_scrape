@@ -18,8 +18,8 @@ pieces each one has rather than forcing one call signature:
 ``app/scrapers/registry.py`` maps a name to its descriptor; ``docs/adding-a-scraper.md``
 is the checklist for a new one.
 """
+
 from dataclasses import dataclass, field
-from typing import Tuple
 
 
 @dataclass(frozen=True)
@@ -33,10 +33,10 @@ class ScraperInfo:
     #: Dotted path of the page loader (browser or HTTP client).
     fetch: str
     #: Dotted path of the extractor(s) that turn a page into rows.
-    extract: Tuple[str, ...]
+    extract: tuple[str, ...]
     #: Dotted path of the controller the HTTP routes call.
     controller: str
     #: Where rows are written: "platform" (XR-8, Drizzle-owned) or "own".
     writes: str
     #: Tables this scraper owns (an Alembic revision each); empty for platform writers.
-    own_tables: Tuple[str, ...] = field(default_factory=tuple)
+    own_tables: tuple[str, ...] = field(default_factory=tuple)
