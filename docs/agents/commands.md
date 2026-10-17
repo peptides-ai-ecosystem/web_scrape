@@ -18,9 +18,9 @@ Swagger `/docs`, gateway spec `/api/v1/openapi.json`, health `/health`, dashboar
 ## Test
 ```bash
 uv run pytest -q                                            # everything pytest collects
-uv run pytest src/tests/test_vendor_ssrf.py -q              # one file
-uv run pytest src/tests/test_image_contents.py::test_schema_files_exist_in_the_repo -q   # one test
-PLATFORM_SCHEMA_REPO=<peptides-platform checkout> uv run pytest src/tests/test_platform_schema_contract.py -v
+uv run pytest app/tests/test_vendor_ssrf.py -q              # one file
+uv run pytest app/tests/test_image_contents.py::test_schema_files_exist_in_the_repo -q   # one test
+PLATFORM_SCHEMA_REPO=<peptides-platform checkout> uv run pytest app/tests/test_platform_schema_contract.py -v
 ```
 The suite is offline. Tests that need Chromium skip themselves; the platform-schema contract test skips without a platform checkout. `uv run pytest` also collects three tests that already fail on `staging`; `scripts/check.sh` lists and deselects them.
 

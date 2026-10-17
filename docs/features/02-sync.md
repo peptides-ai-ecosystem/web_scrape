@@ -1,6 +1,6 @@
 # Feature: Database Sync
 
-> **Module**: `src/mappers/`, `src/infrastructure/db/`, `src/infrastructure/csv_storage.py`
+> **Module**: `app/mappers/`, `app/infrastructure/db/`, `app/infrastructure/csv_storage.py`
 >
 > **Entry Points**: `main.py --sync` (v1 sync), API endpoints (`/api/v1/sync/*`), Scheduler (automated)
 >
@@ -124,7 +124,7 @@ If no keyword matches, or the mapped method doesn't exist in the DB's `administr
 
 ### 3.2 Core Sync Flow (`DbImportOrchestrator`)
 
-**File**: `src/mappers/db_import_orchestrator.py`
+**File**: `app/mappers/db_import_orchestrator.py`
 
 ```mermaid
 sequenceDiagram
@@ -187,7 +187,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group A — Lookup Mappers
 
-**Directory**: `src/mappers/group_a/`
+**Directory**: `app/mappers/group_a/`
 
 | Mapper | File | Output |
 |--------|------|--------|
@@ -205,7 +205,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group B — Peptide Mapper
 
-**Directory**: `src/mappers/group_b/`
+**Directory**: `app/mappers/group_b/`
 
 | Mapper | Output Fields |
 |--------|---------------|
@@ -218,7 +218,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group C — Relation Mappers
 
-**Directory**: `src/mappers/group_c/`
+**Directory**: `app/mappers/group_c/`
 
 | Mapper | Output |
 |--------|--------|
@@ -226,7 +226,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group D — Protocol Mapper
 
-**Directory**: `src/mappers/group_d/`
+**Directory**: `app/mappers/group_d/`
 
 | Mapper | Output |
 |--------|--------|
@@ -234,7 +234,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 ### 3.4 Graph Sync Flow (`GraphImportOrchestrator`)
 
-**File**: `src/mappers/graph_import_orchestrator.py`
+**File**: `app/mappers/graph_import_orchestrator.py`
 
 ```mermaid
 flowchart TD
@@ -252,13 +252,13 @@ flowchart TD
 
 #### Graph Mapper
 
-**File**: `src/mappers/group_d/graph_mapper.py`
+**File**: `app/mappers/group_d/graph_mapper.py`
 
 Handles two input formats and normalizes them for DB insertion:
 
 | Format | Source | Key Differences |
 |--------|--------|-----------------|
-| **Format 1** | `src` pipeline (via `csv_storage.py` → `dataclasses.asdict()`) | Metadata at root level, labels use `"label"` key |
+| **Format 1** | `app` pipeline (via `csv_storage.py` → `dataclasses.asdict()`) | Metadata at root level, labels use `"label"` key |
 | **Format 2** | Graph scraper standalone JSON | Metadata nested under `"metadata"`, labels use `"text"` key |
 
 **Normalization**: Axis labels are standardized to `{"pos": N, "label": "..."}` regardless of input format.
@@ -274,7 +274,7 @@ A variant that:
 
 #### DbManager
 
-**File**: `src/infrastructure/db/service.py`
+**File**: `app/infrastructure/db/service.py`
 
 A facade that coordinates all repositories:
 
@@ -299,7 +299,7 @@ class DbManager:
 
 #### Repository Pattern
 
-**File**: `src/infrastructure/db/repositories/`
+**File**: `app/infrastructure/db/repositories/`
 
 Separate repository classes for each domain:
 

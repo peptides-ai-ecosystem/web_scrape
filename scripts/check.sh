@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 uv sync --frozen
 
 uv run pytest -q -p no:cacheprovider \
-  --deselect src/tests/test_actual_ingestion.py::test_actual_ingestion \
-  --deselect src/tests/test_gateway_integration.py::test_health_route_registered \
-  --deselect src/tests/test_graph_extractor.py::test_scrape_current_view_mock \
+  --deselect app/tests/test_actual_ingestion.py::test_actual_ingestion \
+  --deselect app/tests/test_gateway_integration.py::test_health_route_registered \
+  --deselect app/tests/test_graph_extractor.py::test_scrape_current_view_mock \
   "$@"

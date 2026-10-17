@@ -1,6 +1,6 @@
 # Feature: Evaluation
 
-> **Module**: `src/evaluation/`
+> **Module**: `app/evaluation/`
 >
 > **Entry Points**: `main.py --evaluate`, API endpoints (`/api/v1/evaluation/core`, `/api/v1/evaluation/graph`)
 
@@ -80,7 +80,7 @@ flowchart TB
 
 ### 3.1 Evaluation Runner (`run_evaluation`)
 
-**File**: `src/evaluation/runner.py`
+**File**: `app/evaluation/runner.py`
 
 ```mermaid
 sequenceDiagram
@@ -133,7 +133,7 @@ sequenceDiagram
 
 ### 3.2 CsvExpectationBuilder
 
-**File**: `src/evaluation/csv_expectation_builder.py`
+**File**: `app/evaluation/csv_expectation_builder.py`
 
 **Business Logic**: Reuses the exact same `DbImportOrchestrator` mapper stack to derive what **should** be in the database from the CSV row.
 
@@ -170,7 +170,7 @@ class CsvExpectationBuilder:
 
 ### 3.3 DbActualFetcher
 
-**File**: `src/evaluation/db_actual_fetcher.py`
+**File**: `app/evaluation/db_actual_fetcher.py`
 
 **Business Logic**: Queries the live database for the **actual** state of a peptide. The returned structure mirrors the expected payload shape so the evaluation engine can do a direct comparison.
 
@@ -193,7 +193,7 @@ Total: **10 queries per evaluated peptide**.
 
 ### 3.4 EvaluationEngine
 
-**File**: `src/evaluation/evaluation_engine.py`
+**File**: `app/evaluation/evaluation_engine.py`
 
 **Business Logic**: Compares expected vs actual and produces structured `CheckResult` objects.
 
@@ -266,7 +266,7 @@ class PeptideEvalResult:
 
 ### 3.5 GraphEvaluator
 
-**File**: `src/evaluation/graph_evaluator.py`
+**File**: `app/evaluation/graph_evaluator.py`
 
 A **separate evaluation pipeline** for pharmacokinetics graph data stored in the `peptide_graph` table.
 
@@ -298,7 +298,7 @@ flowchart TD
 
 ### 3.6 EvaluationReporter
 
-**File**: `src/evaluation/reporter.py`
+**File**: `app/evaluation/reporter.py`
 
 **Business Logic**: Renders results in two formats:
 

@@ -3,12 +3,12 @@
 > **Feedback**: CEO final feedback AAD-1 (with AAD-2, PPA-5): "Scrape competitors from a URL only, no
 > selectors; competitor vendors kept separate; pagination."
 >
-> **Modules**: `src/services/url_discovery.py`, `src/extractors/{store_api,structured_data}.py`,
-> `src/infrastructure/polite_http.py`, `src/core/owned_stores.py`, and the AAD-1 parts of
-> `src/services/{vendor_scraper,vendor_scrape_runner}.py` and `src/api/v1/endpoints/vendors.py`
+> **Modules**: `app/services/url_discovery.py`, `app/extractors/{store_api,structured_data}.py`,
+> `app/infrastructure/polite_http.py`, `app/core/owned_stores.py`, and the AAD-1 parts of
+> `app/services/{vendor_scraper,vendor_scrape_runner}.py` and `app/api/v1/endpoints/vendors.py`
 >
-> **Tests**: `src/tests/test_url_discovery.py` (offline; recorded responses in
-> `src/tests/fixtures/url_discovery/`)
+> **Tests**: `app/tests/test_url_discovery.py` (offline; recorded responses in
+> `app/tests/fixtures/url_discovery/`)
 
 Before this, every competitor target needed hand-written CSS selectors per site (for example GL Peptides'
 size button `button.min-w-16[aria-pressed="true"]`). Now an admin can give just a store URL. Selectors

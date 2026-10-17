@@ -23,7 +23,7 @@ The EC2 host does **not** hold this repository. A push to `staging` deploys
 3. pulls that exact image and restarts the `web-scrape` container.
 
 So on the box you will only find `~/web_scrape/docker-compose.deploy.yml` and
-`.env`; the code is inside the container (`/app/src`, `/app/main.py`).
+`.env`; the code is inside the container (`/app/app`, `/app/main.py`).
 
 To see which code is live, call `GET /health`. Its `commit` field is the git
 sha the running image was built from (FEEDBACK-3 G36). Then compare it with
@@ -257,7 +257,7 @@ graph TB
 │   ├── structured.md          # insertion order (mapper groups A–F)
 │   └── sync_field_mapping.md
 │
-├── src/
+├── app/
 │   ├── core/                   # Data models, interfaces, job queue, scheduler
 │   │   ├── models.py           #   PeptideData, GraphData, HeroData, etc.
 │   │   ├── interfaces.py       #   IExtractor, IStorage, IScraper
@@ -358,8 +358,8 @@ flowchart LR
 uv run pytest
 
 # Specific test modules
-uv run pytest src/tests/test_graph_extractor.py -v
-uv run pytest src/tests/test_mapping_groups.py -v
+uv run pytest app/tests/test_graph_extractor.py -v
+uv run pytest app/tests/test_mapping_groups.py -v
 ```
 
 ---

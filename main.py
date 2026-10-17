@@ -8,14 +8,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.api.v1.routers import api_router
+from app.api.v1.routers import api_router
 
-from src.core.scheduler import (
+from app.core.scheduler import (
     start_scheduler,
     shutdown_scheduler,
     start_vendor_scrape_scheduler,
 )
-from src.config import (
+from app.config import (
     START_SCHEDULER,
     VENDOR_SCRAPE_CRON_ENABLED,
     VENDOR_SCRAPE_CRON_HOUR,
@@ -26,7 +26,7 @@ from src.config import (
 # ---------------------------------------------------------------------------
 # Bootstrap logging before anything else
 # ---------------------------------------------------------------------------
-from src.log_setup import setup_logging
+from app.log_setup import setup_logging
 
 setup_logging(log_dir=os.getenv("LOG_DIR", "log"))
 
@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 
 # FEEDBACK-3 G15: before the app is built, so an exception during construction
 # is reported. A no-op when SENTRY_DSN is empty: sentry_sdk.init is not called.
-from src.core.sentry import capture_exception, init_sentry  # noqa: E402
-from src.core.request_context import (  # noqa: E402
+from app.core.sentry import capture_exception, init_sentry  # noqa: E402
+from app.core.request_context import (  # noqa: E402
     TraceContextMiddleware,
     bound_trace,
     trace_ids_from_request,
@@ -46,7 +46,7 @@ init_sentry()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Warm up the pool on startup so the first request isn't slow
-    from src.infrastructure.db.pool import get_pool
+    from app.infrastructure.db.pool import get_pool
     get_pool()
     
     # Start the automated scheduler for background sync tasks
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     # Competitor-scraping tables (idempotent DDL). Non-fatal: a failure is
     # logged and the rest of the service still boots.
     if VENDOR_SCHEMA_AUTO_CREATE:
-        from src.infrastructure.db.vendor_schema import ensure_vendor_schema
+        from app.infrastructure.db.vendor_schema import ensure_vendor_schema
         ensure_vendor_schema(os.getenv("DATABASE_URL", ""))
 
     # Nightly competitor price scrape (peptides-platform#288). Opt-in per
@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
     shutdown_scheduler()
     
     # Close all pool connections cleanly on shutdown
-    from src.infrastructure.db.pool import close_pool
+    from app.infrastructure.db.pool import close_pool
     close_pool()
 
 app = FastAPI(
@@ -267,7 +267,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 # Get project root for static file path
 project_root = os.path.dirname(os.path.abspath(__file__))
-visualization_path = os.path.join(project_root, 'src', 'visualization')
+visualization_path = os.path.join(project_root, 'app', 'visualization')
 
 # Mount static files for visualization
 if os.path.exists(visualization_path):

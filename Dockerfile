@@ -4,8 +4,8 @@
 # (docker-compose.deploy.yml for production, orchestrator's ms-staging for staging).
 #
 # This image bundles:
-#   * the FastAPI backend  (main.py + src/api/...)
-#   * the static frontend  (src/visualization/*.html|css|js — mounted by FastAPI at /visualization/)
+#   * the FastAPI backend  (main.py + app/api/...)
+#   * the static frontend  (app/visualization/*.html|css|js — mounted by FastAPI at /visualization/)
 #   * Chromium + ChromeDriver for the Selenium-based scraper / scheduler jobs
 #     (Playwright, used by the competitor vendor scraper, launches this same
 #      Chromium via CHROME_BIN rather than downloading a second browser)
@@ -44,10 +44,10 @@ RUN uv sync --frozen --no-dev --no-install-project
 # ---------------------------------------------------------------------------
 # 3. Application source
 # ---------------------------------------------------------------------------
-COPY src/ ./src/
+COPY app/ ./app/
 COPY main.py ./
 # The competitor-scrape tables are created on boot from these two files
-# (src/infrastructure/db/vendor_schema.py). Without them in the image the
+# (app/infrastructure/db/vendor_schema.py). Without them in the image the
 # bootstrap fails and the admin Scrape tab has no tables to use.
 COPY migrations/migration_vendor_price_observations.sql migrations/migration_vendor_scrape_targets.sql ./migrations/
 

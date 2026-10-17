@@ -30,7 +30,7 @@ Stores administration/route methods (e.g. Injectable, Capsule, Nasal Spray).
 | 2 | `name` | `Method` (first keyword-mapped → canonical name) | `"Injectable"` |
 | 3 | `description` | `Method` (auto-generated) | `"Injectable administration method"` |
 
-**Mapper:** `AdministrationMethodMapper` (`src/mappers/group_a/lookup_mappers.py`)
+**Mapper:** `AdministrationMethodMapper` (`app/mappers/group_a/lookup_mappers.py`)
 
 **Notes:** CSV `Method` goes through keyword mapping before insertion (e.g. `"Nasal"` → `"Nasal Spray"`). See [Method Keyword Mapping](#6-method-keyword-mapping).
 
@@ -46,7 +46,7 @@ Stores general benefit descriptions.
 | 2 | `name` | `overview_key_benefits` (split by `.`) | `"Direct systemic delivery for cardiac tissue support"` |
 | 3 | `description` | `overview_key_benefits` (same as name) | `"Direct systemic delivery for cardiac tissue support, established reconstitution protocols..."` |
 
-**Mapper:** `BenefitMapper` (`src/mappers/group_a/lookup_mappers.py`)
+**Mapper:** `BenefitMapper` (`app/mappers/group_a/lookup_mappers.py`)
 **Logic:** Splits `overview_key_benefits` by periods into multiple benefit entries.
 
 ---
@@ -61,7 +61,7 @@ Stores potential side effects.
 | 2 | `name` | `side_effects_and_safety_side_effects_{1..9}` (split by `.`) | `"Nausea"` |
 | 3 | `description` | `side_effects_and_safety_side_effects_{1..9}` (same as name) | `"Nausea"` |
 
-**Mapper:** `SideEffectMapper` (`src/mappers/group_a/lookup_mappers.py`)
+**Mapper:** `SideEffectMapper` (`app/mappers/group_a/lookup_mappers.py`)
 **Logic:** Iterates `side_effects_and_safety_side_effects_1` through `_9`, splits each by periods.
 
 ---
@@ -76,7 +76,7 @@ Stores frequency and timing schedules.
 | 2 | `name` | `research_protocols_frequency_{1..5}` | `"Every 3-7 days"` |
 | 3 | `frequency` | `research_protocols_frequency_{1..5}` (same as name) | `"Every 3-7 days"` |
 
-**Mapper:** `ScheduleMapper` (`src/mappers/group_a/lookup_mappers.py`)
+**Mapper:** `ScheduleMapper` (`app/mappers/group_a/lookup_mappers.py`)
 **Logic:** Iterates `research_protocols_frequency_1` through `_5`.
 
 ---
@@ -92,7 +92,7 @@ Stores dosage amounts and units.
 | 3 | `amount` | `typical_dose` / `research_protocols_dose_{1..5}` (parsed) | `"10-20"` |
 | 4 | `unit` | `typical_dose` / `research_protocols_dose_{1..5}` (parsed) | `"mg"` |
 
-**Mapper:** `DosageMapper` (`src/mappers/group_a/lookup_mappers.py`)
+**Mapper:** `DosageMapper` (`app/mappers/group_a/lookup_mappers.py`)
 **Parser:** `parse_dosage_string()` — extracts numeric amount and unit suffix. Examples:
 - `"100 mcg"` → amount=`"100"`, unit=`"mcg"`
 - `"10-20mg (Every 3-7 days)"` → amount=`"10-20"`, unit=`"mg"`
@@ -109,7 +109,7 @@ Stores injection/application sites.
 | 1 | `id` | Auto-generated (SERIAL PK) | `1` |
 | 2 | `name` | `route` or `research_protocols_route_{1..5}` | `"Injectable (Subcutaneous: abdomen, thigh, upper arm)"` |
 
-**Mapper:** `ApplicationPlaceMapper` (`src/mappers/group_e/detail_mappers.py`)
+**Mapper:** `ApplicationPlaceMapper` (`app/mappers/group_e/detail_mappers.py`)
 **Logic:** Takes the route string as the application place name (truncated to 100 chars).
 
 ---
@@ -125,7 +125,7 @@ Stores external research studies.
 | 3 | `url` | `references_research_studies_{key}` (if value starts with `http`) | `"https://pubmed.ncbi.nlm.nih.gov/..."` |
 | 4 | `abstract` | `references_research_studies_{key}` (if value does NOT start with `http`) | `"Study on cardiac tissue repair..."` |
 
-**Mapper:** `ResearchStudyMapper` (`src/mappers/group_a/lookup_mappers.py`)
+**Mapper:** `ResearchStudyMapper` (`app/mappers/group_a/lookup_mappers.py`)
 
 ---
 
@@ -142,7 +142,7 @@ Stores academic citations with DOIs.
 | 5 | `publication_url` | `references_citations_{key}` (if starts with `http`) | `"https://pubmed.ncbi.nlm.nih.gov/..."` |
 | 6 | `abstract` | `references_citations_{key}` (full cleaned text) | `"Full citation text including abstract..."` |
 
-**Mapper:** `ResearchStudyMapper` (`src/mappers/group_a/lookup_mappers.py`)
+**Mapper:** `ResearchStudyMapper` (`app/mappers/group_a/lookup_mappers.py`)
 **Logic:** Cleans "View Publication" text, extracts DOI via regex, extracts authors before `(Year).`.
 
 ---
@@ -169,7 +169,7 @@ The central peptide record — one row per peptide.
 | 12 | `stop_signs` | `side_effects_and_safety_when_to_stop_{suffix}` (multiple columns) | `["If severe reaction occurs", "If symptoms persist"]` |
 | 13 | `key_information` | `overview_key_benefits` | `"Direct systemic delivery for cardiac tissue support..."` |
 
-**Mapper:** `PeptideMapper` (`src/mappers/group_b/peptide_mapper.py`)
+**Mapper:** `PeptideMapper` (`app/mappers/group_b/peptide_mapper.py`)
 **Slug generation:** `re.sub(r'[^a-z0-9]+', '-', raw_name.lower()).strip('-')`
 **Dynamic overview column:** Tries `overview_what_is_{slug}` first, falls back to first `overview_what_is_*` column found.
 
@@ -188,7 +188,7 @@ Links peptides to their benefits.
 | 3 | `benefit_id` | Resolved from `benefits.id` (via `benefit_name` lookup) | `7` |
 
 **CSV Source:** `overview_key_benefits` (split by `.`)
-**Mapper:** `RelationMapper._map_benefits()` (`src/mappers/group_c/relation_mappers.py`)
+**Mapper:** `RelationMapper._map_benefits()` (`app/mappers/group_c/relation_mappers.py`)
 
 ---
 
@@ -203,7 +203,7 @@ Links peptides to their side effects.
 | 3 | `side_effect_id` | Resolved from `side_effects.id` | `15` |
 
 **CSV Source:** `side_effects_and_safety_side_effects_{1..9}`
-**Mapper:** `RelationMapper._map_side_effects()` (`src/mappers/group_c/relation_mappers.py`)
+**Mapper:** `RelationMapper._map_side_effects()` (`app/mappers/group_c/relation_mappers.py`)
 
 ---
 
@@ -222,7 +222,7 @@ Captures interactions between peptides.
 
 **CSV Column Pattern:** `peptide_interactions_{peptide_name}_{interaction_type}`
 **Example CSV Column:** `peptide_interactions_bpc-157_synergistic`
-**Mapper:** `RelationMapper._map_interactions()` (`src/mappers/group_c/relation_mappers.py`)
+**Mapper:** `RelationMapper._map_interactions()` (`app/mappers/group_c/relation_mappers.py`)
 **Logic:** Column name is parsed: middle part = secondary peptide name, last part = interaction type (`synergistic`, `antagonistic`, `compatible`, `monitor_combination`, etc.).
 
 ---
@@ -246,7 +246,7 @@ Maps research indications/tags to peptides.
 - `research_indications_anti_aging_moderate_(geroprotective_potential)`
 
 **Effectiveness Tags:** `most_effective`, `effective`, `moderate`
-**Mapper:** `RelationMapper._map_indications()` (`src/mappers/group_c/relation_mappers.py`)
+**Mapper:** `RelationMapper._map_indications()` (`app/mappers/group_c/relation_mappers.py`)
 
 ---
 
@@ -265,7 +265,7 @@ Links peptides to research studies and citations.
 **CSV Source Columns:**
 - `references_research_studies_{key}` → type=`"study"`
 - `references_citations_{key}` → type=`"citation"`
-**Mapper:** `RelationMapper._map_references()` → `ResearchStudyMapper` (`src/mappers/group_c/relation_mappers.py`)
+**Mapper:** `RelationMapper._map_references()` → `ResearchStudyMapper` (`app/mappers/group_c/relation_mappers.py`)
 
 ---
 
@@ -289,7 +289,7 @@ Each protocol represents a specific administration protocol for a peptide.
 | 10 | `best_timing` | `best_timing` | `"Morning administration recommended"` |
 | 11 | `effects_timeline` | `effects_timeline` | `"Days 1-7: Initial effects, Weeks 2-4: Peak effects"` |
 
-**Mapper:** `ProtocolMapper` (`src/mappers/group_d/protocol_mapper.py`)
+**Mapper:** `ProtocolMapper` (`app/mappers/group_d/protocol_mapper.py`)
 **Logic:** Creates one protocol per research protocol entry (`research_protocols_goal_{i}` with matching `dose`, `frequency`, `route`), plus a default baseline protocol if no goals exist but `typical_dose` or `route` is present.
 
 ---
@@ -305,7 +305,7 @@ Numbered steps for reconstituting the peptide.
 | 3 | `step_number` | `how_to_reconstitute_others` (parsed numeric markers) | `1` |
 | 4 | `description` | `how_to_reconstitute_others` (text after step number) | `"Draw 1ml of bacteriostatic water into syringe"` |
 
-**Mapper:** `ReconstitutionMapper` (`src/mappers/group_e/detail_mappers.py`)
+**Mapper:** `ReconstitutionMapper` (`app/mappers/group_e/detail_mappers.py`)
 **Logic:** Splits `how_to_reconstitute_others` by newlines, detects numeric markers as step numbers.
 
 ---
@@ -323,7 +323,7 @@ Quality indicators for the protocol.
 
 **CSV Column Pattern:** `quality_indicators_{descriptive_name}`
 **Example CSV Columns:** `quality_indicators_white_lyophilized_powder`, `quality_indicators_clear_reconstituted_solution`
-**Mapper:** `QualityMapper` (`src/mappers/group_e/detail_mappers.py`)
+**Mapper:** `QualityMapper` (`app/mappers/group_e/detail_mappers.py`)
 
 ---
 
@@ -338,7 +338,7 @@ Links protocols to application places.
 | 3 | `application_place_id` | Resolved from `application_places.id` via route string | `3` |
 
 **CSV Source:** `route` or `research_protocols_route_{1..5}`
-**Mapper:** `ApplicationPlaceMapper` (`src/mappers/group_e/detail_mappers.py`)
+**Mapper:** `ApplicationPlaceMapper` (`app/mappers/group_e/detail_mappers.py`)
 
 ---
 
@@ -356,7 +356,7 @@ Links protocols to dosages and schedules.
 | 6 | `notes` | `research_protocols_dose_{i}` + `research_protocols_frequency_{i}` | `"Amount: 10-20mg, Freq: Every 3-7 days"` |
 
 **CSV Source:** `research_protocols_dose_{1..5}` + `research_protocols_frequency_{1..5}`, fallback: `typical_dose`
-**Mapper:** `ProtocolDosageMapper` (`src/mappers/group_e/detail_mappers.py`)
+**Mapper:** `ProtocolDosageMapper` (`app/mappers/group_e/detail_mappers.py`)
 
 ---
 
@@ -384,7 +384,7 @@ Pharmacokinetics graph data (concentration curves over time).
 | 14 | `legend` | `graph_data_json` → `[time_range].legend` (JSONB) | `{"peak": "rgb(34, 197, 94)", "half-life": "rgb(245, 158, 11)"}` |
 
 **CSV Column:** `graph_data_json` — a single JSON column containing all graph data.
-**Mapper:** `GraphMapper` (`src/mappers/group_d/graph_mapper.py`)
+**Mapper:** `GraphMapper` (`app/mappers/group_d/graph_mapper.py`)
 **Graph CSV:** Only `pep_pedia_graph.csv` contains the `graph_data_json` column.
 **Input Formats:** Supports two JSON formats:
 1. **Src pipeline format** (via `csv_storage.py` → `dataclasses.asdict()`): keys at root level

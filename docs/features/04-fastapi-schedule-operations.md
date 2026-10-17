@@ -1,6 +1,6 @@
 # Feature: FastAPI Server, Scheduler & Operations
 
-> **Module**: `main.py`, `src/api/`, `src/core/scheduler.py`, `src/core/job_queue.py`
+> **Module**: `main.py`, `app/api/`, `app/core/scheduler.py`, `app/core/job_queue.py`
 >
 > **Entry Point**: `uv run main.py`
 
@@ -111,7 +111,7 @@ async def lifespan(app: FastAPI):
 
 #### Sync Endpoints (`/api/v1/sync/`)
 
-**File**: `src/api/v1/endpoints/sync.py`
+**File**: `app/api/v1/endpoints/sync.py`
 
 | Method | Endpoint | Description | Background Task |
 |--------|----------|-------------|-----------------|
@@ -167,7 +167,7 @@ sequenceDiagram
 
 #### Evaluation Endpoints (`/api/v1/evaluation/`)
 
-**File**: `src/api/v1/endpoints/evaluation.py`
+**File**: `app/api/v1/endpoints/evaluation.py`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -184,7 +184,7 @@ sequenceDiagram
 
 #### Graph Data Endpoints (`/api/v1/graph/`)
 
-**File**: `src/api/v1/endpoints/graph.py`
+**File**: `app/api/v1/endpoints/graph.py`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -217,7 +217,7 @@ GET /api/v1/graph/42?method=Injectable
 
 #### Operations Endpoints (`/api/v1/operations/`)
 
-**File**: `src/api/v1/endpoints/operations.py`
+**File**: `app/api/v1/endpoints/operations.py`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -259,7 +259,7 @@ GET /api/v1/operations/job/sync_core_1687765432_a1b2c3d4
 
 #### Scheduler Endpoints (`/api/v1/scheduler/`)
 
-**File**: `src/api/v1/endpoints/scheduler.py`
+**File**: `app/api/v1/endpoints/scheduler.py`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -282,7 +282,7 @@ GET /api/v1/operations/job/sync_core_1687765432_a1b2c3d4
 
 ### 3.3 Scheduler
 
-**File**: `src/core/scheduler.py`
+**File**: `app/core/scheduler.py`
 
 Uses **APScheduler** (`AsyncIOScheduler`) to run automated syncs.
 
@@ -322,7 +322,7 @@ flowchart TD
 
 ### 3.4 Job Queue
 
-**File**: `src/core/job_queue.py`
+**File**: `app/core/job_queue.py`
 
 A lightweight **in-memory** job tracking system.
 
@@ -350,7 +350,7 @@ class Job:
 
 ### 3.5 Connection Pool
 
-**File**: `src/infrastructure/db/connection.py` → `DbPool`
+**File**: `app/infrastructure/db/connection.py` → `DbPool`
 
 ```python
 _pool: DbPool = DbPool(db_url, minconn=1, maxconn=5)
@@ -365,7 +365,7 @@ _pool: DbPool = DbPool(db_url, minconn=1, maxconn=5)
 
 ### 3.6 Visualization Dashboard
 
-**File**: `src/visualization/` (index.html, script.js, styles.css)
+**File**: `app/visualization/` (index.html, script.js, styles.css)
 
 The FastAPI server mounts a static file server for the frontend:
 
@@ -383,7 +383,7 @@ app.mount("/visualization", StaticFiles(directory=visualization_path, html=True)
 
 ## 4. Router Registration
 
-**File**: `src/api/v1/routers.py`
+**File**: `app/api/v1/routers.py`
 
 ```python
 api_router = APIRouter()
@@ -427,7 +427,7 @@ Final URL structure:
 FROM python:3.12-slim-bookworm
 RUN apt-get install -y chromium chromium-driver
 COPY requirements.txt . && pip install -r requirements.txt
-COPY src/ ./src/
+COPY app/ ./app/
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_BIN=/usr/bin/chromedriver
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

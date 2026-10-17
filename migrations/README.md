@@ -6,14 +6,14 @@ web_scrape has no migration runner. Every file here is idempotent SQL (`IF NOT E
 
 | File | Creates | How |
 |---|---|---|
-| `migration_vendor_price_observations.sql` | `vendor_price_observations` | On every startup by `src/infrastructure/db/vendor_schema.py` while `VENDOR_SCHEMA_AUTO_CREATE=true` (the default) |
+| `migration_vendor_price_observations.sql` | `vendor_price_observations` | On every startup by `app/infrastructure/db/vendor_schema.py` while `VENDOR_SCHEMA_AUTO_CREATE=true` (the default) |
 | `migration_vendor_scrape_targets.sql` | `vendor_scrape_targets` | Same |
 
-These are web_scrape's own tables. They are the only SQL files copied into the image (`Dockerfile`, `.dockerignore`). Moving or renaming them means updating both, plus `vendor_schema.py`; `src/tests/test_image_contents.py` checks all three.
+These are web_scrape's own tables. They are the only SQL files copied into the image (`Dockerfile`, `.dockerignore`). Moving or renaming them means updating both, plus `vendor_schema.py`; `app/tests/test_image_contents.py` checks all three.
 
 ## Applied by hand
 
-These change tables that the platform's Drizzle schema owns (`peptides`, `peptide_graph`; cross-repo contract XR-8, `../orchestrator/docs/ecosystem/dependencies.md#xr-8`). Check the platform schema before running one; a column the platform does not declare is listed in `KNOWN_UNDECLARED_COLUMNS` in `src/tests/test_platform_schema_contract.py`.
+These change tables that the platform's Drizzle schema owns (`peptides`, `peptide_graph`; cross-repo contract XR-8, `../orchestrator/docs/ecosystem/dependencies.md#xr-8`). Check the platform schema before running one; a column the platform does not declare is listed in `KNOWN_UNDECLARED_COLUMNS` in `app/tests/test_platform_schema_contract.py`.
 
 | File | Changes |
 |---|---|

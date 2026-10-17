@@ -1,6 +1,6 @@
 # Feature: Web Scrape
 
-> **Module**: `src/services/`, `src/extractors/`, `src/utils/crawl_peptide_urls.py`, `src/infrastructure/webdriver_factory.py`, `src/infrastructure/csv_storage.py`
+> **Module**: `app/services/`, `app/extractors/`, `app/utils/crawl_peptide_urls.py`, `app/infrastructure/webdriver_factory.py`, `app/infrastructure/csv_storage.py`
 >
 > **Entry Point**: `main.py --scrape` or `uv run main.py --scrape`
 
@@ -89,7 +89,7 @@ flowchart TB
 
 ### 3.1 URL Discovery (`crawl_peptide_urls`)
 
-**File**: `src/utils/crawl_peptide_urls.py`
+**File**: `app/utils/crawl_peptide_urls.py`
 
 ```mermaid
 flowchart LR
@@ -114,7 +114,7 @@ flowchart LR
 
 ### 3.2 WebDriver Factory (`WebDriverFactory`)
 
-**File**: `src/infrastructure/webdriver_factory.py`
+**File**: `app/infrastructure/webdriver_factory.py`
 
 Creates a Selenium Chrome WebDriver with:
 
@@ -133,7 +133,7 @@ Supports two modes:
 
 ### 3.3 Scraper Manager (`ScraperManager`)
 
-**File**: `src/services/scraper_manager.py`
+**File**: `app/services/scraper_manager.py`
 
 **Business Logic**:
 - Manages a multiprocessing pool to scrape URLs concurrently.
@@ -175,7 +175,7 @@ sequenceDiagram
 
 ### 3.4 Page Scraper (`PageScraper`)
 
-**File**: `src/services/page_scraper.py`
+**File**: `app/services/page_scraper.py`
 
 This is the core scraper that processes one peptide URL. It:
 
@@ -193,15 +193,15 @@ Each extractor is a specialized class that parses a specific section of the page
 
 | Extractor | File | Data Extracted |
 |-----------|------|----------------|
-| **HeroExtractor** | `src/extractors/hero.py` | Peptide name, subtitle, hero facts (MW, formula, CAS, sequence, etc.) |
-| **QuickGuideExtractor** | `src/extractors/quick_guide.py` | Quick reference data (dosage, timing, half-life) |
-| **CommunityExtractor** | `src/extractors/community.py` | Community insights, poll results, user ratings |
-| **SectionExtractor** | `src/extractors/section.py` | Structured content sections — handles accordions, tabs, tables, bullet lists, numbered steps, checkmark lists |
-| **GraphExtractor** | `src/extractors/graph.py` | SVG path data (coordinates), markers, axis labels, legend, peak/half-life/cleared stats — for each time range (24h, 7d, 14d, 30d) |
+| **HeroExtractor** | `app/extractors/hero.py` | Peptide name, subtitle, hero facts (MW, formula, CAS, sequence, etc.) |
+| **QuickGuideExtractor** | `app/extractors/quick_guide.py` | Quick reference data (dosage, timing, half-life) |
+| **CommunityExtractor** | `app/extractors/community.py` | Community insights, poll results, user ratings |
+| **SectionExtractor** | `app/extractors/section.py` | Structured content sections — handles accordions, tabs, tables, bullet lists, numbered steps, checkmark lists |
+| **GraphExtractor** | `app/extractors/graph.py` | SVG path data (coordinates), markers, axis labels, legend, peak/half-life/cleared stats — for each time range (24h, 7d, 14d, 30d) |
 
 #### BaseExtractor
 
-**File**: `src/extractors/base.py`
+**File**: `app/extractors/base.py`
 
 Provides two shared utilities:
 
@@ -232,7 +232,7 @@ flowchart TD
 
 #### GraphExtractor — Detailed Workflow
 
-**File**: `src/extractors/graph.py`
+**File**: `app/extractors/graph.py`
 
 ```mermaid
 flowchart TD
@@ -256,7 +256,7 @@ The graph extractor tracks the SVG `d` attribute before clicking a new tab. Afte
 
 ### 3.6 CSV Storage (`CSVStorage`)
 
-**File**: `src/infrastructure/csv_storage.py`
+**File**: `app/infrastructure/csv_storage.py`
 
 | Method | Behavior |
 |--------|----------|
@@ -275,7 +275,7 @@ Peptide_Name | Full_Name | Method | URL | molecular_weight | chemical_formula | 
 
 ### ErrorTracker
 
-**File**: `src/utils/error_tracker.py`
+**File**: `app/utils/error_tracker.py`
 
 Tracks two categories of errors:
 
@@ -295,7 +295,7 @@ At the end of a run, the tracker can:
 
 ## 5. Configuration
 
-**File**: `src/config.py`
+**File**: `app/config.py`
 
 | Setting | Default | Description |
 |---------|---------|-------------|

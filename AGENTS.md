@@ -5,10 +5,10 @@ It is an upstream behind the orchestrator gateway (`/web_scrape/*`); the platfor
 Ecosystem map: `../orchestrator/docs/ecosystem/AGENTS.md` · contracts: `../orchestrator/docs/ecosystem/dependencies.md` ([GitHub](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/dependencies.md)). Canonical checkout: `G:\aultra\microservice\web_scrape`.
 
 ## Navigation
-- `src/api/v1/routers.py` + `src/api/v1/endpoints/` — every HTTP route; `src/api/gateway_auth.py` checks `X-Gateway-Token`.
-- `src/mappers/` — CSV row → platform tables, groups A–F (`docs/structured.md` is the insert order).
-- `src/infrastructure/db/repositories/` — all SQL; `peptide.py` `delete_peptide_cascading` names the platform tables.
-- `src/services/vendor_*` — competitor pricing; `vendor_products_publisher.py` is an unimplemented seam (`_send` raises).
+- `app/api/v1/routers.py` + `app/api/v1/endpoints/` — every HTTP route; `app/api/gateway_auth.py` checks `X-Gateway-Token`.
+- `app/mappers/` — CSV row → platform tables, groups A–F (`docs/structured.md` is the insert order).
+- `app/infrastructure/db/repositories/` — all SQL; `peptide.py` `delete_peptide_cascading` names the platform tables.
+- `app/services/vendor_*` — competitor pricing; `vendor_products_publisher.py` is an unimplemented seam (`_send` raises).
 - `migrations/README.md` — which SQL runs on startup and which by hand.
 - `docs/features/` — one deep-dive per feature.
 
@@ -30,7 +30,7 @@ Ecosystem map: `../orchestrator/docs/ecosystem/AGENTS.md` · contracts: `../orch
 |---|---|
 | 401 on every `/web_scrape/*` call | `API_TOKEN` here differs from the gateway's (XR-10) |
 | gateway 502/503 for `/web_scrape/*` | `WEBSCRAPE_SERVICE_URL` uses host port 8005 inside Docker; the container listens on 8000 |
-| sync fails with an unknown column or relation | platform Drizzle schema changed (XR-8); run `src/tests/test_platform_schema_contract.py` |
+| sync fails with an unknown column or relation | platform Drizzle schema changed (XR-8); run `app/tests/test_platform_schema_contract.py` |
 | admin Scrape tab 500s at startup | vendor tables not created: `migrations/` files missing from the image or `VENDOR_SCHEMA_AUTO_CREATE=false` |
 | peptide delete fails on a foreign key | a new platform table references `peptides`; add it to `delete_peptide_cascading` with the platform change |
 
