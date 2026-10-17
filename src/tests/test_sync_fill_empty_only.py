@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.v1.endpoints.sync as sync_endpoints
+import src.controllers.pep_pedia_sync_controller as sync_controller
 import src.mappers.db_import_orchestrator as core_module
 import src.mappers.graph_import_orchestrator as graph_module
 from src.infrastructure.db.repositories.peptide import (
@@ -272,7 +273,16 @@ def client(monkeypatch):
 ])
 def test_endpoint_passes_flag(client, monkeypatch, path, task, body, expected):
     calls = []
-    monkeypatch.setattr(sync_endpoints, task, lambda *a, **kw: calls.append(kw))
+    monkeypatch.setattr(sync_controller, task, lambda *a, **kw: calls.append(kw))
     res = client.post(f"/api/v1/sync{path}", json=body)
     assert res.status_code == 202
     assert calls == [{"fill_empty_only": expected}]
+
+
+def test_endpoint_500_without_database_url(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    app = FastAPI()
+    app.include_router(sync_endpoints.router, prefix="/api/v1/sync")
+    res = TestClient(app).post("/api/v1/sync/graph-missing", json={"urls": ["https://pep-pedia.org/peptides/klow"]})
+    assert res.status_code == 500
+    assert res.json()["detail"] == "DATABASE_URL not configured."
