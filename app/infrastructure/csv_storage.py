@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from tqdm import tqdm
 
-from app.config import MASTER_CSV, log_debug, log_error
+from app.core.config import MASTER_CSV
+from app.core.logging import log_debug, log_error
 from app.core.interfaces import IStorage
 from app.core.models import PeptideData
 

@@ -3,7 +3,7 @@
 We are reading other companies' websites. The first rule we hold ourselves to
 is the one they can actually state machine-readably: ``robots.txt``. This
 module is the only thing that decides whether a URL may be fetched, and
-:class:`~app.services.vendor_scraper.VendorScrapeService` asks it *before*
+:class:`~app.scrapers.vendors.vendor_scraper.VendorScrapeService` asks it *before*
 opening a browser — a disallowed path is never loaded at all, not loaded and
 then discarded.
 

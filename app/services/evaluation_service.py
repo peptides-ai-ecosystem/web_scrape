@@ -7,7 +7,8 @@ background work to ``schedule`` (the endpoint passes
 import os
 from typing import Any, Callable, Dict, Optional
 
-from app.config import ENHANCED_CSV, GRAPH_CSV, log_error
+from app.core.config import ENHANCED_CSV, GRAPH_CSV
+from app.core.logging import log_error
 from app.core.errors import ConfigurationError
 from app.core.job_queue import get_job_queue
 from app.evaluation.graph_evaluator import run_graph_evaluation

@@ -8,7 +8,7 @@ would double the request rate against the same hosts. The nightly cron
 """
 from typing import Any, Callable, Dict, List, Optional
 
-from app.config import log_error, log_info
+from app.core.logging import log_error, log_info
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.core.job_queue import JobStatus, get_job_queue
 from app.core.sentry import capture_background_failure

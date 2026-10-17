@@ -4,7 +4,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
-from app.config import TIMEOUT
+from app.core.config import TIMEOUT
 
 logger = logging.getLogger(__name__)
 

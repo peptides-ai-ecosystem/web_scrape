@@ -12,7 +12,7 @@ is skipped, preserving the original open API behavior.
 import hmac
 from fastapi import Header, HTTPException
 
-from app.config import API_TOKEN, GATEWAY_AUTH_HEADER
+from app.core.config import API_TOKEN, GATEWAY_AUTH_HEADER
 
 
 def require_gateway_token(

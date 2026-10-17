@@ -4,7 +4,7 @@ HTTP only — each route is a status mapping plus one call: targets go to
 ``app/services/vendor_target_service.py``, observations to
 ``app/services/vendor_observation_service.py`` and scrape runs to
 ``app/controllers/vendor_scrape_controller.py``. The pipeline itself lives in
-``app/services/vendor_scraper.py`` and its wiring in
+``app/scrapers/vendors/vendor_scraper.py`` and its wiring in
 ``app/services/vendor_scrape_runner.py``.
 
 These are what the admin "Pepti.AI -> Scrape" tab drives, through the platform

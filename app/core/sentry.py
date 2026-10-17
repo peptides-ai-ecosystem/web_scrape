@@ -40,7 +40,7 @@ import re
 import socket
 from typing import Any, Optional
 
-from app.config import settings
+from app.core.config import settings
 from app.core.redaction import MASK, redact, secret_literals
 from app.core.request_context import bound_trace, get_request_id, get_trace_id
 

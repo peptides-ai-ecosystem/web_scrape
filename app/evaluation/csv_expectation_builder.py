@@ -7,8 +7,8 @@ Reuses the existing mapper stack (DbImportOrchestrator) to derive the
 import re
 from typing import Any, Dict, Optional
 
-from app.mappers.db_import_orchestrator import DbImportOrchestrator
-from app.mappers.group_d.graph_mapper import GraphMapper
+from app.services.sync.db_import_orchestrator import DbImportOrchestrator
+from app.services.sync.group_d.graph_mapper import GraphMapper
 
 
 # Mirror of the METHOD_KEYWORD_MAP defined in DbImportOrchestrator.sync_to_db

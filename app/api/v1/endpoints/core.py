@@ -7,7 +7,7 @@ indications, references, plus a graph-row summary). These endpoints power the
 Core Data Inspector page at `/visualization/core.html`, but they are also
 useful for ad-hoc DB inspection via Swagger or curl.
 
-All queries live in `app/infrastructure/db/repositories/peptide_inspector.py`;
+All queries live in `app/repositories/peptide_inspector.py`;
 these routes call `app/services/core_data_service.py`.
 """
 import logging

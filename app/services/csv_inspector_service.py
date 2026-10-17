@@ -1,6 +1,6 @@
 """Read the scraped CSV for the Core Data Inspector (``/api/v1/csv/*``).
 
-The enhanced CSV (``app.config.ENHANCED_CSV``) is wide (about 2,400 columns),
+The enhanced CSV (``app.core.config.ENHANCED_CSV``) is wide (about 2,400 columns),
 so this module:
 
 - Loads it once and caches in memory keyed by mtime, refreshing on file change.
@@ -19,7 +19,7 @@ import re
 from threading import Lock
 from typing import Any, Dict, List, Optional
 
-from app.config import ENHANCED_CSV as MASTER_CSV
+from app.core.config import ENHANCED_CSV as MASTER_CSV
 from app.core.errors import NotFoundError
 
 logger = logging.getLogger(__name__)

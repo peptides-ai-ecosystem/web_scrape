@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import openapi_docs
 from app.api.v1.routers import api_router
-from app.config import (
+from app.core.config import (
     START_SCHEDULER,
     VENDOR_SCHEMA_AUTO_CREATE,
     VENDOR_SCRAPE_CRON_ENABLED,
@@ -26,7 +26,7 @@ from app.config import (
 from app.core.request_context import TraceContextMiddleware, bound_trace, trace_ids_from_request
 from app.core.scheduler import shutdown_scheduler, start_scheduler, start_vendor_scrape_scheduler
 from app.core.sentry import capture_exception, init_sentry
-from app.log_setup import setup_logging
+from app.core.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +47,12 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Scheduler start skipped on boot (START_SCHEDULER=false)")
 
-    # Competitor-scraping tables (idempotent DDL). Non-fatal: a failure is
-    # logged and the rest of the service still boots.
+    # Alembic revisions for this service's own tables, only when explicitly
+    # enabled (the deploy normally runs `alembic upgrade head` itself).
+    # Non-fatal: a failure is logged and the rest of the service still boots.
     if VENDOR_SCHEMA_AUTO_CREATE:
-        from app.infrastructure.db.vendor_schema import ensure_vendor_schema
-        ensure_vendor_schema(os.getenv("DATABASE_URL", ""))
+        from app.infrastructure.db.migrate import upgrade_to_head
+        upgrade_to_head()
 
     # Nightly competitor price scrape (peptides-platform#288). Opt-in per
     # environment: we do not start hitting other companies' sites just

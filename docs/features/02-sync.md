@@ -1,6 +1,6 @@
 # Feature: Database Sync
 
-> **Module**: `app/mappers/`, `app/infrastructure/db/`, `app/infrastructure/csv_storage.py`
+> **Module**: `app/services/sync/`, `app/infrastructure/db/`, `app/infrastructure/csv_storage.py`
 >
 > **Entry Points**: `main.py --sync` (v1 sync), API endpoints (`/api/v1/sync/*`), Scheduler (automated)
 >
@@ -124,7 +124,7 @@ If no keyword matches, or the mapped method doesn't exist in the DB's `administr
 
 ### 3.2 Core Sync Flow (`DbImportOrchestrator`)
 
-**File**: `app/mappers/db_import_orchestrator.py`
+**File**: `app/services/sync/db_import_orchestrator.py`
 
 ```mermaid
 sequenceDiagram
@@ -187,7 +187,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group A — Lookup Mappers
 
-**Directory**: `app/mappers/group_a/`
+**Directory**: `app/services/sync/group_a/`
 
 | Mapper | File | Output |
 |--------|------|--------|
@@ -205,7 +205,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group B — Peptide Mapper
 
-**Directory**: `app/mappers/group_b/`
+**Directory**: `app/services/sync/group_b/`
 
 | Mapper | Output Fields |
 |--------|---------------|
@@ -218,7 +218,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group C — Relation Mappers
 
-**Directory**: `app/mappers/group_c/`
+**Directory**: `app/services/sync/group_c/`
 
 | Mapper | Output |
 |--------|--------|
@@ -226,7 +226,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 #### Group D — Protocol Mapper
 
-**Directory**: `app/mappers/group_d/`
+**Directory**: `app/services/sync/group_d/`
 
 | Mapper | Output |
 |--------|--------|
@@ -234,7 +234,7 @@ The mapper stack transforms one CSV row into structured database payloads, organ
 
 ### 3.4 Graph Sync Flow (`GraphImportOrchestrator`)
 
-**File**: `app/mappers/graph_import_orchestrator.py`
+**File**: `app/services/sync/graph_import_orchestrator.py`
 
 ```mermaid
 flowchart TD
@@ -252,7 +252,7 @@ flowchart TD
 
 #### Graph Mapper
 
-**File**: `app/mappers/group_d/graph_mapper.py`
+**File**: `app/services/sync/group_d/graph_mapper.py`
 
 Handles two input formats and normalizes them for DB insertion:
 
@@ -299,7 +299,7 @@ class DbManager:
 
 #### Repository Pattern
 
-**File**: `app/infrastructure/db/repositories/`
+**File**: `app/repositories/`
 
 Separate repository classes for each domain:
 

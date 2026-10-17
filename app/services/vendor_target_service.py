@@ -13,19 +13,19 @@ from urllib.parse import urlsplit
 
 import psycopg2
 
-from app.config import (
+from app.core.config import (
     VENDOR_MIN_CONFIDENCE,
     VENDOR_PRICE_DELTA_THRESHOLD,
     VENDOR_SCRAPE_MIN_INTERVAL_SECONDS,
     VENDOR_SCRAPER_USER_AGENT,
     VENDOR_TARGETS_FILE,
-    log_info,
 )
+from app.core.logging import log_info
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError, ServiceUnavailableError
 from app.core.owned_stores import owned_reason
 from app.core.vendor_models import DiscoveryMode, TargetReviewState, VendorTarget
 from app.infrastructure.db.connection import DbConnection
-from app.infrastructure.db.repositories import VendorTargetRepository
+from app.repositories import VendorTargetRepository
 from app.infrastructure.url_safety import UnsafeTargetURLError, check_url
 from app.infrastructure.vendor_targets import (
     VendorTargetConfigError,

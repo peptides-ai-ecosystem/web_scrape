@@ -5,14 +5,15 @@ from apscheduler.jobstores.base import JobLookupError
 from apscheduler.events import EVENT_JOB_ERROR
 import os
 
-from app.utils.crawl_peptide_urls import crawl_peptide_urls
-from app.services.scraper_manager import ScraperManager
+from app.scrapers.pep_pedia.crawl_peptide_urls import crawl_peptide_urls
+from app.scrapers.pep_pedia.scraper_manager import ScraperManager
 from app.infrastructure.csv_storage import CSVStorage
-from app.mappers.db_import_orchestrator import DbImportOrchestrator
-from app.mappers.graph_import_orchestrator import GraphImportOrchestrator
+from app.services.sync.db_import_orchestrator import DbImportOrchestrator
+from app.services.sync.graph_import_orchestrator import GraphImportOrchestrator
 from app.utils.error_tracker import ErrorTracker
 from pathlib import Path
-from app.config import log_debug, log_error, OUTPUT_DIR, FULL_CSV
+from app.core.config import OUTPUT_DIR, FULL_CSV
+from app.core.logging import log_debug, log_error
 from app.core.sentry import capture_background_failure, capture_job_error
 
 # Keep a global instance of the scheduler

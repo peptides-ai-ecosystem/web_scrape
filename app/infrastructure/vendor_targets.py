@@ -3,7 +3,7 @@
 Targets are **configuration, not code** (peptides-platform#288). Since the
 admin "Scrape" tab (CEO feedback round 2, P2) they are primarily managed
 through the API and stored in ``vendor_scrape_targets``
-(:mod:`app.infrastructure.db.repositories.vendor_target`). The JSON file named
+(:mod:`app.repositories.vendor_target`). The JSON file named
 by ``VENDOR_TARGETS_FILE`` is kept as a seed / fallback: a file target is used
 only while no DB target has the same slug, so the DB always wins and an admin
 can take a file target over by saving it once.
@@ -275,7 +275,7 @@ def load_targets(
     Returns an empty list when the file is absent or unreadable — see the
     module docstring for why that is not an exception.
     """
-    from app.config import VENDOR_TARGETS_FILE
+    from app.core.config import VENDOR_TARGETS_FILE
 
     target_path = Path(path) if path is not None else Path(VENDOR_TARGETS_FILE)
 

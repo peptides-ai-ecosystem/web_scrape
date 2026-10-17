@@ -3,8 +3,8 @@
 > **Issue**: peptides-platform#288 (depends on #263 / #10)
 >
 > **Modules**: `app/core/vendor_models.py`, `app/infrastructure/{robots,rate_limiter,playwright_fetcher,vendor_targets}.py`,
-> `app/extractors/vendor_listing.py`, `app/services/{vendor_scraper,vendor_confidence,vendor_scrape_runner,vendor_products_publisher}.py`,
-> `app/infrastructure/db/repositories/vendor_observation.py`, `app/api/v1/endpoints/vendors.py`
+> `app/scrapers/vendors/extractors/vendor_listing.py`, `app/services/{vendor_scraper,vendor_confidence,vendor_scrape_runner,vendor_products_publisher}.py`,
+> `app/repositories/vendor_observation.py`, `app/api/v1/endpoints/vendors.py`
 >
 > **Entry points**: `POST /api/v1/vendors/scrape` (on demand) and the nightly APScheduler cron
 >
@@ -222,7 +222,7 @@ guards. A guard only the cron honours is not a guard.
 
 peptides-platform#288 asks for rows in `vendor_products` with `source = 'scraper'`. That write is **not
 implemented**, and the full reasoning lives in the module docstring of
-`app/services/vendor_products_publisher.py`. In short, four independent blockers:
+`app/scrapers/vendors/vendor_products_publisher.py`. In short, four independent blockers:
 
 1. **No reachable database.** `vendor_products` is in the peptides-platform database. This service has one
    `DATABASE_URL`, pointing at its own store, and no credentials or client for the platform's.
@@ -248,10 +248,10 @@ This service still writes nothing outside its own database. The platform-side ch
 ## 6. Testing
 
 ```bash
-uv run pytest app/tests/test_vendor_scraper.py app/tests/test_vendor_targets_api.py app/tests/test_vendor_ssrf.py -q
+uv run pytest tests/vendors/test_vendor_scraper.py tests/vendors/test_vendor_targets_api.py tests/vendors/test_vendor_ssrf.py -q
 ```
 
-`test_vendor_targets_api.py::TestLocalFixtureSite` serves `app/tests/fixtures/competitor_site/` (a static
+`test_vendor_targets_api.py::TestLocalFixtureSite` serves `tests/vendors/fixtures/competitor_site/` (a static
 fixture shop with a robots.txt that disallows `/private/`) from `http.server` on 127.0.0.1 and drives the
 real Playwright fetcher at it. It skips when no Chromium launches — set `CHROME_BIN` to an installed
 Chromium. No test contacts a real competitor site. Because 127.0.0.1 is refused by the SSRF guard, that

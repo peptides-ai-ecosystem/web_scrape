@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from app.infrastructure.db.service import DbManager
-from app.mappers.group_d.graph_mapper import GraphMapper
+from app.services.sync.group_d.graph_mapper import GraphMapper
 from app.utils.peptide_utils import find_best_match, extract_essence
 
 

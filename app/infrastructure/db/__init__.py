@@ -1,8 +1,8 @@
 """Database infrastructure module."""
 from app.infrastructure.db.connection import DbConnection
 from app.infrastructure.db.connection import DbPool as NewDbPool
-from app.infrastructure.db.base_repository import BaseRepository
-from app.infrastructure.db.repositories import (
+from app.repositories.base import BaseRepository
+from app.repositories import (
     PeptideRepository,
     ProtocolRepository,
     ResearchStudyRepository,

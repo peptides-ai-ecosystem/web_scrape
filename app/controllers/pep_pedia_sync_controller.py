@@ -11,16 +11,17 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from app.config import ENHANCED_CSV, GRAPH_CSV, OUTPUT_DIR, log_debug, log_error, log_info, log_success
+from app.core.config import ENHANCED_CSV, GRAPH_CSV, OUTPUT_DIR
+from app.core.logging import log_debug, log_error, log_info, log_success
 from app.core.errors import ConfigurationError
 from app.core.job_queue import JobStatus, get_job_queue
 from app.core.models import ScrapeMode
 from app.infrastructure.csv_storage import CSVStorage
-from app.mappers.db_import_orchestrator import DbImportOrchestrator
-from app.mappers.graph_import_orchestrator import GraphImportOrchestrator
+from app.services.sync.db_import_orchestrator import DbImportOrchestrator
+from app.services.sync.graph_import_orchestrator import GraphImportOrchestrator
 from app.models.sync import SyncRequest
-from app.services.scraper_manager import ScraperManager
-from app.utils.crawl_peptide_urls import crawl_peptide_urls
+from app.scrapers.pep_pedia.scraper_manager import ScraperManager
+from app.scrapers.pep_pedia.crawl_peptide_urls import crawl_peptide_urls
 from app.utils.error_tracker import ErrorTracker
 
 Schedule = Callable[..., Any]

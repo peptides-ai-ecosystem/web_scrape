@@ -52,7 +52,7 @@ class UnsafeTargetURLError(ValueError):
 def private_targets_allowed() -> bool:
     """``VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS``, read on every call so tests
     (and an operator flipping it) take effect without a re-import."""
-    from app.config import settings
+    from app.core.config import settings
 
     return bool(getattr(settings, "VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS", False))
 

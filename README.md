@@ -1,389 +1,43 @@
-# 🧬 Pep-Pedia — Web Scraper & Visualization Pipeline
+# web_scrape
 
-> **Extract** → **Sync** → **Evaluate** → **Visualize** — An end-to-end pipeline for scraping peptide pharmacokinetics data from [pep-pedia.org](https://pep-pedia.org), synchronizing it to PostgreSQL, evaluating sync quality, and serving interactive graph visualizations via a FastAPI dashboard.
+Scrapes pep-pedia.org and competitor vendor sites, syncs peptide and PK-graph data into the platform database, and serves the sync, graph, evaluation, operations and vendor-pricing API (FastAPI + APScheduler). It runs behind the orchestrator gateway at `/web_scrape/*`; the platform admin and the peptide service call it.
 
-[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=flat&logo=postgresql&logoColor=white)](https://postgresql.org)
-[![Selenium](https://img.shields.io/badge/Selenium-4.40-43B02A?style=flat&logo=selenium&logoColor=white)](https://selenium.dev)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)](https://docker.com)
+Two scrapers live here (`docs/README.md`): **pep_pedia** (peptide pages -> CSV -> the platform's peptide and PK-graph tables) and **vendors** (competitor product pages -> price observations in this service's own tables). A new site is a new package under `app/scrapers/` (`docs/adding-a-scraper.md`).
 
----
+## Layout
 
-## ☁️ Where the code runs on AWS
+```
+main.py                      app = create_app()  (container: uvicorn main:app)
+app/factory.py               the app, lifespan, middleware, /visualization mount
+app/api/v1/endpoints/        routes: status codes and one call downward
+app/controllers/             use cases that scrape and write (pep-pedia sync, vendor scrape)
+app/services/                business rules; app/services/sync/ = CSV -> platform tables (groups A-F)
+app/scrapers/                pep_pedia/ and vendors/ (+ registry.py)
+app/repositories/            all SQL, one file per table
+app/infrastructure/          DB pool, Playwright, Selenium, polite HTTP, robots, rate limiter, SSRF guard
+app/core/                    settings, logging, auth, Sentry, errors, job queue, scheduler
+app/models/                  Pydantic request and response models
+app/visualization/           operator dashboard (served at /visualization)
+alembic/                     revisions for this service's own two tables
+tests/<theme>/               pep_pedia, vendors, sync, evaluation, ops (tests/README.md)
+```
 
-The EC2 host does **not** hold this repository. A push to `staging` deploys
-`web-scrape-staging` in the shared staging stack (orchestrator's
-`deploy/ms-staging/`). A push to `master` is a **production** deploy: it runs
-`.github/workflows/deploy.yml`, which:
-
-1. builds the image from the whole repository (Dockerfile) and pushes it to
-   `ghcr.io/peptides-ai-ecosystem/web_scrape`, tagged with the commit sha;
-2. copies `docker-compose.deploy.yml` to the box;
-3. pulls that exact image and restarts the `web-scrape` container.
-
-So on the box you will only find `~/web_scrape/docker-compose.deploy.yml` and
-`.env`; the code is inside the container (`/app/app`, `/app/main.py`).
-
-To see which code is live, call `GET /health`. Its `commit` field is the git
-sha the running image was built from (FEEDBACK-3 G36). Then compare it with
-`git log master -1`. On the box, `docker inspect web-scrape --format
-'{{.Config.Image}}'` shows the same sha in the image tag.
-
-**Error reporting (Sentry, FEEDBACK-3 G15).** Off unless `SENTRY_DSN` is set in
-the box's `.env` (run the deploy workflow with `set_sentry_dsn`). It reports
-5xx, timeouts and unhandled exceptions on API routes, scheduler jobs that raise,
-and sync / competitor scrape runs that fail as a whole — never ordinary 4xx, and
-never a single competitor page that fails to parse. Events are tagged
-`service=web_scrape` plus the request's `X-Trace-Id`; credentials are scrubbed.
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `SENTRY_DSN` | empty | Empty = Sentry fully off (no init, no network) |
-| `SENTRY_ENVIRONMENT` | `$ENVIRONMENT`, else `production` | Environment shown in Sentry |
-| `SENTRY_RELEASE` | `$GIT_SHA` (baked in by the Dockerfile) | Release shown in Sentry |
-| `SENTRY_TRACES_SAMPLE_RATE` | `0.0` | Performance tracing; leave at 0 |
-
----
-
-## 📑 Feature Documentation
-
-Each feature is documented in detail with business logic, architecture diagrams, and code workflows:
-
-| # | Feature | Document | Key Modules |
-|---|---------|----------|-------------|
-| 1 | **🕷️ Web Scrape** | [`docs/features/01-scrape.md`](docs/features/01-scrape.md) | `PageScraper`, `ScraperManager`, extractors, `WebDriverFactory`, `CSVStorage` |
-| 2 | **🔄 Database Sync** | [`docs/features/02-sync.md`](docs/features/02-sync.md) | `DbImportOrchestrator`, `GraphImportOrchestrator`, mappers (groups A–F) |
-| 3 | **📊 Evaluation** | [`docs/features/03-evaluation.md`](docs/features/03-evaluation.md) | `EvaluationEngine`, `CsvExpectationBuilder`, `DbActualFetcher`, `GraphEvaluator` |
-| 4 | **🚀 FastAPI & Scheduler & Operations** | [`docs/features/04-fastapi-schedule-operations.md`](docs/features/04-fastapi-schedule-operations.md) | `main.py`, APScheduler, `JobQueue`, async endpoints, visualization |
-| 5 | **🏷️ Competitor Vendor Pricing** | [`docs/features/05-vendor-scraping.md`](docs/features/05-vendor-scraping.md) | `VendorScrapeService`, `RobotsPolicy`, `HostRateLimiter`, `PlaywrightPageFetcher`, `DeltaReviewer` |
-| 5a | **🔗 Competitor from a URL only (no selectors)** | [`docs/features/url-only-discovery.md`](docs/features/url-only-discovery.md) | `UrlOnlyDiscovery`, `PoliteHttpClient`, Store API / products.json / sitemap / JSON-LD extractors |
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-| Tool | Version | Installation |
-|------|---------|-------------|
-| `uv` | ≥ 0.x | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Docker (recommended) | ≥ 24.x | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) |
-| Or: PostgreSQL | 17.x | Local install via system package manager |
-
-### 1. Clone & Install
+## Run
 
 ```bash
-git clone https://github.com/peptides-ai-ecosystem/web_scrape.git
-cd web_scrape
 uv sync
+cp .env.example .env     # point DATABASE_URL at a throwaway database
+uv run uvicorn main:app --host 127.0.0.1 --port 8005
 ```
 
-### 2. Configure Environment
+Swagger `/docs`, gateway spec `/api/v1/openapi.json`, health `/health`, dashboard `/visualization/`. Locally use port 8005 (chat uses 8000); the container listens on 8000. `START_SCHEDULER=false` starts without the background sync (staging pins it).
 
-```bash
-# Copy the environment template
-cp .env.example .env   # (create one if none exists)
+Docker: `docker build -t web_scrape .` then `docker run -p 8005:8000 --env-file .env web_scrape`. The image carries Chromium for the Selenium scrape and the Playwright vendor fetch.
 
-# Set your database URL
-DATABASE_URL=postgresql://user:password@localhost:5432/peptides_db
-OUTPUT_DIR="output_dir"
-LOG_DIR="log"
-TIMEOUT=10
-```
+## Gate
 
-### 3. Database Setup
+`scripts/check.sh` (uv sync + the offline test suite; this is what CI runs). All commands: `docs/agents/commands.md`.
 
-web_scrape writes into the **platform's** database: the `peptides` tables are
-defined by the peptides-platform Drizzle schema (cross-repo contract XR-8), not
-by this repo. For a local database:
+## Docs
 
-1. Start PostgreSQL: `docker compose up -d postgres` (PostgreSQL 17 on host port 15432).
-2. Create the platform schema from the peptides-platform repo's migrations
-   (`apps/api/drizzle/`).
-3. Apply the hand-run files in [`migrations/`](migrations/README.md); the two
-   competitor tables are created on startup.
-
-### 4. Run — Choose Your Path
-
-The project provides **two entry points** depending on your use case:
-
----
-
-#### 🧪 Path A: the CLI — *lives in another repository*
-
-There is no command-line pipeline here. `main.py` is the FastAPI application; it takes no
-`--scrape` / `--sync` flags and never has in this repository. Passing them does nothing —
-the server simply starts.
-
-The CLI-first version of this scraper is **`peptide_web_sync`**, a sibling repository:
-
-```bash
-# in peptide_web_sync, not here
-uv run main.py --scrape --sync
-```
-
----
-
-#### 🌐 Path B: the API server (`main.py`) — how this service runs
-
-`main.py` is the whole service: HTTP API, APScheduler, job tracking and the visualization dashboard.
-
-Ports: the app binds `$PORT` (default 8000). In Docker it listens on 8000 and
-the host publishes it on 8005 (`docker-compose.deploy.yml`); the gateway
-reaches it as `WEBSCRAPE_SERVICE_URL=http://web-scrape-service:8000`, or
-`http://web-scrape-staging:8000` on staging. Locally, chat already uses 8000,
-so run it with `--port 8005` when the gateway is also running.
-
-```bash
-# Start the service (reload enabled; binds $PORT, default 8000)
-uv run main.py
-
-# Or explicitly — this is what the Dockerfile runs
-uv run uvicorn main:app --host 0.0.0.0 --port 8000
-
-# Server starts at http://localhost:8000
-# Swagger docs at http://localhost:8000/docs
-```
-
-**What the server provides:**
-
-| Area | Endpoints / Features |
-|------|---------------------|
-| **Sync API** | `POST /api/v1/sync/core` — scrape + core DB sync |
-| | `POST /api/v1/sync/graph` — scrape + graph DB sync |
-| | `POST /api/v1/sync/graph-missing` — sync only missing graph data |
-| **Evaluation API** | `POST /api/v1/evaluation/core` — 13 checks per peptide |
-| | `POST /api/v1/evaluation/graph` — 5 graph-specific checks |
-| **Graph API** | `GET /api/v1/graph/peptides` — list peptides with graph data |
-| | `GET /api/v1/graph/peptide/{id}/methods` — methods for a peptide |
-| | `GET /api/v1/graph/graph/{id}?method=` — graph coordinates & SVG paths |
-| **Operations** | `GET /api/v1/operations/jobs` — list all jobs |
-| | `GET /api/v1/operations/job/{id}` — track job progress |
-| | `DELETE /api/v1/operations/job/{id}` — cancel a running job |
-| | `GET /api/v1/operations/health` — system health & stats |
-| **Scheduler** | `GET /api/v1/scheduler/status` — check scheduler state |
-| | `POST /api/v1/scheduler/start` — start / re-configure scheduler |
-| | `POST /api/v1/scheduler/pause` — pause scheduler |
-| | `POST /api/v1/scheduler/resume` — resume paused scheduler |
-| **Dashboard** | `/visualization/` — interactive graph viewer |
-| **Swagger UI** | `/docs` — auto-generated API explorer |
-
----
-
-## 🤔 One entry point
-
-Earlier versions of this repository had two: a CLI (`main.py`) and a server (`api_server.py`).
-They were consolidated — `main.py` **is** the server, and `api_server.py` no longer exists.
-
-That consolidation was never finished in the docs or the `Dockerfile`, which is why this README
-described flags that do nothing and the container started a module that is not there. If you find
-another `api_server.py` reference, it is stale; the answer is always `main.py`.
-
-For one-off command-line scraping, use the `peptide_web_sync` repository.
-
----
-
-## 🏗️ Project Architecture
-
-```mermaid
-graph TB
-    subgraph External["External"]
-        A[pep-pedia.org]
-    end
-
-    subgraph CLI["CLI Layer"]
-        B[main.py]
-    end
-
-    subgraph API["API Layer"]
-        C[main.py<br/>FastAPI]
-        D[Scheduler<br/>APScheduler]
-        E[JobQueue<br/>In-memory]
-    end
-
-    subgraph Core["Core Pipeline"]
-        F[ScraperManager]
-        G[PageScraper + Extractors]
-        H[CSVStorage]
-        I[DbImportOrchestrator]
-        J[GraphImportOrchestrator]
-        K[Evaluation Engine]
-    end
-
-    subgraph Storage["Storage Layer"]
-        L[(PostgreSQL)]
-        M[output/pep_pedia_master.csv]
-    end
-
-    subgraph Frontend["Frontend"]
-        N[Visualization Dashboard<br/>HTML/JS/SVG]
-    end
-
-    A --> G
-    B --> F
-    C --> E
-    C --> D
-    D --> F
-    E --> F & I & J & K
-    F --> G
-    G --> H
-    H --> M
-    M --> I
-    M --> J
-    M --> K
-    I --> L
-    J --> L
-    K --> L
-    C --> N
-    N --> L
-```
-
-### Directory Structure
-
-```
-├── main.py                    # 🚀 FastAPI app (sync API, evaluation, graph, dashboard, scheduler)
-│
-├── docs/
-│   ├── features/
-│   │   ├── 01-scrape.md           # 🕷️ Scrape feature deep-dive
-│   │   ├── 02-sync.md             # 🔄 Sync feature deep-dive
-│   │   ├── 03-evaluation.md       # 📊 Evaluation feature deep-dive
-│   │   ├── 04-fastapi-schedule-operations.md  # 🚀 API & Operations deep-dive
-│   │   └── 05-vendor-scraping.md  # 🏷️ Competitor pricing
-│   ├── graph_analysis.md      # PK graph SVG coordinates (used by script.js)
-│   ├── mapper.md              # entity relations
-│   ├── structure_data.md      # CSV columns → payload
-│   ├── structured.md          # insertion order (mapper groups A–F)
-│   └── sync_field_mapping.md
-│
-├── app/
-│   ├── core/                   # Data models, interfaces, job queue, scheduler
-│   │   ├── models.py           #   PeptideData, GraphData, HeroData, etc.
-│   │   ├── interfaces.py       #   IExtractor, IStorage, IScraper
-│   │   ├── job_queue.py        #   In-memory job queue (Job, JobStatus, JobQueue)
-│   │   └── scheduler.py        #   APScheduler integration
-│   │
-│   ├── extractors/             # 🕷️ Specialized page section parsers
-│   │   ├── base.py             #   BaseExtractor (safe_click, wait_for_loading)
-│   │   ├── hero.py             #   HeroExtractor — name, subtitle, facts
-│   │   ├── quick_guide.py      #   QuickGuideExtractor — dosage, timing
-│   │   ├── community.py        #   CommunityExtractor — insights, polls
-│   │   ├── section.py          #   SectionExtractor — accordions, tabs, tables, lists
-│   │   └── graph.py            #   GraphExtractor — SVG paths, markers, axis labels
-│   │
-│   ├── services/               # Orchestration layer
-│   │   ├── scraper_manager.py  #   Multiprocessing pool of PageScrapers
-│   │   └── page_scraper.py     #   Single URL scraper (category loop + all extractors)
-│   │
-│   ├── mappers/                # 🔄 CSV → structured DB payloads
-│   │   ├── db_import_orchestrator.py    # Core table sync orchestrator
-│   │   ├── graph_import_orchestrator.py # Graph table sync orchestrator
-│   │   ├── group_a/            #   Lookup mappers (benefits, side-effects, dosages...)
-│   │   ├── group_b/            #   Peptide mapper
-│   │   ├── group_c/            #   Relation mappers (interactions, indications)
-│   │   ├── group_d/            #   Protocol & Graph mappers
-│   │   ├── group_e/            #   (Additional groups)
-│   │   └── group_f/            #
-│   │
-│   ├── evaluation/             # 📊 Sync quality evaluation
-│   │   ├── runner.py           #   Orchestrator: CSV → build → fetch → compare → report
-│   │   ├── csv_expectation_builder.py # Derive expected DB state from CSV
-│   │   ├── db_actual_fetcher.py       # Query actual DB state (10 queries/peptide)
-│   │   ├── evaluation_engine.py       # 13 core checks + result dataclasses
-│   │   ├── graph_evaluator.py         # 5 graph-specific checks
-│   │   └── reporter.py                # Console + JSON output
-│   │
-│   ├── infrastructure/         # External services
-│   │   ├── webdriver_factory.py #   Selenium Chrome driver (headless, anti-detection)
-│   │   ├── csv_storage.py      #   CSV read/write (pandas DataFrame)
-│   │   └── db/                 #   PostgreSQL: connection pool, repositories (peptide, graph, lookup...)
-│   │
-│   ├── api/                    # 🌐 FastAPI routes
-│   │   └── v1/
-│   │       ├── routers.py      #   Router aggregation
-│   │       └── endpoints/
-│   │           ├── sync.py        #   POST /sync/* — scrape + DB sync
-│   │           ├── evaluation.py  #   POST /evaluation/* — run evaluations
-│   │           ├── graph.py       #   GET /graph/* — graph data API
-│   │           ├── operations.py  #   GET /operations/* — job tracking, health
-│   │           └── scheduler.py   #   /scheduler/* — start/pause/resume sync scheduler
-│   │
-│   ├── utils/
-│   │   ├── crawl_peptide_urls.py  # Auto-discover peptide URLs via Selenium
-│   │   ├── peptide_utils.py       # Slug normalization, matching
-│   │   └── error_tracker.py       # Error collection & reporting
-│   │
-│   ├── visualization/         # Frontend dashboard
-│   │   ├── index.html         #   Graph viewer UI
-│   │   ├── script.js          #   SVG rendering engine
-│   │   └── styles.css         #   Styling
-│   │
-│   └── config.py              # Centralized config (paths, timeouts, env vars)
-│
-├── requirements.txt
-├── pyproject.toml
-├── Dockerfile                 # 🐳 Python + Chromium Docker image
-├── docker-compose.yml         # PostgreSQL + scraper services
-├── migrations/                # SQL files; README says which run on startup
-└── sync_supabase.sh           # DB migration helper script
-```
-
----
-
-## 🔄 Data Flow Overview
-
-```mermaid
-flowchart LR
-    Web["pep-pedia.org"] -->|Scrape| CSV["output/pep_pedia_master.csv"]
-    CSV -->|Sync| DB[("PostgreSQL<br/>Core Tables")]
-    CSV -->|Sync| GraphDB[("PostgreSQL<br/>Graph Tables")]
-    DB -->|Evaluate| Report["Evaluation Report"]
-    GraphDB -->|Evaluate| GraphReport["Graph Eval Report"]
-    DB -->|API| Dashboard["Visualization Dashboard"]
-    GraphDB -->|API| Dashboard
-
-    style Web fill:#f9f,stroke:#333
-    style CSV fill:#ff9,stroke:#333
-    style DB fill:#9cf,stroke:#333
-    style Dashboard fill:#9f9,stroke:#333
-```
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-uv run pytest
-
-# Specific test modules
-uv run pytest app/tests/test_graph_extractor.py -v
-uv run pytest app/tests/test_mapping_groups.py -v
-```
-
----
-
-## 🐳 Docker Deployment
-
-```bash
-# Build and run all services
-docker compose up --build
-
-# This starts:
-#   - PostgreSQL 17 on port 15432
-#   - Scraper service with Chromium (2GB shared memory)
-```
-
----
-
-## 📚 Additional Documentation
-
-| Document | Description |
-|----------|-------------|
-| [`migrations/README.md`](migrations/README.md) | Which SQL files run on startup and which by hand |
-| [`AGENTS.md`](AGENTS.md) | Agent guide: navigation, cross-repo contracts, safety rules |
-
----
-
-*Built with Python, Selenium, FastAPI, PostgreSQL, and ❤️*
+`docs/README.md` indexes the rest: the pipeline, the feature deep dives, the mapper docs, `docs/ops/deploy.md` (AWS, Sentry, staging), `AGENTS.md` and `CODING_STANDARDS.md` for agents and reviewers.

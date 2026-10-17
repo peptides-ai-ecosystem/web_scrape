@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from app.infrastructure.db.repositories.interaction import map_interaction_type
+from app.repositories.interaction import map_interaction_type
 
 
 # ---------------------------------------------------------------------------

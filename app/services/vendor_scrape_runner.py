@@ -1,6 +1,6 @@
 """Wiring for a competitor scrape run (peptides-platform#288).
 
-One place that builds a :class:`~app.services.vendor_scraper.VendorScrapeService`
+One place that builds a :class:`~app.scrapers.vendors.vendor_scraper.VendorScrapeService`
 from settings, so the nightly cron and the on-demand API trigger run exactly
 the same pipeline with exactly the same guards. A guard that only the cron
 honours is not a guard.
@@ -11,7 +11,7 @@ import logging
 import os
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from app.config import (
+from app.core.config import (
     VENDOR_DISCOVERY_CONCURRENCY,
     VENDOR_DISCOVERY_MAX_PRODUCTS,
     VENDOR_DISCOVERY_MAX_REQUESTS,
@@ -27,7 +27,7 @@ from app.config import (
 )
 from app.core.vendor_models import VendorTarget
 from app.infrastructure.db.connection import DbConnection
-from app.infrastructure.db.repositories import (
+from app.repositories import (
     VendorObservationRepository,
     VendorTargetRepository,
 )
@@ -36,10 +36,10 @@ from app.infrastructure.polite_http import PoliteHttpClient, Transport
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
 from app.infrastructure.vendor_targets import load_targets, merge_targets
-from app.services.url_discovery import UrlOnlyDiscovery
-from app.services.vendor_confidence import DeltaReviewer
-from app.services.vendor_products_publisher import VendorProductsPublisher
-from app.services.vendor_scraper import VendorScrapeService
+from app.scrapers.vendors.url_discovery import UrlOnlyDiscovery
+from app.scrapers.vendors.vendor_confidence import DeltaReviewer
+from app.scrapers.vendors.vendor_products_publisher import VendorProductsPublisher
+from app.scrapers.vendors.vendor_scraper import VendorScrapeService
 
 logger = logging.getLogger(__name__)
 

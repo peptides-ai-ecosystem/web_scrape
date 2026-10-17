@@ -1,6 +1,6 @@
 # Feature: Web Scrape
 
-> **Module**: `app/services/`, `app/extractors/`, `app/utils/crawl_peptide_urls.py`, `app/infrastructure/webdriver_factory.py`, `app/infrastructure/csv_storage.py`
+> **Module**: `app/services/`, `app/scrapers/pep_pedia/extractors/`, `app/scrapers/pep_pedia/crawl_peptide_urls.py`, `app/infrastructure/webdriver_factory.py`, `app/infrastructure/csv_storage.py`
 >
 > **Entry Point**: `main.py --scrape` or `uv run main.py --scrape`
 
@@ -89,7 +89,7 @@ flowchart TB
 
 ### 3.1 URL Discovery (`crawl_peptide_urls`)
 
-**File**: `app/utils/crawl_peptide_urls.py`
+**File**: `app/scrapers/pep_pedia/crawl_peptide_urls.py`
 
 ```mermaid
 flowchart LR
@@ -133,7 +133,7 @@ Supports two modes:
 
 ### 3.3 Scraper Manager (`ScraperManager`)
 
-**File**: `app/services/scraper_manager.py`
+**File**: `app/scrapers/pep_pedia/scraper_manager.py`
 
 **Business Logic**:
 - Manages a multiprocessing pool to scrape URLs concurrently.
@@ -175,7 +175,7 @@ sequenceDiagram
 
 ### 3.4 Page Scraper (`PageScraper`)
 
-**File**: `app/services/page_scraper.py`
+**File**: `app/scrapers/pep_pedia/page_scraper.py`
 
 This is the core scraper that processes one peptide URL. It:
 
@@ -193,15 +193,15 @@ Each extractor is a specialized class that parses a specific section of the page
 
 | Extractor | File | Data Extracted |
 |-----------|------|----------------|
-| **HeroExtractor** | `app/extractors/hero.py` | Peptide name, subtitle, hero facts (MW, formula, CAS, sequence, etc.) |
-| **QuickGuideExtractor** | `app/extractors/quick_guide.py` | Quick reference data (dosage, timing, half-life) |
-| **CommunityExtractor** | `app/extractors/community.py` | Community insights, poll results, user ratings |
-| **SectionExtractor** | `app/extractors/section.py` | Structured content sections — handles accordions, tabs, tables, bullet lists, numbered steps, checkmark lists |
-| **GraphExtractor** | `app/extractors/graph.py` | SVG path data (coordinates), markers, axis labels, legend, peak/half-life/cleared stats — for each time range (24h, 7d, 14d, 30d) |
+| **HeroExtractor** | `app/scrapers/pep_pedia/extractors/hero.py` | Peptide name, subtitle, hero facts (MW, formula, CAS, sequence, etc.) |
+| **QuickGuideExtractor** | `app/scrapers/pep_pedia/extractors/quick_guide.py` | Quick reference data (dosage, timing, half-life) |
+| **CommunityExtractor** | `app/scrapers/pep_pedia/extractors/community.py` | Community insights, poll results, user ratings |
+| **SectionExtractor** | `app/scrapers/pep_pedia/extractors/section.py` | Structured content sections — handles accordions, tabs, tables, bullet lists, numbered steps, checkmark lists |
+| **GraphExtractor** | `app/scrapers/pep_pedia/extractors/graph.py` | SVG path data (coordinates), markers, axis labels, legend, peak/half-life/cleared stats — for each time range (24h, 7d, 14d, 30d) |
 
 #### BaseExtractor
 
-**File**: `app/extractors/base.py`
+**File**: `app/scrapers/pep_pedia/extractors/base.py`
 
 Provides two shared utilities:
 
@@ -232,7 +232,7 @@ flowchart TD
 
 #### GraphExtractor — Detailed Workflow
 
-**File**: `app/extractors/graph.py`
+**File**: `app/scrapers/pep_pedia/extractors/graph.py`
 
 ```mermaid
 flowchart TD
@@ -295,7 +295,7 @@ At the end of a run, the tracker can:
 
 ## 5. Configuration
 
-**File**: `app/config.py`
+**File**: `app/core/config.py`
 
 | Setting | Default | Description |
 |---------|---------|-------------|

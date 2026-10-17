@@ -1,7 +1,7 @@
 """Database service facade for backward compatibility and orchestration."""
 from typing import Dict, Any, Optional, List
 from app.infrastructure.db.connection import DbConnection, DbPool
-from app.infrastructure.db.repositories import (
+from app.repositories import (
     PeptideRepository,
     PeptideInspectorRepository,
     ProtocolRepository,

@@ -2,7 +2,7 @@
 CSV inspector endpoints.
 
 Read-only endpoints that surface what was **scraped** into the enhanced CSV at
-`output/pep_pedia_enhanced.csv` (path comes from `app.config.ENHANCED_CSV`).
+`output/pep_pedia_enhanced.csv` (path comes from `app.core.config.ENHANCED_CSV`).
 The Core Data Inspector page renders these alongside the `/core/*` endpoints
 so the operator can spot ingestion gaps between scrape and DB injection.
 

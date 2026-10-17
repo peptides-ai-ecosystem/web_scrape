@@ -21,13 +21,13 @@ def _split(raw: str | None) -> set[str]:
 
 
 def owned_domains() -> set[str]:
-    from app.config import settings
+    from app.core.config import settings
 
     return {d.lstrip(".").removeprefix("www.") for d in _split(getattr(settings, "OWNED_STORE_DOMAINS", ""))}
 
 
 def owned_slugs() -> set[str]:
-    from app.config import settings
+    from app.core.config import settings
 
     return _split(getattr(settings, "OWNED_STORE_VENDORS", ""))
 

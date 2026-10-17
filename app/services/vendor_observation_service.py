@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError
 from app.core.vendor_models import ReviewStatus, ScrapeStatus
 from app.infrastructure.db.connection import DbConnection
-from app.infrastructure.db.repositories import VendorObservationRepository
+from app.repositories import VendorObservationRepository
 from app.services.vendor_scrape_runner import all_targets
 from app.services.vendor_target_service import db_url
 

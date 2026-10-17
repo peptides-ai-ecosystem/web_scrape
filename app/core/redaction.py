@@ -17,7 +17,7 @@ import os
 import re
 from urllib.parse import urlsplit
 
-from app.config import settings
+from app.core.config import settings
 
 MASK = "[redacted]"
 
@@ -37,7 +37,7 @@ _URL_PASSWORD = re.compile(r"(?P<head>[A-Za-z][A-Za-z0-9+.\-]*://[^\s:/@]*:)(?P<
 _SECRET_SETTINGS = ("API_TOKEN", "DATABASE_URL", "SENTRY_DSN")
 _SECRET_ENV_MARKERS = ("TOKEN", "SECRET", "PASSWORD", "API_KEY", "APIKEY", "DATABASE_URL", "DSN")
 
-# The documented placeholder in app/config.py. Masking the word "password"
+# The documented placeholder in app/core/config.py. Masking the word "password"
 # everywhere would mangle unrelated text without protecting anything.
 _PLACEHOLDERS = frozenset({"postgresql://user:password@localhost:5432/peptides_db", "password"})
 

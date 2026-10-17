@@ -109,7 +109,7 @@ class FieldSelectors:
 
     Order is meaningful: the first entry is the selector we believe is the
     vendor's real price element, later entries are progressively weaker
-    fallbacks. :mod:`app.services.vendor_confidence` discounts a field that
+    fallbacks. :mod:`app.scrapers.vendors.vendor_confidence` discounts a field that
     only matched on a fallback, because "we found *a* number somewhere on the
     page" is a weaker claim than "we found the element we were told to read".
     """
