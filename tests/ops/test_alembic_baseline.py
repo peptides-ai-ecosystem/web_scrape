@@ -33,6 +33,10 @@ def _docker_ok() -> bool:
 
 @pytest.fixture(scope="module")
 def pg_url():
+    external = os.environ.get("WEB_SCRAPE_TEST_PG_URL")
+    if external:  # a throwaway Postgres the operator started; never a real database
+        yield external
+        return
     if not _docker_ok():
         pytest.skip("needs a local Docker daemon")
     name = f"ws-alembic-{uuid.uuid4().hex[:8]}"
@@ -47,7 +51,7 @@ def pg_url():
         url = f"postgresql://postgres:pw@127.0.0.1:{port}/postgres"
         import psycopg2
 
-        for _ in range(60):
+        for _ in range(180):
             try:
                 psycopg2.connect(url, connect_timeout=2).close()
                 break

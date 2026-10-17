@@ -184,9 +184,16 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_database_url(self) -> str:
-        """``DATABASE_URL`` in the form SQLAlchemy accepts (Alembic): ``postgres://`` -> ``postgresql://``."""
+        """``DATABASE_URL`` for SQLAlchemy (Alembic): the psycopg2 driver this service ships.
+
+        ``postgres://`` and ``postgresql://`` become ``postgresql+psycopg2://``; a URL that
+        already names a driver is left alone.
+        """
         url = self.DATABASE_URL
-        return "postgresql://" + url[len("postgres://"):] if url.startswith("postgres://") else url
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg2://" + url[len(prefix):]
+        return url
 
 
 # -------------------- MODULE-LEVEL EXPORTS -------------------- #

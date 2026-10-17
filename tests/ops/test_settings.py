@@ -65,3 +65,8 @@ def test_empty_sentry_rate_is_zero_and_dsn_is_stripped(monkeypatch):
 
 def test_explicit_user_agent_wins(monkeypatch):
     assert _clean(monkeypatch, VENDOR_SCRAPER_USER_AGENT="Bot/2").VENDOR_SCRAPER_USER_AGENT == "Bot/2"
+
+
+@pytest.mark.parametrize("raw", ["postgres://u:p@h:5432/d", "postgresql://u:p@h:5432/d", "postgresql+psycopg2://u:p@h:5432/d"])
+def test_alembic_url_uses_the_psycopg2_driver(monkeypatch, raw):
+    assert _clean(monkeypatch, DATABASE_URL=raw).sqlalchemy_database_url == "postgresql+psycopg2://u:p@h:5432/d"
