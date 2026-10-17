@@ -1,12 +1,10 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from src.models.evaluation import EvaluationRequest
-from typing import Optional
-import os
+"""Evaluation endpoints: validate the body, then one call to ``src.services.evaluation_service``."""
+from fastapi import APIRouter, BackgroundTasks
 
-from src.evaluation.runner import run_evaluation
-from src.evaluation.graph_evaluator import run_graph_evaluation
-from src.config import ENHANCED_CSV, GRAPH_CSV, log_debug, log_error
-from src.core.job_queue import get_job_queue
+from src.api.errors import http_error
+from src.core.errors import ServiceError
+from src.models.evaluation import EvaluationRequest
+from src.services import evaluation_service
 
 router = APIRouter()
 
@@ -14,30 +12,6 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Core Evaluation
 # ---------------------------------------------------------------------------
-
-def run_core_evaluation_task(job_id: str, limit: Optional[int], output_json: Optional[str], db_url: str, csv_path: str):
-    """Background task: run the 13-check core evaluation on ingested peptides."""
-    queue = get_job_queue()
-    job = queue.get_job(job_id)
-    if not job:
-        return
-
-    job.start()
-    try:
-        result = run_evaluation(db_url, csv_path, limit=limit, output_json=output_json) or {}
-        job.complete({
-            "limit": limit,
-            "output_file": output_json,
-            "total": result.get("total", 0),
-            "evaluated_count": result.get("evaluated_count", 0),
-            "skipped_count": result.get("skipped_count", 0),
-            "evaluated_peptides": result.get("evaluated_peptides", []),
-            "skipped_peptides": result.get("skipped_peptides", []),
-        })
-    except Exception as e:
-        log_error(f"Fatal error during core evaluation task: {e}", "evaluation_endpoint")
-        job.fail(str(e))
-
 
 @router.post("/core", status_code=202)
 async def start_core_evaluation(request: EvaluationRequest, background_tasks: BackgroundTasks):
@@ -72,48 +46,15 @@ async def start_core_evaluation(request: EvaluationRequest, background_tasks: Ba
     {"limit": 10, "output_json": null}
     ```
     """
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        raise HTTPException(status_code=500, detail="DATABASE_URL not configured.")
-
-    csv_path = str(ENHANCED_CSV)
-    if not os.path.exists(csv_path):
-        raise HTTPException(status_code=500, detail=f"Enhanced CSV not found at {csv_path}. Run a core sync first.")
-
-    queue = get_job_queue()
-    job = queue.create_job("/evaluation/core", {"limit": request.limit, "output_json": request.output_json})
-    background_tasks.add_task(run_core_evaluation_task, job.job_id, request.limit, request.output_json, db_url, csv_path)
-
-    return job.to_dict()
+    try:
+        return evaluation_service.start_core_evaluation(request.limit, request.output_json, background_tasks.add_task)
+    except ServiceError as exc:
+        raise http_error(exc)
 
 
 # ---------------------------------------------------------------------------
 # Graph Evaluation
 # ---------------------------------------------------------------------------
-
-def run_graph_evaluation_task(job_id: str, limit: Optional[int], output_json: Optional[str], db_url: str, csv_path: str):
-    """Background task: evaluate graph data in peptide_graph vs what the CSV expects."""
-    queue = get_job_queue()
-    job = queue.get_job(job_id)
-    if not job:
-        return
-
-    job.start()
-    try:
-        result = run_graph_evaluation(db_url, csv_path, limit=limit, output_json=output_json) or {}
-        job.complete({
-            "limit": limit,
-            "output_file": output_json,
-            "total": result.get("total", 0),
-            "evaluated_count": result.get("evaluated_count", 0),
-            "skipped_count": result.get("skipped_count", 0),
-            "evaluated_peptides": result.get("evaluated_peptides", []),
-            "skipped_peptides": result.get("skipped_peptides", []),
-        })
-    except Exception as e:
-        log_error(f"Fatal error during graph evaluation task: {e}", "evaluation_endpoint")
-        job.fail(str(e))
-
 
 @router.post("/graph", status_code=202)
 async def start_graph_evaluation(request: EvaluationRequest, background_tasks: BackgroundTasks):
@@ -135,17 +76,8 @@ async def start_graph_evaluation(request: EvaluationRequest, background_tasks: B
     - **422** → Validation error.
     - **500** → `DATABASE_URL` not configured or missing master CSV.
     """
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        raise HTTPException(status_code=500, detail="DATABASE_URL not configured.")
-
-    csv_path = str(GRAPH_CSV)
-    if not os.path.exists(csv_path):
-        raise HTTPException(status_code=500, detail=f"Graph CSV not found at {csv_path}. Run a graph sync first.")
-
-    queue = get_job_queue()
-    job = queue.create_job("/evaluation/graph", {"limit": request.limit, "output_json": request.output_json})
-    background_tasks.add_task(run_graph_evaluation_task, job.job_id, request.limit, request.output_json, db_url, csv_path)
-
-    return job.to_dict()
+    try:
+        return evaluation_service.start_graph_evaluation(request.limit, request.output_json, background_tasks.add_task)
+    except ServiceError as exc:
+        raise http_error(exc)
 
