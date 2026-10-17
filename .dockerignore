@@ -16,7 +16,6 @@ __pycache__
 # --- Source control / IDE noise ---
 .git
 .gitignore
-.graphifyignore
 .cursor
 .DS_Store
 .vscode
@@ -37,13 +36,11 @@ peptides_temp/
 graph_html/
 
 # --- Local-only assets ---
+# Hand-run platform SQL (migrations/) is never shipped.
 *.sql
 migrations/*
-# ...except the two the service applies itself on startup (vendor_schema.py).
-!migrations/migration_vendor_price_observations.sql
-!migrations/migration_vendor_scrape_targets.sql
 *.csv
-sync_supabase.sh
+scripts/ops/
 viz_server.py
 docker-compose.yml
 

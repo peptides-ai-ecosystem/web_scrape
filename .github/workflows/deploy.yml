@@ -207,6 +207,11 @@ jobs:
               sleep 10
             done
 
+            # This service's own two tables (alembic_version_web_scrape). The
+            # baseline revision only creates what is missing, so it is a no-op
+            # where they exist. Runs in the new image before the container is replaced.
+            docker compose -f docker-compose.deploy.yml run --rm --no-deps -T web-scrape alembic upgrade head
+
             docker compose -f docker-compose.deploy.yml up -d --no-deps --no-build web-scrape
 
             # Poll rather than sleep-and-hope: Chromium and the APScheduler jobs
@@ -228,8 +233,11 @@ jobs:
             exit 1
 
       # -- staging: ~/ms-staging, service web-scrape-staging, nothing else --
-      # No migrations: web_scrape has no Alembic; its migrations/*.sql files are
-      # applied by hand. The ms-staging compose pins START_SCHEDULER and
+      # Migrations: `alembic upgrade head` (this service's own two tables, version
+      # table alembic_version_web_scrape) runs in the new image before the
+      # container is recreated. The baseline revision is a no-op on a database
+      # where the tables exist. The platform's tables are never migrated here.
+      # The ms-staging compose pins START_SCHEDULER and
       # VENDOR_SCRAPE_CRON_ENABLED to false, so the staging container boots idle.
       # Health is probed inside the container (ms-staging publishes no host port).
       - name: Deploy digest to web-scrape-staging (recreate, health, rollback)
@@ -249,7 +257,7 @@ jobs:
           --service=web-scrape-staging
           --image="$REF"
           --pin-var=WEBSCRAPE_IMAGE
-          --migrate=none
+          --migrate="compose alembic upgrade head"
           --health-port=8000
 
       - name: Log in to GHCR

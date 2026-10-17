@@ -8,16 +8,16 @@ description: Use when changing SQL in web_scrape that touches a platform table (
 web_scrape writes and deletes rows in the **peptides-platform** database with raw SQL. The platform owns those tables in its Drizzle schema (`apps/api/src/db/schema/`, migrations in `apps/api/drizzle/`). Contract: `../orchestrator/docs/ecosystem/dependencies.md#xr-8`.
 
 ## Where web_scrape touches platform tables
-- `src/infrastructure/db/repositories/*.py` — inserts and updates (`_insert_guarded`, literal `UPDATE ... SET`).
-- `src/mappers/db_import_orchestrator.py` — `link_relation(...)` and `insert_lookup(...)` name the junction and lookup tables.
-- `src/mappers/group_b/peptide_mapper.py` — the keys of the dict it returns are the `peptides` columns written.
-- `src/infrastructure/db/repositories/peptide.py` `delete_peptide_cascading` — hard-codes every platform table that references a peptide. A new platform table with a `peptide_id` foreign key must be added there, or the delete fails on the FK.
+- `app/repositories/*.py` — inserts and updates (`_insert_guarded`, literal `UPDATE ... SET`).
+- `app/services/sync/db_import_orchestrator.py` — `link_relation(...)` and `insert_lookup(...)` name the junction and lookup tables.
+- `app/services/sync/group_b/peptide_mapper.py` — the keys of the dict it returns are the `peptides` columns written.
+- `app/repositories/peptide.py` `delete_peptide_cascading` — hard-codes every platform table that references a peptide. A new platform table with a `peptide_id` foreign key must be added there, or the delete fails on the FK.
 - Own tables (not platform): `vendor_price_observations`, `vendor_scrape_targets` (`migrations/`).
 
 ## Run the contract test
 ```bash
 PLATFORM_SCHEMA_REPO=<path to a peptides-platform checkout on staging> \
-  uv run pytest src/tests/test_platform_schema_contract.py -v
+  uv run pytest tests/sync/test_platform_schema_contract.py -v
 ```
 - Default path: `G:/aultra/microservice/peptides-platform`. It skips when the path does not exist (as in CI), so run it locally whenever this skill applies.
 - Use a checkout of the platform branch you will deploy with (normally `staging`); an old checkout proves nothing.
