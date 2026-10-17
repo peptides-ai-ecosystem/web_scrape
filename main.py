@@ -46,7 +46,7 @@ init_sentry()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Warm up the pool on startup so the first request isn't slow
-    from src.api.v1.endpoints.graph import get_pool
+    from src.infrastructure.db.pool import get_pool
     get_pool()
     
     # Start the automated scheduler for background sync tasks
@@ -84,9 +84,8 @@ async def lifespan(app: FastAPI):
     shutdown_scheduler()
     
     # Close all pool connections cleanly on shutdown
-    from src.api.v1.endpoints.graph import _pool
-    if _pool is not None:
-        _pool.close()
+    from src.infrastructure.db.pool import close_pool
+    close_pool()
 
 app = FastAPI(
     title="Peptide Pipeline API & Graph Visualization",

@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.api.v1.endpoints.graph as graph_endpoints
+import src.services.graph_service as graph_service
 from src.infrastructure.db.repositories.graph import (
     PK_SUMMARY_SQL,
     GraphRepository,
@@ -136,7 +137,7 @@ def client():
 
 def test_endpoint_returns_count_and_peptides(client, monkeypatch):
     rows = [pk_summary_row_to_dict(_row())]
-    monkeypatch.setattr(graph_endpoints, "get_pool", lambda: _FakePool(_Graph(rows)))
+    monkeypatch.setattr(graph_service, "get_pool", lambda: _FakePool(_Graph(rows)))
     res = client.get("/api/v1/pk/peptides")
     assert res.status_code == 200
     assert res.json() == {"count": 1, "peptides": rows}
@@ -144,7 +145,7 @@ def test_endpoint_returns_count_and_peptides(client, monkeypatch):
 
 def test_endpoint_hides_db_error_detail(client, monkeypatch):
     graph = _Graph(error=RuntimeError("password=hunter2 connection refused"))
-    monkeypatch.setattr(graph_endpoints, "get_pool", lambda: _FakePool(graph))
+    monkeypatch.setattr(graph_service, "get_pool", lambda: _FakePool(graph))
     res = client.get("/api/v1/pk/peptides")
     assert res.status_code == 500
     assert "hunter2" not in res.text

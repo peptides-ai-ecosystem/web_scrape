@@ -114,6 +114,16 @@ class GraphRepository(BaseRepository):
                 self.log_operation("INSERT_GRAPH", "peptide_graph", 
                     f"Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})")
 
+    def list_peptides_with_graph(self) -> List[Dict[str, Any]]:
+        """Peptides with at least one ``peptide_graph`` row, as ``{id, name}``, by name."""
+        peptides = self.execute_all("""
+            SELECT DISTINCT p.id, p.name
+            FROM peptides p
+            JOIN peptide_graph pg ON p.id = pg.peptide_id
+            ORDER BY p.name
+        """)
+        return [{"id": row["id"], "name": row["name"]} for row in peptides]
+
     def list_pk_summary(self) -> List[Dict[str, Any]]:
         """Every peptide with PK curves, with its source and last-written time."""
         return [pk_summary_row_to_dict(row) for row in self.execute_all(PK_SUMMARY_SQL)]

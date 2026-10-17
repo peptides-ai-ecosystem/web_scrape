@@ -1,5 +1,6 @@
 """Repository exports."""
 from src.infrastructure.db.repositories.peptide import PeptideRepository
+from src.infrastructure.db.repositories.peptide_inspector import PeptideInspectorRepository
 from src.infrastructure.db.repositories.protocol import ProtocolRepository
 from src.infrastructure.db.repositories.research_study import ResearchStudyRepository
 from src.infrastructure.db.repositories.citation import CitationRepository
@@ -13,6 +14,7 @@ from src.infrastructure.db.repositories.vendor_target import VendorTargetReposit
 
 __all__ = [
     "PeptideRepository",
+    "PeptideInspectorRepository",
     "ProtocolRepository",
     "ResearchStudyRepository",
     "CitationRepository",

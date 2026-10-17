@@ -1,46 +1,16 @@
-import os
-from fastapi import APIRouter, HTTPException, Path, Query
-from dotenv import load_dotenv
-import sys
+"""PK graph endpoints: status codes plus one call to ``src.services.graph_service``."""
 import logging
-from typing import List, Dict, Any
+from typing import List
+
+from fastapi import APIRouter, HTTPException, Path, Query
+
+from src.api.errors import http_error
+from src.core.errors import ServiceError
 from src.models.graph import MethodItem, PeptideItem
-
-# Load environment variables
-load_dotenv()
-
-# Add project root to path if needed for local imports
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from src.infrastructure.db import DbPool
+from src.services import graph_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Module-level connection pool (minconn=1, maxconn=5).
-# Connections are checked out per request and returned automatically via the
-# DbPool.acquire() context manager — no new TCP sockets per request, and each
-# concurrent user gets their own connection so cursors never collide.
-# ---------------------------------------------------------------------------
-_pool: DbPool | None = None
-
-
-def get_pool() -> DbPool:
-    global _pool
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        raise RuntimeError("DATABASE_URL environment variable is not set.")
-    if _pool is None:
-        _pool = DbPool(db_url, minconn=1, maxconn=5)
-    return _pool
-
-
-# ---------------------------------------------------------------------------
-# Response schemas (documentation only — also used as return types)
-# ---------------------------------------------------------------------------
 
 
 # NOTE: Intentionally not declared as a strict Pydantic response_model.
@@ -90,14 +60,7 @@ async def get_peptides():
     - **500** → Database query failed or `DATABASE_URL` is not set.
     """
     try:
-        with get_pool().acquire() as db:
-            peptides = db.graph.execute_all("""
-                SELECT DISTINCT p.id, p.name
-                FROM peptides p
-                JOIN peptide_graph pg ON p.id = pg.peptide_id
-                ORDER BY p.name
-            """)
-            return [{"id": row["id"], "name": row["name"]} for row in peptides]
+        return graph_service.list_peptides_with_graph()
     except Exception as e:
         logger.error(f"Failed to fetch peptides: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch peptides: {str(e)}")
@@ -153,9 +116,7 @@ async def get_pk_summary():
     - **500** → Database query failed or `DATABASE_URL` is not set.
     """
     try:
-        with get_pool().acquire() as db:
-            peptides = db.graph.list_pk_summary()
-        return {"count": len(peptides), "peptides": peptides}
+        return graph_service.list_pk_summary()
     except Exception as e:
         logger.error(f"Failed to fetch PK summary: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch PK summary.")
@@ -206,17 +167,9 @@ async def get_peptide_methods(
     - **500** → Database error.
     """
     try:
-        with get_pool().acquire() as db:
-            methods = db.graph.get_methods_for_peptide(peptide_id)
-        if not methods:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No graph data found for peptide ID {peptide_id}. "
-                       "Check GET /api/v1/peptides for valid peptide IDs.",
-            )
-        return methods
-    except HTTPException:
-        raise
+        return graph_service.methods_for_peptide(peptide_id)
+    except ServiceError as exc:
+        raise http_error(exc)
     except Exception as e:
         logger.error(f"Failed to fetch methods for peptide {peptide_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -289,40 +242,9 @@ async def get_graph_data(
     - **500** → Database error.
     """
     try:
-        with get_pool().acquire() as db:
-            methods = db.graph.get_methods_for_peptide(peptide_id)
-            if not methods:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Peptide {peptide_id} not found or has no graph data. "
-                           "Check GET /api/v1/peptides for valid peptide IDs.",
-                )
-
-            # Reject empty/unknown methods instead of silently falling back
-            # to the default "Injectable" method in the repository.
-            method = (method or "").strip()
-            valid = [m["name"] for m in methods]
-            matched = next((m for m in valid if m.lower() == method.lower()), None)
-            if not matched:
-                raise HTTPException(
-                    status_code=422,
-                    detail=(
-                        f"Invalid method '{method}' for peptide {peptide_id}. "
-                        f"Valid methods: {', '.join(valid)}"
-                    ),
-                )
-
-            data = db.graph.get_visualization_data(peptide_id, matched)
-        if not data or not any(
-            k not in ["peptide_name", "administration_method"] for k in data.keys()
-        ):
-            raise HTTPException(
-                status_code=404,
-                detail=f"No graph data found for peptide {peptide_id} with method '{matched}'",
-            )
-        return data
-    except HTTPException:
-        raise
+        return graph_service.graph_data(peptide_id, method)
+    except ServiceError as exc:
+        raise http_error(exc)
     except Exception as e:
         logger.error(f"Failed to fetch graph data for peptide {peptide_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

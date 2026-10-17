@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional, List
 from src.infrastructure.db.connection import DbConnection, DbPool
 from src.infrastructure.db.repositories import (
     PeptideRepository,
+    PeptideInspectorRepository,
     ProtocolRepository,
     ResearchStudyRepository,
     CitationRepository,
@@ -43,6 +44,8 @@ class DbService:
         
         # Initialize repositories
         self.peptide = PeptideRepository(connection)
+        # Read-only fan-out queries for the Core Data Inspector (/api/v1/core).
+        self.inspector = PeptideInspectorRepository(connection)
         self.protocol = ProtocolRepository(connection)
         self.research_study = ResearchStudyRepository(connection)
         self.citation = CitationRepository(connection)
