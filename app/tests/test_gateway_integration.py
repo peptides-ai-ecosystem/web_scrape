@@ -29,7 +29,7 @@ def with_gateway_token(monkeypatch):
 
 
 def test_health_route_registered():
-    import web_scrape.main as main
+    import main
 
     paths = {route.path for route in main.app.routes}
     assert "/health" in paths
@@ -40,7 +40,7 @@ def test_health_reports_the_commit_the_image_was_built_from(monkeypatch):
     commit is running (the deploy's GIT_SHA build arg)."""
     import asyncio
 
-    import main
+    import app.factory as main
 
     monkeypatch.setenv("GIT_SHA", "ac49ca9")
     assert asyncio.run(main.health())["commit"] == "ac49ca9"
