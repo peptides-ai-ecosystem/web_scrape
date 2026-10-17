@@ -62,11 +62,12 @@ Once that exists, implement :meth:`VendorProductsPublisher._send` against it
 and flip ``VENDOR_PRODUCTS_PUBLISH_ENABLED``. Until then the publisher is a
 loud no-op: it never silently succeeds.
 """
+
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Sequence
 
 from app.core.vendor_models import ReviewStatus, VendorObservation
 
@@ -120,10 +121,8 @@ class VendorProductsPublisher:
         return self._enabled
 
     def publish(self, observations: Sequence[VendorObservation]) -> PublishResult:
-        publishable: List[VendorObservation] = [
-            o
-            for o in observations
-            if o.review_status is ReviewStatus.ACCEPTED and o.price is not None
+        publishable: list[VendorObservation] = [
+            o for o in observations if o.review_status is ReviewStatus.ACCEPTED and o.price is not None
         ]
         skipped = len(observations) - len(publishable)
 

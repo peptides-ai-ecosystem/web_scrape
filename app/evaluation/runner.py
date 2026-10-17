@@ -8,24 +8,23 @@ Orchestrates the full evaluation pipeline:
   4. Compare and produce results
   5. Report to console / JSON
 """
+
 import csv
 import os
-import re
-from typing import Optional
 
 from app.evaluation.csv_expectation_builder import CsvExpectationBuilder
 from app.evaluation.db_actual_fetcher import DbActualFetcher
 from app.evaluation.evaluation_engine import EvaluationEngine
 from app.evaluation.reporter import EvaluationReporter
 from app.infrastructure.db.service import DbManager
-from app.utils.peptide_utils import find_best_match, extract_essence
+from app.utils.peptide_utils import extract_essence, find_best_match
 
 
 def run_evaluation(
     db_url: str,
     csv_path: str,
-    limit: Optional[int] = None,
-    output_json: Optional[str] = None,
+    limit: int | None = None,
+    output_json: str | None = None,
 ) -> dict:
     """
     Main entry point for the evaluation step.
@@ -41,14 +40,14 @@ def run_evaluation(
     -------
     dict with keys: total, evaluated_count, skipped_count, evaluated_peptides, skipped_peptides
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  CSV SYNC EVALUATION")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  CSV  : {csv_path}")
     print(f"  DB   : {db_url.split('@')[-1] if '@' in db_url else db_url}")
     if limit:
         print(f"  Limit: {limit} row(s)")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # ── Step 1: Read CSV ────────────────────────────────────────────────────
     if not os.path.exists(csv_path):
@@ -62,7 +61,7 @@ def run_evaluation(
         }
 
     rows = []
-    with open(csv_path, mode="r", encoding="utf-8") as f:
+    with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append(row)
@@ -71,9 +70,9 @@ def run_evaluation(
     print(f"[EVAL] Read {len(rows)} row(s) from CSV")
 
     # ── Step 2-4: Build expected → fetch actual → compare ──────────────────
-    builder  = CsvExpectationBuilder()
-    fetcher  = DbActualFetcher(db_url)
-    engine   = EvaluationEngine()
+    builder = CsvExpectationBuilder()
+    fetcher = DbActualFetcher(db_url)
+    engine = EvaluationEngine()
     reporter = EvaluationReporter()
 
     evaluated_peptides = []
@@ -92,7 +91,7 @@ def run_evaluation(
 
             # Use robust matching to find the peptide in DB
             matched_identifier = find_best_match(raw_name, db_identifiers, db_essences)
-            
+
             # Build expected payload (mirrors orchestrator filter logic)
             expected = builder.build(row)
             if expected is None:
@@ -103,7 +102,7 @@ def run_evaluation(
             # If we matched a different identifier, update the expected slug
             if matched_identifier:
                 expected["slug"] = matched_identifier
-            
+
             slug = expected["slug"]
             print(f"[EVAL] Checking {raw_name!r} (slug: {slug})")
 

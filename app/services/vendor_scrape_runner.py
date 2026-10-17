@@ -5,11 +5,13 @@ from settings, so the nightly cron and the on-demand API trigger run exactly
 the same pipeline with exactly the same guards. A guard that only the cron
 honours is not a guard.
 """
+
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from app.core.config import (
     VENDOR_DISCOVERY_CONCURRENCY,
@@ -27,15 +29,15 @@ from app.core.config import (
 )
 from app.core.vendor_models import VendorTarget
 from app.infrastructure.db.connection import DbConnection
-from app.repositories import (
-    VendorObservationRepository,
-    VendorTargetRepository,
-)
 from app.infrastructure.playwright_fetcher import PlaywrightPageFetcher
 from app.infrastructure.polite_http import PoliteHttpClient, Transport
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
 from app.infrastructure.vendor_targets import load_targets, merge_targets
+from app.repositories import (
+    VendorObservationRepository,
+    VendorTargetRepository,
+)
 from app.scrapers.vendors.url_discovery import UrlOnlyDiscovery
 from app.scrapers.vendors.vendor_confidence import DeltaReviewer
 from app.scrapers.vendors.vendor_products_publisher import VendorProductsPublisher
@@ -44,7 +46,7 @@ from app.scrapers.vendors.vendor_scraper import VendorScrapeService
 logger = logging.getLogger(__name__)
 
 
-def load_db_targets() -> List[VendorTarget]:
+def load_db_targets() -> list[VendorTarget]:
     """API-managed targets from ``vendor_scrape_targets``; [] when unavailable.
 
     An unreachable database (or a database the migration has not reached yet)
@@ -64,7 +66,7 @@ def load_db_targets() -> List[VendorTarget]:
         connection.close()
 
 
-def all_targets(*, include_disabled: bool = False) -> List[VendorTarget]:
+def all_targets(*, include_disabled: bool = False) -> list[VendorTarget]:
     """DB targets merged over the file targets (DB wins on a slug clash)."""
     return merge_targets(
         load_db_targets(),
@@ -74,11 +76,11 @@ def all_targets(*, include_disabled: bool = False) -> List[VendorTarget]:
 
 
 def select_targets(
-    vendors: Optional[Sequence[str]] = None,
+    vendors: Sequence[str] | None = None,
     *,
     include_disabled: bool = False,
     include_drafts: bool = False,
-) -> List[VendorTarget]:
+) -> list[VendorTarget]:
     """Configured targets, optionally narrowed to specific slugs.
 
     A slug that is not configured is dropped with a warning rather than
@@ -106,12 +108,12 @@ def discovery_factory(
     robots: RobotsPolicy,
     limiter: HostRateLimiter,
     renderer=None,
-    transport: Optional[Transport] = None,
-) -> Callable[[VendorTarget, Optional[int]], UrlOnlyDiscovery]:
+    transport: Transport | None = None,
+) -> Callable[[VendorTarget, int | None], UrlOnlyDiscovery]:
     """``(target, max_products) -> UrlOnlyDiscovery`` sharing the run's robots
     cache and per-host rate limiter, with a fresh request budget per target."""
 
-    def build(target: VendorTarget, max_products: Optional[int]) -> UrlOnlyDiscovery:
+    def build(target: VendorTarget, max_products: int | None) -> UrlOnlyDiscovery:
         client = PoliteHttpClient(
             robots,
             limiter,
@@ -147,9 +149,7 @@ def build_robots_and_limiter() -> tuple:
 def build_service(repository=None, fetcher=None) -> VendorScrapeService:
     """Assemble the pipeline from settings."""
     user_agent = VENDOR_SCRAPER_USER_AGENT
-    page_fetcher = fetcher or PlaywrightPageFetcher(
-        user_agent=user_agent, timeout_ms=VENDOR_SCRAPE_TIMEOUT_MS
-    )
+    page_fetcher = fetcher or PlaywrightPageFetcher(user_agent=user_agent, timeout_ms=VENDOR_SCRAPE_TIMEOUT_MS)
     robots, limiter = build_robots_and_limiter()
     return VendorScrapeService(
         fetcher=page_fetcher,
@@ -166,7 +166,7 @@ def build_service(repository=None, fetcher=None) -> VendorScrapeService:
     )
 
 
-def preview_discovery(url: str, max_products: int = 5, currency: Optional[str] = None) -> Dict[str, Any]:
+def preview_discovery(url: str, max_products: int = 5, currency: str | None = None) -> dict[str, Any]:
     """Dry run of selector-free discovery for one URL: nothing is stored.
 
     Backs ``POST /api/v1/vendors/discover`` so an admin can see what a URL
@@ -183,10 +183,10 @@ def preview_discovery(url: str, max_products: int = 5, currency: Optional[str] =
 
 
 def run_vendor_scrape(
-    vendors: Optional[Sequence[str]] = None,
-    limit_per_vendor: Optional[int] = None,
-    on_progress: Optional[Callable[[int, int], None]] = None,
-) -> Dict[str, Any]:
+    vendors: Sequence[str] | None = None,
+    limit_per_vendor: int | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict[str, Any]:
     """Run one pass and return a JSON-safe report.
 
     Used by both ``POST /api/v1/vendors/scrape`` and the nightly cron.
@@ -203,7 +203,7 @@ def run_vendor_scrape(
         }
 
     db_url = os.getenv("DATABASE_URL")
-    connection: Optional[DbConnection] = None
+    connection: DbConnection | None = None
     repository = None
     if db_url:
         connection = DbConnection(db_url)
@@ -215,9 +215,7 @@ def run_vendor_scrape(
 
     try:
         service = build_service(repository=repository)
-        report = service.run(
-            targets, limit_per_target=limit_per_vendor, on_progress=on_progress
-        )
+        report = service.run(targets, limit_per_target=limit_per_vendor, on_progress=on_progress)
     finally:
         if connection is not None:
             connection.close()

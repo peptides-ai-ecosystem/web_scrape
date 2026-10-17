@@ -1,8 +1,9 @@
 # XR-8 consumer (delete_peptide_cascading names platform tables) — see orchestrator/docs/ecosystem/dependencies.md#xr-8
 """Peptide repository for peptide entity operations."""
-from typing import Dict, Any, List, Optional
-from app.repositories.base import BaseRepository
 
+from typing import Any
+
+from app.repositories.base import BaseRepository
 
 # Columns a fill-empty sync must never write, even when they are empty.
 _FILL_EMPTY_PROTECTED = frozenset({"id", "slug", "name", "created_at", "updated_at"})
@@ -12,10 +13,7 @@ _FILL_EMPTY_PROTECTED = frozenset({"id", "slug", "name", "created_at", "updated_
 CHILD_KIND_SQL = {
     "benefits": "SELECT 1 FROM peptide_benefits WHERE peptide_id = %(id)s LIMIT 1",
     "side_effects": "SELECT 1 FROM peptide_side_effects WHERE peptide_id = %(id)s LIMIT 1",
-    "interactions": (
-        "SELECT 1 FROM peptide_interactions "
-        "WHERE peptide_id_1 = %(id)s OR peptide_id_2 = %(id)s LIMIT 1"
-    ),
+    "interactions": ("SELECT 1 FROM peptide_interactions WHERE peptide_id_1 = %(id)s OR peptide_id_2 = %(id)s LIMIT 1"),
     "indications": "SELECT 1 FROM peptide_research_indications WHERE peptide_id = %(id)s LIMIT 1",
     "references": "SELECT 1 FROM peptide_references WHERE peptide_id = %(id)s LIMIT 1",
     "protocols": "SELECT 1 FROM peptide_protocols WHERE peptide_id = %(id)s LIMIT 1",
@@ -37,15 +35,15 @@ def is_empty_value(value: Any) -> bool:
 class PeptideRepository(BaseRepository):
     """Repository for peptide entity operations."""
 
-    def get_by_slug(self, slug: str) -> Optional[Dict[str, Any]]:
+    def get_by_slug(self, slug: str) -> dict[str, Any] | None:
         """Get peptide by slug."""
         return self.execute_one("SELECT * FROM peptides WHERE slug = %s", (slug,))
 
-    def get_by_id(self, peptide_id: int) -> Optional[Dict[str, Any]]:
+    def get_by_id(self, peptide_id: int) -> dict[str, Any] | None:
         """Get peptide by ID."""
         return self.execute_one("SELECT * FROM peptides WHERE id = %s", (peptide_id,))
 
-    def search_by_name_flexible(self, name: str) -> Optional[Dict[str, Any]]:
+    def search_by_name_flexible(self, name: str) -> dict[str, Any] | None:
         """Search for a peptide by name with flexible, similarity-aware matching.
 
         Tries, in order:
@@ -63,20 +61,20 @@ class PeptideRepository(BaseRepository):
 
         # 1. Exact match on name or slug
         result = self.execute_one(
-            "SELECT * FROM peptides WHERE LOWER(name) = LOWER(%s) OR LOWER(slug) = LOWER(%s)",
-            (name, name)
+            "SELECT * FROM peptides WHERE LOWER(name) = LOWER(%s) OR LOWER(slug) = LOWER(%s)", (name, name)
         )
         if result:
             return result
 
         # 2. Try candidate slugs (handles parenthetical aliases, filler stripping)
         from app.utils.peptide_utils import get_peptide_candidates
+
         candidates = get_peptide_candidates(name)
         if candidates:
             placeholders = ", ".join("%s" for _ in candidates)
             result = self.execute_one(
                 f"SELECT * FROM peptides WHERE LOWER(slug) IN ({placeholders}) LIMIT 1",
-                tuple(c.lower() for c in candidates)
+                tuple(c.lower() for c in candidates),
             )
             if result:
                 return result
@@ -89,7 +87,7 @@ class PeptideRepository(BaseRepository):
                   OR LOWER(slug) LIKE %s
                   OR LOWER(synonyms) LIKE %s
                LIMIT 1""",
-            (like_pattern, like_pattern, like_pattern)
+            (like_pattern, like_pattern, like_pattern),
         )
 
     def get_all_identifiers(self) -> set:
@@ -98,61 +96,61 @@ class PeptideRepository(BaseRepository):
         rows = self.execute_all("SELECT slug, LOWER(name) as name_lower FROM peptides")
         identifiers = set()
         for row in rows:
-            if row.get('slug'):
-                identifiers.add(row['slug'])
-            if row.get('name_lower'):
-                identifiers.add(row['name_lower'])
+            if row.get("slug"):
+                identifiers.add(row["slug"])
+            if row.get("name_lower"):
+                identifiers.add(row["name_lower"])
         return identifiers
 
-    def upsert_fill_nulls(self, payload: Dict[str, Any]) -> int:
+    def upsert_fill_nulls(self, payload: dict[str, Any]) -> int:
         """
         Inserts a peptide or updates its NULL columns if it exists.
         Returns the peptide ID.
         """
-        slug = payload.get('slug')
+        slug = payload.get("slug")
         existing = self.get_by_slug(slug)
 
         if not existing:
             # Insert new peptide
             columns = list(payload.keys())
             values = [payload[col] for col in columns]
-            
+
             with self.get_cursor() as cur:
                 peptide_id = self._insert_guarded(cur, "peptides", columns, values)
                 self._commit()
                 self.log_operation("INSERT_PEPTIDE", "peptides", f"{payload.get('name')} (ID: {peptide_id})")
                 return peptide_id
         else:
-            peptide_id = existing['id']
+            peptide_id = existing["id"]
             updates = {}
             for col, val in payload.items():
                 if val and (existing.get(col) is None or existing.get(col) == ""):
                     updates[col] = val
-            
+
             if updates:
                 set_clause = ", ".join([f"{col} = %s" for col in updates.keys()])
                 sql = f"UPDATE peptides SET {set_clause} WHERE id = %s"
                 params = list(updates.values()) + [peptide_id]
-                
+
                 with self.get_cursor() as cur:
                     cur.execute(sql, params)
                     self._commit()
-                self.log_operation("UPDATE_PEPTIDE", "peptides", 
-                    f"{len(updates)} NULL columns for peptide: {payload.get('name')}")
+                self.log_operation(
+                    "UPDATE_PEPTIDE", "peptides", f"{len(updates)} NULL columns for peptide: {payload.get('name')}"
+                )
             else:
-                self.log_operation("EXIST_PEPTIDE", "peptides", payload.get('name'))
-            
+                self.log_operation("EXIST_PEPTIDE", "peptides", payload.get("name"))
+
             return peptide_id
 
-    def get_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
+    def get_by_identifier(self, identifier: str) -> dict[str, Any] | None:
         """Exact lookup by slug or lower-cased name (the keys of get_all_identifiers)."""
         return self.execute_one(
-            "SELECT * FROM peptides WHERE slug = %s OR LOWER(name) = %s "
-            "ORDER BY (slug = %s) DESC LIMIT 1",
+            "SELECT * FROM peptides WHERE slug = %s OR LOWER(name) = %s ORDER BY (slug = %s) DESC LIMIT 1",
             (identifier, identifier, identifier),
         )
 
-    def fill_empty_columns(self, peptide_id: int, payload: Dict[str, Any]) -> List[str]:
+    def fill_empty_columns(self, peptide_id: int, payload: dict[str, Any]) -> list[str]:
         """
         Write payload values only into columns that are empty on the existing row.
 
@@ -181,16 +179,12 @@ class PeptideRepository(BaseRepository):
                 list(updates.values()) + [peptide_id],
             )
             self._commit()
-        self.log_operation("FILL_EMPTY_PEPTIDE", "peptides",
-            f"ID: {peptide_id} filled {', '.join(updates)}")
+        self.log_operation("FILL_EMPTY_PEPTIDE", "peptides", f"ID: {peptide_id} filled {', '.join(updates)}")
         return list(updates)
 
-    def get_child_kinds_present(self, peptide_id: int) -> Dict[str, bool]:
+    def get_child_kinds_present(self, peptide_id: int) -> dict[str, bool]:
         """For each child-row kind in CHILD_KIND_SQL, whether the peptide has any."""
-        return {
-            kind: self.execute_one(sql, {"id": peptide_id}) is not None
-            for kind, sql in CHILD_KIND_SQL.items()
-        }
+        return {kind: self.execute_one(sql, {"id": peptide_id}) is not None for kind, sql in CHILD_KIND_SQL.items()}
 
     def update_activity_type(self, peptide_id: int, activity_type: str) -> bool:
         """
@@ -203,7 +197,7 @@ class PeptideRepository(BaseRepository):
         Returns:
             True if the peptide was updated, False if not found.
         """
-        VALID_TYPES = {'automatic', 'manual'}
+        VALID_TYPES = {"automatic", "manual"}
         if activity_type not in VALID_TYPES:
             raise ValueError(
                 f"Invalid activity_type '{activity_type}'. Must be one of: {', '.join(sorted(VALID_TYPES))}"
@@ -211,14 +205,14 @@ class PeptideRepository(BaseRepository):
 
         with self.get_cursor() as cur:
             cur.execute(
-                "UPDATE peptides SET activity_type = %s, updated_at = NOW() WHERE id = %s",
-                (activity_type, peptide_id)
+                "UPDATE peptides SET activity_type = %s, updated_at = NOW() WHERE id = %s", (activity_type, peptide_id)
             )
             self._commit()
             updated = cur.rowcount > 0
             if updated:
-                self.log_operation("UPDATE_ACTIVITY_TYPE", "peptides",
-                    f"ID: {peptide_id} → activity_type='{activity_type}'")
+                self.log_operation(
+                    "UPDATE_ACTIVITY_TYPE", "peptides", f"ID: {peptide_id} → activity_type='{activity_type}'"
+                )
             else:
                 self.log_operation("NOT_FOUND", "peptides", f"ID: {peptide_id}")
             return updated
@@ -235,47 +229,60 @@ class PeptideRepository(BaseRepository):
                 self.log_operation("NOT_FOUND", "peptides", f"slug='{slug}'")
                 return False
 
-            peptide_id = row['id']
+            peptide_id = row["id"]
 
             # --- Protocol subtree ---
             cur.execute("SELECT id FROM peptide_protocols WHERE peptide_id = %s", (peptide_id,))
-            protocol_ids = [r['id'] for r in cur.fetchall()]
+            protocol_ids = [r["id"] for r in cur.fetchall()]
 
             if protocol_ids:
                 # protocol_dosages subtree
-                cur.execute(
-                    "SELECT id FROM protocol_dosages WHERE protocol_id = ANY(%s)",
-                    (protocol_ids,)
-                )
-                dosage_ids = [r['id'] for r in cur.fetchall()]
+                cur.execute("SELECT id FROM protocol_dosages WHERE protocol_id = ANY(%s)", (protocol_ids,))
+                dosage_ids = [r["id"] for r in cur.fetchall()]
 
                 if dosage_ids:
-                    cur.execute("DELETE FROM protocol_dosage_benefits WHERE protocol_dosage_id = ANY(%s)", (dosage_ids,))
-                    cur.execute("DELETE FROM protocol_dosage_side_effects WHERE protocol_dosage_id = ANY(%s)", (dosage_ids,))
+                    cur.execute(
+                        "DELETE FROM protocol_dosage_benefits WHERE protocol_dosage_id = ANY(%s)", (dosage_ids,)
+                    )
+                    cur.execute(
+                        "DELETE FROM protocol_dosage_side_effects WHERE protocol_dosage_id = ANY(%s)", (dosage_ids,)
+                    )
                     cur.execute("DELETE FROM protocol_dosages WHERE id = ANY(%s)", (dosage_ids,))
 
                 # peptide_research_indication_studies linked via protocol_id
-                cur.execute("DELETE FROM peptide_research_indication_studies WHERE protocol_id = ANY(%s)", (protocol_ids,))
+                cur.execute(
+                    "DELETE FROM peptide_research_indication_studies WHERE protocol_id = ANY(%s)", (protocol_ids,)
+                )
                 cur.execute("DELETE FROM protocol_application_places WHERE protocol_id = ANY(%s)", (protocol_ids,))
                 cur.execute("DELETE FROM protocol_quality_indicators WHERE protocol_id = ANY(%s)", (protocol_ids,))
-                cur.execute("DELETE FROM peptide_protocol_reconstitution_steps WHERE protocol_id = ANY(%s)", (protocol_ids,))
+                cur.execute(
+                    "DELETE FROM peptide_protocol_reconstitution_steps WHERE protocol_id = ANY(%s)", (protocol_ids,)
+                )
                 cur.execute("DELETE FROM peptide_protocols WHERE id = ANY(%s)", (protocol_ids,))
-                self.log_operation("DELETE_CASCADE", "peptide_protocols", 
-                    f"{len(protocol_ids)} protocol(s) for peptide {peptide_id}")
+                self.log_operation(
+                    "DELETE_CASCADE", "peptide_protocols", f"{len(protocol_ids)} protocol(s) for peptide {peptide_id}"
+                )
 
             # --- Research indications subtree ---
             cur.execute("SELECT id FROM peptide_research_indications WHERE peptide_id = %s", (peptide_id,))
-            indication_ids = [r['id'] for r in cur.fetchall()]
+            indication_ids = [r["id"] for r in cur.fetchall()]
 
             if indication_ids:
-                cur.execute("DELETE FROM peptide_research_indication_studies WHERE indication_id = ANY(%s)", (indication_ids,))
+                cur.execute(
+                    "DELETE FROM peptide_research_indication_studies WHERE indication_id = ANY(%s)", (indication_ids,)
+                )
                 cur.execute("DELETE FROM peptide_research_indications WHERE id = ANY(%s)", (indication_ids,))
-                self.log_operation("DELETE_CASCADE", "peptide_research_indications", f"{len(indication_ids)} indication(s)")
+                self.log_operation(
+                    "DELETE_CASCADE", "peptide_research_indications", f"{len(indication_ids)} indication(s)"
+                )
 
             # --- Direct peptide relations ---
             cur.execute("DELETE FROM peptide_benefits WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM peptide_side_effects WHERE peptide_id = %s", (peptide_id,))
-            cur.execute("DELETE FROM peptide_interactions WHERE peptide_id_1 = %s OR peptide_id_2 = %s", (peptide_id, peptide_id))
+            cur.execute(
+                "DELETE FROM peptide_interactions WHERE peptide_id_1 = %s OR peptide_id_2 = %s",
+                (peptide_id, peptide_id),
+            )
             cur.execute("DELETE FROM peptide_references WHERE peptide_id = %s", (peptide_id,))
             cur.execute("DELETE FROM peptide_graph WHERE peptide_id = %s", (peptide_id,))
 

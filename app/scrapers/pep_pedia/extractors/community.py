@@ -1,16 +1,14 @@
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
+
 from app.scrapers.pep_pedia.extractors.base import BaseExtractor
-from typing import Dict
+
 
 class CommunityExtractor(BaseExtractor):
-    def extract(self, driver, wait) -> Dict[str, Dict[str, str]]:
-        return {
-            "insights": self._get_community_insights(driver, wait),
-            "polls": self._get_poll_results(driver, wait)
-        }
+    def extract(self, driver, wait) -> dict[str, dict[str, str]]:
+        return {"insights": self._get_community_insights(driver, wait), "polls": self._get_poll_results(driver, wait)}
 
     # Verified against the live site (pep-pedia.org, AOD-9604/Semaglutide):
     # - "Community Insights" no longer exists — the sidebar shows the
@@ -23,8 +21,7 @@ class CommunityExtractor(BaseExtractor):
     #   old "Go to question 1"/"Next question"/`aria-roledescription='slide'`
     #   logic always failed.
     _POLL_CARD_XPATH = (
-        "//h3[contains(text(),'Poll Results')]"
-        "/parent::div/following-sibling::div[contains(@class,'rounded-xl')][1]"
+        "//h3[contains(text(),'Poll Results')]/parent::div/following-sibling::div[contains(@class,'rounded-xl')][1]"
     )
 
     def _get_community_insights(self, driver, wait):
@@ -33,49 +30,47 @@ class CommunityExtractor(BaseExtractor):
         # it lazy-hydrates somewhere, then bail out quickly — do not block the
         # whole wait (5s) on a section that no longer exists.
         try:
-            WebDriverWait(driver, 1.5).until(EC.presence_of_element_located(
-                (By.XPATH, "//h3[contains(.,'Community Insights')]")
-            ))
-            card = wait.until(EC.presence_of_element_located(
-                (By.XPATH, "//h3[contains(.,'Community Insights')]"
-                           "/parent::div/following-sibling::div[contains(@class,'rounded-xl')][1]")
-            ))
+            WebDriverWait(driver, 1.5).until(
+                EC.presence_of_element_located((By.XPATH, "//h3[contains(.,'Community Insights')]"))
+            )
+            card = wait.until(
+                EC.presence_of_element_located(
+                    (
+                        By.XPATH,
+                        "//h3[contains(.,'Community Insights')]"
+                        "/parent::div/following-sibling::div[contains(@class,'rounded-xl')][1]",
+                    )
+                )
+            )
             heading = self.get_text(driver, card.find_element(By.TAG_NAME, "h3")).strip()
-            responses = self.get_text(driver, card.find_element(
-                By.XPATH, ".//p[contains(.,'responses')]"
-            )).strip()
+            responses = self.get_text(driver, card.find_element(By.XPATH, ".//p[contains(.,'responses')]")).strip()
             rows = card.find_elements(By.CSS_SELECTOR, "div.flex.gap-3.items-start")
             insights = {heading: responses}
-            insights.update({
-                f"{heading}_{self.get_text(driver, r.find_element(By.CSS_SELECTOR, '.text-label-sm')).strip()}":
-                self.get_text(driver, r.find_element(By.CSS_SELECTOR, ".text-body-sm")).strip()
-                for r in rows
-            })
+            insights.update(
+                {
+                    f"{heading}_{self.get_text(driver, r.find_element(By.CSS_SELECTOR, '.text-label-sm')).strip()}": self.get_text(
+                        driver, r.find_element(By.CSS_SELECTOR, ".text-body-sm")
+                    ).strip()
+                    for r in rows
+                }
+            )
             return insights
         except TimeoutException:
             return {}
 
     def _get_poll_results(self, driver, wait):
         try:
-            wait.until(EC.presence_of_element_located(
-                (By.XPATH, "//h3[contains(text(),'Poll Results')]")
-            ))
-            card = wait.until(EC.presence_of_element_located(
-                (By.XPATH, self._POLL_CARD_XPATH)
-            ))
+            wait.until(EC.presence_of_element_located((By.XPATH, "//h3[contains(text(),'Poll Results')]")))
+            card = wait.until(EC.presence_of_element_located((By.XPATH, self._POLL_CARD_XPATH)))
             poll_results = {}
 
-            responses = self.get_text(driver, card.find_element(
-                By.XPATH, ".//p[contains(.,'responses')]"
-            )).strip()
+            responses = self.get_text(driver, card.find_element(By.XPATH, ".//p[contains(.,'responses')]")).strip()
             if responses:
                 poll_results["poll_responses"] = responses
 
             # Questions are switched with the pill buttons below the options;
             # if a card has no pills it only ever shows one question.
-            pill_buttons = card.find_elements(
-                By.CSS_SELECTOR, "div.flex.flex-wrap.gap-2 button"
-            )
+            pill_buttons = card.find_elements(By.CSS_SELECTOR, "div.flex.flex-wrap.gap-2 button")
             if not pill_buttons:
                 pill_buttons = [None]
 
@@ -90,9 +85,7 @@ class CommunityExtractor(BaseExtractor):
                     h4 = card.find_element(By.TAG_NAME, "h4")
                     question = self.get_text(driver, h4).strip()
                     question_box = h4.find_element(By.XPATH, "./parent::div")
-                    for row in question_box.find_elements(
-                        By.CSS_SELECTOR, "div.space-y-3 > div"
-                    ):
+                    for row in question_box.find_elements(By.CSS_SELECTOR, "div.space-y-3 > div"):
                         spans = row.find_elements(By.TAG_NAME, "span")
                         if len(spans) >= 2:
                             label = self.get_text(driver, spans[0]).strip()

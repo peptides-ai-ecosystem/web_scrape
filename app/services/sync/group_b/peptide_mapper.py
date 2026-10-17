@@ -1,24 +1,33 @@
 import json
 import re
-from typing import Any, Dict
+from typing import Any
+
 from app.services.sync.base import BaseMapper
+
 
 class PeptideMapper(BaseMapper):
     """Group B: Maps the central peptide record."""
 
-    def map(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def map(self, row: dict[str, Any]) -> dict[str, Any]:
         raw_name = (row.get("Peptide_Name") or "").strip()
         full_name = (row.get("Full_Name") or "").strip()
 
         # Generate a slug from name
-        slug = re.sub(r'[^a-z0-9]+', '-', raw_name.lower()).strip('-')
+        slug = re.sub(r"[^a-z0-9]+", "-", raw_name.lower()).strip("-")
 
         # Dynamically determine the overview column if name-specific
         overview = (row.get(f"overview_what_is_{slug.replace('-', '_')}") or "").strip()
         if not overview:
             # Fallback to search any column starting with overview_what_is
             for k, v in row.items():
-                if k and isinstance(k, str) and k.startswith("overview_what_is_") and v and isinstance(v, str) and v.strip():
+                if (
+                    k
+                    and isinstance(k, str)
+                    and k.startswith("overview_what_is_")
+                    and v
+                    and isinstance(v, str)
+                    and v.strip()
+                ):
                     overview = v.strip()
                     break
 
@@ -41,10 +50,10 @@ class PeptideMapper(BaseMapper):
             "wada_status": wada_status if wada_status else None,
             "contraindications": self._extract_contraindications(row),
             "stop_signs": self._extract_stop_signs(row),
-            "key_information": (row.get("overview_key_benefits") or "").strip()
+            "key_information": (row.get("overview_key_benefits") or "").strip(),
         }
 
-    def _extract_contraindications(self, row: Dict[str, Any]) -> str:
+    def _extract_contraindications(self, row: dict[str, Any]) -> str:
         """Extract what_to_expect_{1..n} columns as a key:value JSON object.
 
         CSV values look like "Week 1-2: Minimal noticeable effects..." so the
@@ -66,7 +75,7 @@ class PeptideMapper(BaseMapper):
                 expectations[key] = statement
         return json.dumps(expectations) if expectations else json.dumps([])
 
-    def _extract_stop_signs(self, row: Dict[str, Any]) -> str:
+    def _extract_stop_signs(self, row: dict[str, Any]) -> str:
         """Extract side_effects_and_safety_when_to_stop_{1..n} columns as a key:value JSON object.
 
         The CSV suffix (1, 2, ... n) becomes the key ("stop_sign_number") and
@@ -80,7 +89,7 @@ class PeptideMapper(BaseMapper):
             if isinstance(key, str) and key.startswith(prefix) and isinstance(value, str):
                 trimmed = value.strip()
                 if trimmed:
-                    suffix = key[len(prefix):].strip()
+                    suffix = key[len(prefix) :].strip()
                     stop_items[suffix] = trimmed
 
         return json.dumps(stop_items) if stop_items else json.dumps([])

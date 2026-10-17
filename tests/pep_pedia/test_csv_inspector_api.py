@@ -1,5 +1,6 @@
 """The CSV inspector routes (``/api/v1/csv/*``) read the scraped CSV through
 ``csv_inspector_service``; a missing CSV or row is a 404 with the same detail."""
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

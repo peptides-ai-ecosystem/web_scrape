@@ -8,6 +8,7 @@
 
 Skipped without a Docker daemon (marker ``docker``). Never uses a URL from ``.env``.
 """
+
 from __future__ import annotations
 
 import os
@@ -41,13 +42,30 @@ def pg_url():
         pytest.skip("needs a local Docker daemon")
     name = f"ws-alembic-{uuid.uuid4().hex[:8]}"
     out = subprocess.run(
-        ["docker", "run", "-d", "--rm", "--name", name, "-e", "POSTGRES_PASSWORD=pw", "-p", "127.0.0.1::5432", "postgres:17"],
-        capture_output=True, text=True,
+        [
+            "docker",
+            "run",
+            "-d",
+            "--rm",
+            "--name",
+            name,
+            "-e",
+            "POSTGRES_PASSWORD=pw",
+            "-p",
+            "127.0.0.1::5432",
+            "postgres:17",
+        ],
+        capture_output=True,
+        text=True,
     )
     if out.returncode != 0:
         pytest.skip(f"cannot start postgres: {out.stderr[-200:]}")
     try:
-        port = subprocess.run(["docker", "port", name, "5432/tcp"], capture_output=True, text=True).stdout.strip().rsplit(":", 1)[1]
+        port = (
+            subprocess.run(["docker", "port", name, "5432/tcp"], capture_output=True, text=True)
+            .stdout.strip()
+            .rsplit(":", 1)[1]
+        )
         url = f"postgresql://postgres:pw@127.0.0.1:{port}/postgres"
         import psycopg2
 
@@ -66,7 +84,9 @@ def pg_url():
 
 def _alembic(url: str, *args: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "DATABASE_URL": url, "LOG_DIR": str(ROOT / "log")}
-    return subprocess.run(["uv", "run", "--no-sync", "alembic", *args], cwd=ROOT, env=env, capture_output=True, text=True)
+    return subprocess.run(
+        ["uv", "run", "--no-sync", "alembic", *args], cwd=ROOT, env=env, capture_output=True, text=True
+    )
 
 
 def _tables(url: str) -> set[str]:
@@ -115,7 +135,10 @@ def test_existing_tables_upgrade_in_place_and_keep_their_rows(pg_url):
 
 def test_platform_tables_are_not_touched(pg_url):
     _reset(pg_url)
-    _exec(pg_url, "create table peptides (id serial primary key, name text); insert into peptides (name) values ('BPC-157')")
+    _exec(
+        pg_url,
+        "create table peptides (id serial primary key, name text); insert into peptides (name) values ('BPC-157')",
+    )
     _exec(pg_url, "create table alembic_version (version_num varchar(32) not null)")
     assert _alembic(pg_url, "upgrade", "head").returncode == 0
     import psycopg2

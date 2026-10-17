@@ -1,7 +1,8 @@
 """Interaction repository for peptide interaction operations."""
-from typing import Dict, Any, Optional
-from app.repositories.base import BaseRepository
 
+from typing import Any
+
+from app.repositories.base import BaseRepository
 
 # Exact mapping from raw CSV interaction keywords to PostgreSQL
 # interaction_type enum values (synergistic, antagonistic, neutral, caution).
@@ -30,7 +31,7 @@ def map_interaction_type(raw_type: str) -> str:
 class InteractionRepository(BaseRepository):
     """Repository for peptide interaction operations."""
 
-    def upsert(self, peptide_id: int, interaction: Dict[str, Any]):
+    def upsert(self, peptide_id: int, interaction: dict[str, Any]):
         """Upserts a peptide interaction.
 
         If the interaction dict contains a ``secondary_peptide_id``
@@ -43,65 +44,71 @@ class InteractionRepository(BaseRepository):
         yet resolved), that row is **upgraded** with the resolved ID
         instead of being skipped or duplicated.
         """
-        secondary_name = interaction.get('secondary_peptide_name', '')
-        secondary_id = interaction.get('secondary_peptide_id')
+        secondary_name = interaction.get("secondary_peptide_name", "")
+        secondary_id = interaction.get("secondary_peptide_id")
         with self.get_cursor() as cur:
             # Check for existing — prefer peptide_id_2 match when available
             if secondary_id:
                 cur.execute(
                     "SELECT id FROM peptide_interactions WHERE peptide_id_1 = %s AND peptide_id_2 = %s",
-                    (peptide_id, secondary_id)
+                    (peptide_id, secondary_id),
                 )
                 row = cur.fetchone()
                 if row:
-                    self.log_operation("EXIST_RELATION", "peptide_interactions",
-                        f"Peptide {peptide_id} <-> {secondary_id}")
+                    self.log_operation(
+                        "EXIST_RELATION", "peptide_interactions", f"Peptide {peptide_id} <-> {secondary_id}"
+                    )
                     return
                 # Also check by name — row may exist without peptide_id_2
                 cur.execute(
                     "SELECT id FROM peptide_interactions WHERE peptide_id_1 = %s AND LOWER(peptide_name_2) = LOWER(%s)",
-                    (peptide_id, secondary_name)
+                    (peptide_id, secondary_name),
                 )
                 name_row = cur.fetchone()
                 if name_row:
                     # Upgrade: add the resolved ID to the existing row
                     cur.execute(
                         "UPDATE peptide_interactions SET peptide_id_2 = %s WHERE id = %s",
-                        (secondary_id, name_row['id'])
+                        (secondary_id, name_row["id"]),
                     )
                     self._commit()
-                    self.log_operation("UPDATE_RELATION", "peptide_interactions",
-                        f"Peptide {peptide_id} <-> {secondary_name} (added ID {secondary_id})")
+                    self.log_operation(
+                        "UPDATE_RELATION",
+                        "peptide_interactions",
+                        f"Peptide {peptide_id} <-> {secondary_name} (added ID {secondary_id})",
+                    )
                     return
             else:
                 cur.execute(
                     "SELECT 1 FROM peptide_interactions WHERE peptide_id_1 = %s AND LOWER(peptide_name_2) = LOWER(%s)",
-                    (peptide_id, secondary_name)
+                    (peptide_id, secondary_name),
                 )
                 if cur.fetchone():
-                    self.log_operation("EXIST_RELATION", "peptide_interactions",
-                        f"Peptide {peptide_id} <-> {secondary_name}")
+                    self.log_operation(
+                        "EXIST_RELATION", "peptide_interactions", f"Peptide {peptide_id} <-> {secondary_name}"
+                    )
                     return
 
             try:
-                itype = self._map_interaction_type(interaction.get('interaction_type', 'neutral'))
+                itype = self._map_interaction_type(interaction.get("interaction_type", "neutral"))
                 if secondary_id:
                     self._insert_guarded(
                         cur,
                         "peptide_interactions",
                         ["peptide_id_1", "peptide_id_2", "peptide_name_2", "interaction_type", "description"],
-                        [peptide_id, secondary_id, secondary_name, itype, interaction.get('description')]
+                        [peptide_id, secondary_id, secondary_name, itype, interaction.get("description")],
                     )
                 else:
                     self._insert_guarded(
                         cur,
                         "peptide_interactions",
                         ["peptide_id_1", "peptide_name_2", "interaction_type", "description"],
-                        [peptide_id, secondary_name, itype, interaction.get('description')]
+                        [peptide_id, secondary_name, itype, interaction.get("description")],
                     )
                 self._commit()
-                self.log_operation("INSERT_RELATION", "peptide_interactions",
-                    f"Peptide {peptide_id} <-> {secondary_name} ({itype})")
+                self.log_operation(
+                    "INSERT_RELATION", "peptide_interactions", f"Peptide {peptide_id} <-> {secondary_name} ({itype})"
+                )
             except Exception as e:
                 self._rollback()
                 self.log_operation("ERROR_RELATION", "peptide_interactions", str(e))
@@ -113,6 +120,5 @@ class InteractionRepository(BaseRepository):
     def get_by_peptide_id(self, peptide_id: int) -> list:
         """Get all interactions for a peptide."""
         return self.execute_all(
-            "SELECT * FROM peptide_interactions WHERE peptide_id_1 = %s OR peptide_id_2 = %s",
-            (peptide_id, peptide_id)
+            "SELECT * FROM peptide_interactions WHERE peptide_id_1 = %s OR peptide_id_2 = %s", (peptide_id, peptide_id)
         )

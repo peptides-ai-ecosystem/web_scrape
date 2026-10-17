@@ -7,11 +7,12 @@ Everything here is offline except :class:`TestLocalFixtureSite`, which serves
 a real competitor site.** That class skips itself when no Chromium can be
 launched (set ``CHROME_BIN`` to an installed Chromium to run it).
 """
+
 import asyncio
 import functools
 import http.server
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -26,7 +27,7 @@ from app.core.vendor_models import (
     StockStatus,
     VendorTarget,
 )
-from app.infrastructure.playwright_fetcher import FetchResult, StaticPageDocument
+from app.infrastructure.page_models import FetchResult, StaticPageDocument
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
 from app.infrastructure.vendor_targets import (
@@ -39,7 +40,7 @@ from app.scrapers.vendors.vendor_confidence import DeltaReviewer
 from app.scrapers.vendors.vendor_scraper import VendorScrapeService
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "competitor_site"
-FIXED_NOW = datetime(2026, 9, 27, 3, 15, tzinfo=timezone.utc)
+FIXED_NOW = datetime(2026, 9, 27, 3, 15, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -173,9 +174,7 @@ class TestTargetParsing:
 
     def test_relative_listing_url_is_refused(self):
         with pytest.raises(VendorTargetConfigError, match="absolute"):
-            parse_target(
-                {"slug": "rival", "listing_url": "/shop", "listing_link_selector": "a"}
-            )
+            parse_target({"slug": "rival", "listing_url": "/shop", "listing_link_selector": "a"})
 
     def test_db_row_goes_through_the_same_validator(self):
         target = row_to_target(
@@ -250,7 +249,9 @@ class TestListingDiscovery:
                         }
                     ),
                 ),
-                "https://rival.example/p/configured": FetchResult(status=200, document=product_doc("BPC-157 5mg", "$39.00")),
+                "https://rival.example/p/configured": FetchResult(
+                    status=200, document=product_doc("BPC-157 5mg", "$39.00")
+                ),
                 "https://rival.example/p/a": FetchResult(status=200, document=product_doc("TB-500 10mg", "$89.50")),
                 "https://rival.example/p/b": FetchResult(status=200, document=product_doc("9-Me-BC 10mg", "$54.99")),
             }
@@ -268,12 +269,14 @@ class TestListingDiscovery:
 
     def test_robots_disallowed_listing_is_recorded_and_never_fetched(self):
         fetcher = FakeFetcher(
-            {"https://rival.example/p/configured": FetchResult(status=200, document=product_doc("BPC-157 5mg", "$39.00"))}
+            {
+                "https://rival.example/p/configured": FetchResult(
+                    status=200, document=product_doc("BPC-157 5mg", "$39.00")
+                )
+            }
         )
         repo = FakeObservationRepo()
-        report = service(
-            fetcher, repo, robots("User-agent: *\nDisallow: /shop\n")
-        ).run([listing_target()])
+        report = service(fetcher, repo, robots("User-agent: *\nDisallow: /shop\n")).run([listing_target()])
 
         assert LISTING not in fetcher.requested
         statuses = {o.url: o.status for o in report.observations}
@@ -372,10 +375,14 @@ class FakeObsRepo:
         return 1
 
     def list_latest_accepted(self, vendor=None):
-        return [dict(r) for r in self.rows if r["review_status"] == "accepted" and (vendor is None or r["vendor"] == vendor)]
+        return [
+            dict(r) for r in self.rows if r["review_status"] == "accepted" and (vendor is None or r["vendor"] == vendor)
+        ]
 
     def list_observations(self, **kwargs):
-        rows = [r for r in self.rows if not kwargs.get("review_status") or r["review_status"] == kwargs["review_status"]]
+        rows = [
+            r for r in self.rows if not kwargs.get("review_status") or r["review_status"] == kwargs["review_status"]
+        ]
         return {"total": len(rows), "rows": rows}
 
 
@@ -389,9 +396,21 @@ def api(monkeypatch):
     target_repo = FakeTargetRepo()
     obs_repo = FakeObsRepo(
         [
-            {"id": 1, "vendor": "rival", "url": "https://rival.example/p/1", "price": Decimal("39.00"), "review_status": "accepted"},
+            {
+                "id": 1,
+                "vendor": "rival",
+                "url": "https://rival.example/p/1",
+                "price": Decimal("39.00"),
+                "review_status": "accepted",
+            },
             {"id": 2, "vendor": "rival", "url": "https://rival.example/p/2", "price": None, "review_status": "flagged"},
-            {"id": 3, "vendor": "rival", "url": "https://rival.example/p/3", "price": Decimal("12.00"), "review_status": "flagged"},
+            {
+                "id": 3,
+                "vendor": "rival",
+                "url": "https://rival.example/p/3",
+                "price": Decimal("12.00"),
+                "review_status": "flagged",
+            },
         ]
     )
     monkeypatch.setattr(target_service, "_target_repository", lambda: target_repo)
@@ -477,6 +496,7 @@ class TestTargetEndpoints:
     def test_scrape_refuses_a_second_concurrent_run(self, api, monkeypatch):
         vendors, _, _ = api
         from fastapi import BackgroundTasks
+
         from app.core.job_queue import get_job_queue
 
         run(vendors.create_vendor_target(payload(vendors)))

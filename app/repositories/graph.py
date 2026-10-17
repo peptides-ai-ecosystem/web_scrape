@@ -1,7 +1,9 @@
 """Graph repository for peptide graph data operations."""
-from typing import Dict, Any, Optional, List
-from app.repositories.base import BaseRepository
+
 import json
+from typing import Any
+
+from app.repositories.base import BaseRepository
 
 # pep-pedia.org serves each peptide at /peptides/<slug>; the crawler follows
 # exactly these links. The peptides table keeps no scraped URL, so the source
@@ -49,7 +51,7 @@ PK_SUMMARY_SQL = """
 """
 
 
-def pk_summary_row_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+def pk_summary_row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
     """Shape one PK_SUMMARY_SQL row for the API (pure, unit-tested)."""
     slug = (row.get("slug") or "").strip() or None
     last = row.get("last_updated")
@@ -76,45 +78,49 @@ def pk_summary_row_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
 class GraphRepository(BaseRepository):
     """Repository for peptide graph data (pharmacokinetics) operations."""
 
-    def upsert(self, peptide_id: int, am_id: int, graph_data: Dict[str, Any], action_type: str = 'manual'):
+    def upsert(self, peptide_id: int, am_id: int, graph_data: dict[str, Any], action_type: str = "manual"):
         """Upserts pharmacokinetics graph data."""
         with self.get_cursor() as cur:
             cur.execute(
                 "SELECT id FROM peptide_graph WHERE peptide_id = %s AND administration_method_id = %s AND time_range = %s",
-                (peptide_id, am_id, graph_data['time_range'])
+                (peptide_id, am_id, graph_data["time_range"]),
             )
             row = cur.fetchone()
-            
+
             fields = {
-                'peak_concentration': graph_data.get('peak_concentration'),
-                'half_life': graph_data.get('half_life'),
-                'cleared_percentage': graph_data.get('cleared_percentage'),
-                'path_data': graph_data.get('path_data'),
-                'markers': graph_data.get('markers'),
-                'points': graph_data.get('points'),
-                'x_axis_labels': graph_data.get('x_axis_labels'),
-                'y_axis_labels': graph_data.get('y_axis_labels'),
-                'legend': graph_data.get('legend'),
+                "peak_concentration": graph_data.get("peak_concentration"),
+                "half_life": graph_data.get("half_life"),
+                "cleared_percentage": graph_data.get("cleared_percentage"),
+                "path_data": graph_data.get("path_data"),
+                "markers": graph_data.get("markers"),
+                "points": graph_data.get("points"),
+                "x_axis_labels": graph_data.get("x_axis_labels"),
+                "y_axis_labels": graph_data.get("y_axis_labels"),
+                "legend": graph_data.get("legend"),
             }
-            
+
             if row:
-                graph_id = row['id']
+                graph_id = row["id"]
                 set_clause = ", ".join([f"{col} = %s" for col in fields.keys()])
                 set_clause += ", action_type = %s, updated_at = NOW()"
                 params = list(fields.values()) + [action_type, graph_id]
                 cur.execute(f"UPDATE peptide_graph SET {set_clause} WHERE id = %s", params)
                 self._commit()
-                self.log_operation("UPDATE_GRAPH", "peptide_graph", 
-                    f"Peptide {peptide_id}: '{graph_data['time_range']}'")
+                self.log_operation(
+                    "UPDATE_GRAPH", "peptide_graph", f"Peptide {peptide_id}: '{graph_data['time_range']}'"
+                )
             else:
                 cols = ["peptide_id", "administration_method_id", "time_range", "action_type"] + list(fields.keys())
-                vals = [peptide_id, am_id, graph_data['time_range'], action_type] + list(fields.values())
+                vals = [peptide_id, am_id, graph_data["time_range"], action_type] + list(fields.values())
                 graph_id = self._insert_guarded(cur, "peptide_graph", cols, vals)
                 self._commit()
-                self.log_operation("INSERT_GRAPH", "peptide_graph", 
-                    f"Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})")
+                self.log_operation(
+                    "INSERT_GRAPH",
+                    "peptide_graph",
+                    f"Peptide {peptide_id}: '{graph_data['time_range']}' (ID: {graph_id})",
+                )
 
-    def list_peptides_with_graph(self) -> List[Dict[str, Any]]:
+    def list_peptides_with_graph(self) -> list[dict[str, Any]]:
         """Peptides with at least one ``peptide_graph`` row, as ``{id, name}``, by name."""
         peptides = self.execute_all("""
             SELECT DISTINCT p.id, p.name
@@ -124,22 +130,25 @@ class GraphRepository(BaseRepository):
         """)
         return [{"id": row["id"], "name": row["name"]} for row in peptides]
 
-    def list_pk_summary(self) -> List[Dict[str, Any]]:
+    def list_pk_summary(self) -> list[dict[str, Any]]:
         """Every peptide with PK curves, with its source and last-written time."""
         return [pk_summary_row_to_dict(row) for row in self.execute_all(PK_SUMMARY_SQL)]
 
-    def get_methods_for_peptide(self, peptide_id: int) -> List[Dict[str, Any]]:
+    def get_methods_for_peptide(self, peptide_id: int) -> list[dict[str, Any]]:
         """Get all available administration methods for a peptide."""
-        rows = self.execute_all("""
+        rows = self.execute_all(
+            """
             SELECT DISTINCT am.id, am.name
             FROM peptide_graph pg
             JOIN administration_methods am ON pg.administration_method_id = am.id
             WHERE pg.peptide_id = %s
             ORDER BY am.name
-        """, (peptide_id,))
-        return [{"id": row['id'], "name": row['name']} for row in rows]
+        """,
+            (peptide_id,),
+        )
+        return [{"id": row["id"], "name": row["name"]} for row in rows]
 
-    def get_visualization_data(self, peptide_id: int, method_name: str = "Injectable") -> Dict[str, Any]:
+    def get_visualization_data(self, peptide_id: int, method_name: str = "Injectable") -> dict[str, Any]:
         """
         Fetch and format graph data for frontend visualization.
 
@@ -150,23 +159,23 @@ class GraphRepository(BaseRepository):
             # Get peptide name
             cur.execute("SELECT name FROM peptides WHERE id = %s", (peptide_id,))
             peptide_row = cur.fetchone()
-            result['peptide_name'] = peptide_row['name'] if peptide_row else 'Unknown'
-            result['administration_method'] = method_name
+            result["peptide_name"] = peptide_row["name"] if peptide_row else "Unknown"
+            result["administration_method"] = method_name
 
             # Get administration method ID
             cur.execute("SELECT id FROM administration_methods WHERE name = %s", (method_name,))
             am_row = cur.fetchone()
-            am_id = am_row['id'] if am_row else 6  # Default to Injectable (ID 6)
+            am_id = am_row["id"] if am_row else 6  # Default to Injectable (ID 6)
 
             # Fetch all graph records for this peptide
             cur.execute(
                 "SELECT * FROM peptide_graph WHERE peptide_id = %s AND administration_method_id = %s ORDER BY time_range",
-                (peptide_id, am_id)
+                (peptide_id, am_id),
             )
             rows = cur.fetchall()
 
             for row in rows:
-                time_range = row['time_range']
+                time_range = row["time_range"]
 
                 # Helper function to parse JSON
                 def parse_json(val, default):
@@ -181,23 +190,22 @@ class GraphRepository(BaseRepository):
 
                 result[time_range] = {
                     "metadata": {
-                        "peak": row.get('peak_concentration', ''),
-                        "half_life": row.get('half_life', ''),
-                        "cleared": row.get('cleared_percentage', '')
+                        "peak": row.get("peak_concentration", ""),
+                        "half_life": row.get("half_life", ""),
+                        "cleared": row.get("cleared_percentage", ""),
                     },
-                    "path_data": row.get('path_data', ''),
-                    "markers": parse_json(row.get('markers'), []),
-                    "points": parse_json(row.get('points'), []),
-                    "x_labels": parse_json(row.get('x_axis_labels'), []),
-                    "y_labels": parse_json(row.get('y_axis_labels'), []),
-                    "legend": parse_json(row.get('legend'), {})
+                    "path_data": row.get("path_data", ""),
+                    "markers": parse_json(row.get("markers"), []),
+                    "points": parse_json(row.get("points"), []),
+                    "x_labels": parse_json(row.get("x_axis_labels"), []),
+                    "y_labels": parse_json(row.get("y_axis_labels"), []),
+                    "legend": parse_json(row.get("legend"), {}),
                 }
 
         return result
 
-    def get_by_peptide_and_method(self, peptide_id: int, am_id: int) -> List[Dict[str, Any]]:
+    def get_by_peptide_and_method(self, peptide_id: int, am_id: int) -> list[dict[str, Any]]:
         """Get all graph records for a peptide and administration method."""
         return self.execute_all(
-            "SELECT * FROM peptide_graph WHERE peptide_id = %s AND administration_method_id = %s",
-            (peptide_id, am_id)
+            "SELECT * FROM peptide_graph WHERE peptide_id = %s AND administration_method_id = %s", (peptide_id, am_id)
         )

@@ -21,15 +21,20 @@ uv run pytest -m vendors -q                           # one theme (pep_pedia, ve
 uv run pytest tests/ops/test_image_contents.py -q     # one file
 PLATFORM_SCHEMA_REPO=<peptides-platform checkout> uv run pytest tests/sync/test_platform_schema_contract.py -v
 ```
-The suite is offline. Tests that need Chromium skip themselves; the platform-schema contract test skips without a platform checkout (run it locally when SQL touching a platform table changes); Docker tests skip without a daemon. `scripts/actual_ingestion.py` and `scripts/sync_pipeline.py` are manual scripts, not tests.
+The suite is offline. Tests that need Chromium skip themselves; Docker tests skip without a daemon. The platform-schema contract test runs against the vendored snapshot `contracts/platform-schema/*.json` when there is no checkout (CI), and against the checkout plus a stale-snapshot check when `PLATFORM_SCHEMA_REPO` points at one. `scripts/actual_ingestion.py` and `scripts/sync_pipeline.py` are manual scripts, not tests.
 
 ## Local gate
 ```bash
-scripts/check.sh          # uv sync --frozen + the test suite (what CI runs)
+scripts/check.sh          # uv sync --frozen, ruff, ruff format --check, the mypy ratchet, the test suite (what CI runs)
 ```
 
-## Lint and typecheck
-None configured in this repo yet.
+## Lint, format, typecheck
+```bash
+uv run ruff check .          # rules in pyproject.toml; baseline = [tool.ruff.lint.per-file-ignores], shrink only
+uv run ruff format .
+uv run python scripts/mypy_ratchet.py   # fails on errors not in scripts/mypy-baseline.txt
+uv run python scripts/export_platform_schema.py   # regenerate contracts/platform-schema/ from a platform checkout on staging
+```
 
 ## Migrate (this service's own two tables only)
 ```bash

@@ -1,4 +1,5 @@
 """Evaluation endpoints: validate the body, then one call to ``app.services.evaluation_service``."""
+
 from fastapi import APIRouter, BackgroundTasks
 
 from app.api.errors import http_error
@@ -12,6 +13,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Core Evaluation
 # ---------------------------------------------------------------------------
+
 
 @router.post("/core", status_code=202)
 async def start_core_evaluation(request: EvaluationRequest, background_tasks: BackgroundTasks):
@@ -56,6 +58,7 @@ async def start_core_evaluation(request: EvaluationRequest, background_tasks: Ba
 # Graph Evaluation
 # ---------------------------------------------------------------------------
 
+
 @router.post("/graph", status_code=202)
 async def start_graph_evaluation(request: EvaluationRequest, background_tasks: BackgroundTasks):
     """
@@ -80,4 +83,3 @@ async def start_graph_evaluation(request: EvaluationRequest, background_tasks: B
         return evaluation_service.start_graph_evaluation(request.limit, request.output_json, background_tasks.add_task)
     except ServiceError as exc:
         raise http_error(exc)
-

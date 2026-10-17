@@ -1,6 +1,9 @@
 import time
+
 from selenium.webdriver.support import expected_conditions as EC
+
 from app.core.interfaces import IExtractor
+
 
 class BaseExtractor(IExtractor):
     def get_text(self, driver, element):
@@ -16,8 +19,7 @@ class BaseExtractor(IExtractor):
         """
         try:
             return driver.execute_script(
-                "var t = arguments[0].innerText;"
-                "return (t === undefined || t === null) ? arguments[0].textContent : t;",
+                "var t = arguments[0].innerText;return (t === undefined || t === null) ? arguments[0].textContent : t;",
                 element,
             )
         except Exception:
@@ -27,8 +29,8 @@ class BaseExtractor(IExtractor):
         try:
             driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
             wait.until(EC.element_to_be_clickable(element)).click()
-        except:
+        except Exception:
             driver.execute_script("arguments[0].click();", element)
-    
+
     def wait_for_loading(self, seconds=0.3):
         time.sleep(seconds)

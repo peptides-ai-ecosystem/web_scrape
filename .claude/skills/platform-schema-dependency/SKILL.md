@@ -5,11 +5,11 @@ description: Use when changing SQL in web_scrape that touches a platform table (
 
 # web_scrape depends on the platform's database schema (XR-8)
 
-web_scrape writes and deletes rows in the **peptides-platform** database with raw SQL. The platform owns those tables in its Drizzle schema (`apps/api/src/db/schema/`, migrations in `apps/api/drizzle/`). Contract: `../orchestrator/docs/ecosystem/dependencies.md#xr-8`.
+web_scrape writes and deletes rows in the **peptides-platform** database with raw SQL. The platform owns those tables in its Drizzle schema (`apps/api/src/db/schema/`, migrations in `apps/api/drizzle/`). Contract: [XR-8](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/dependencies.md#xr-8) in the orchestrator repo.
 
 ## Where web_scrape touches platform tables
 - `app/repositories/*.py` — inserts and updates (`_insert_guarded`, literal `UPDATE ... SET`).
-- `app/services/sync/db_import_orchestrator.py` — `link_relation(...)` and `insert_lookup(...)` name the junction and lookup tables.
+- `app/infrastructure/db/service.py` — `link_relation(...)` and `insert_lookup(...)` (called from `app/services/sync/group_sync.py`) name the junction and lookup tables.
 - `app/services/sync/group_b/peptide_mapper.py` — the keys of the dict it returns are the `peptides` columns written.
 - `app/repositories/peptide.py` `delete_peptide_cascading` — hard-codes every platform table that references a peptide. A new platform table with a `peptide_id` foreign key must be added there, or the delete fails on the FK.
 - Own tables (not platform): `vendor_price_observations`, `vendor_scrape_targets` (`migrations/`).
@@ -19,7 +19,7 @@ web_scrape writes and deletes rows in the **peptides-platform** database with ra
 PLATFORM_SCHEMA_REPO=<path to a peptides-platform checkout on staging> \
   uv run pytest tests/sync/test_platform_schema_contract.py -v
 ```
-- Default path: `G:/aultra/microservice/peptides-platform`. It skips when the path does not exist (as in CI), so run it locally whenever this skill applies.
+- Default path: `G:/aultra/microservice/peptides-platform`. Without a checkout (as in CI) the test runs against the vendored snapshot `contracts/platform-schema/*.json`; with one it also fails when the snapshot is stale. After a platform change lands on staging, regenerate the snapshot with `scripts/export_platform_schema.py` and commit it.
 - Use a checkout of the platform branch you will deploy with (normally `staging`); an old checkout proves nothing.
 - It checks: every table in `delete_peptide_cascading` exists; every platform table named in web_scrape SQL exists; every column web_scrape inserts or updates is declared.
 

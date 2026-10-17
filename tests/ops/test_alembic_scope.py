@@ -1,4 +1,5 @@
 """Alembic covers this service's own two tables and nothing the platform owns (no Docker needed)."""
+
 import re
 from pathlib import Path
 

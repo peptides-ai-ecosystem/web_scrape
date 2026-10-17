@@ -4,6 +4,7 @@ exception handlers, the ``/visualization`` dashboard mount and the routers.
 ``main.py`` only does ``app = create_app()``; the container runs
 ``uvicorn main:app``.
 """
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -23,10 +24,10 @@ from app.core.config import (
     VENDOR_SCRAPE_CRON_HOUR,
     VENDOR_SCRAPE_CRON_MINUTE,
 )
+from app.core.logging import setup_logging
 from app.core.request_context import TraceContextMiddleware, bound_trace, trace_ids_from_request
 from app.core.scheduler import shutdown_scheduler, start_scheduler, start_vendor_scrape_scheduler
 from app.core.sentry import capture_exception, init_sentry
-from app.core.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ VISUALIZATION_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vi
 async def lifespan(app: FastAPI):
     # Warm up the pool on startup so the first request isn't slow
     from app.infrastructure.db.pool import get_pool
+
     get_pool()
 
     # Start the automated scheduler for background sync tasks
@@ -52,15 +54,14 @@ async def lifespan(app: FastAPI):
     # Non-fatal: a failure is logged and the rest of the service still boots.
     if VENDOR_SCHEMA_AUTO_CREATE:
         from app.infrastructure.db.migrate import upgrade_to_head
+
         upgrade_to_head()
 
     # Nightly competitor price scrape (peptides-platform#288). Opt-in per
     # environment: we do not start hitting other companies' sites just
     # because someone booted the service.
     if VENDOR_SCRAPE_CRON_ENABLED:
-        start_vendor_scrape_scheduler(
-            hour=VENDOR_SCRAPE_CRON_HOUR, minute=VENDOR_SCRAPE_CRON_MINUTE
-        )
+        start_vendor_scrape_scheduler(hour=VENDOR_SCRAPE_CRON_HOUR, minute=VENDOR_SCRAPE_CRON_MINUTE)
         logger.info(
             "Nightly vendor scrape scheduled at %02d:%02d (VENDOR_SCRAPE_CRON_ENABLED=true)",
             VENDOR_SCRAPE_CRON_HOUR,
@@ -76,6 +77,7 @@ async def lifespan(app: FastAPI):
 
     # Close all pool connections cleanly on shutdown
     from app.infrastructure.db.pool import close_pool
+
     close_pool()
 
 

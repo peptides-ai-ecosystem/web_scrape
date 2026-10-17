@@ -1,33 +1,35 @@
 import json
-from typing import Any, Dict, List
+from typing import Any
+
 from app.services.sync.base import BaseMapper
 from app.services.sync.group_e.detail_mappers import (
-    ReconstitutionMapper,
-    QualityMapper,
     ApplicationPlaceMapper,
-    ProtocolDosageMapper
+    ProtocolDosageMapper,
+    QualityMapper,
+    ReconstitutionMapper,
 )
+
 
 class ProtocolMapper(BaseMapper):
     """Group D: Maps protocols and coordinates Group E details."""
-    
+
     def __init__(self):
         self.reconst_mapper = ReconstitutionMapper()
         self.quality_mapper = QualityMapper()
         self.place_mapper = ApplicationPlaceMapper()
         self.dosage_mapper = ProtocolDosageMapper()
 
-    def map(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def map(self, row: dict[str, Any]) -> list[dict[str, Any]]:
         protocols = []
-        
+
         # Base expectations: what_to_expect_{1..n} columns contain "<period>: <statement>".
         # Build a key:value object keyed by the period, preserving CSV order —
         # the same shape as peptides.contraindications (see PeptideMapper).
         expectations = self._extract_expectations(row)
-        
+
         method = (row.get("Method") or "").strip()
         main_route = (row.get("route") or "").strip()
-        
+
         # Quick start guide as a key:value JSON object:
         #   typical_dose        ← quick_guide_typical_dose
         #   mechanism_of_action ← overview_mechanism_of_action (overview section)
@@ -35,7 +37,7 @@ class ProtocolMapper(BaseMapper):
         #   effects_timeline    ← quick_guide_effects_timeline
         #   best_timing         ← quick_guide_best_timing
         quick_start_json = self._extract_quick_start_guide(row)
-        
+
         key_benefits = (row.get("overview_key_benefits") or row.get("key_benefits", "")).strip()
         moa = (row.get("overview_mechanism_of_action") or row.get("mechanism_of_action", "")).strip()
         timing = (row.get("quick_guide_best_timing") or row.get("best_timing") or "").strip()
@@ -44,7 +46,14 @@ class ProtocolMapper(BaseMapper):
         # Find dynamic description (overview_what_is_<peptide>)
         description = ""
         for k, v in row.items():
-            if k and isinstance(k, str) and k.startswith("overview_what_is_") and v and isinstance(v, str) and v.strip():
+            if (
+                k
+                and isinstance(k, str)
+                and k.startswith("overview_what_is_")
+                and v
+                and isinstance(v, str)
+                and v.strip()
+            ):
                 description = v.strip()
                 break
 
@@ -55,12 +64,34 @@ class ProtocolMapper(BaseMapper):
                 dose = (row.get(f"research_protocols_dose_{i}") or "").strip()
                 freq = (row.get(f"research_protocols_frequency_{i}") or "").strip()
                 route = (row.get(f"research_protocols_route_{i}") or "").strip() or main_route
-                
-                protocols.append({
-                    "name": goal[:100],
+
+                protocols.append(
+                    {
+                        "name": goal[:100],
+                        "description": description,
+                        "administration_method_name": method,
+                        "route_name": route,
+                        "expectations": expectations,
+                        "quick_start_guide": quick_start_json,
+                        "key_benefits": key_benefits,
+                        "mechanism_of_action": moa,
+                        "best_timing": timing,
+                        "effects_timeline": effects,
+                        "reconstitution_steps": self.reconst_mapper.map(row),
+                        "quality_indicators": self.quality_mapper.map(row),
+                        "application_places": self.place_mapper.map(row, route),
+                        "dosages": self.dosage_mapper.map(row, goal, dose, freq, (i == 1)),
+                    }
+                )
+
+        # Default baseline
+        if not protocols and (row.get("typical_dose") or main_route):
+            protocols.append(
+                {
+                    "name": (method or "Default Protocol")[:100],
                     "description": description,
                     "administration_method_name": method,
-                    "route_name": route,
+                    "route_name": main_route,
                     "expectations": expectations,
                     "quick_start_guide": quick_start_json,
                     "key_benefits": key_benefits,
@@ -69,32 +100,14 @@ class ProtocolMapper(BaseMapper):
                     "effects_timeline": effects,
                     "reconstitution_steps": self.reconst_mapper.map(row),
                     "quality_indicators": self.quality_mapper.map(row),
-                    "application_places": self.place_mapper.map(row, route),
-                    "dosages": self.dosage_mapper.map(row, goal, dose, freq, (i == 1))
-                })
-        
-        # Default baseline
-        if not protocols and (row.get("typical_dose") or main_route):
-            protocols.append({
-                "name": (method or "Default Protocol")[:100],
-                "description": description,
-                "administration_method_name": method,
-                "route_name": main_route,
-                "expectations": expectations,
-                "quick_start_guide": quick_start_json,
-                "key_benefits": key_benefits,
-                "mechanism_of_action": moa,
-                "best_timing": timing,
-                "effects_timeline": effects,
-                "reconstitution_steps": self.reconst_mapper.map(row),
-                "quality_indicators": self.quality_mapper.map(row),
-                "application_places": self.place_mapper.map(row, main_route),
-                "dosages": self.dosage_mapper.map(row)
-            })
-            
+                    "application_places": self.place_mapper.map(row, main_route),
+                    "dosages": self.dosage_mapper.map(row),
+                }
+            )
+
         return protocols
 
-    def _extract_expectations(self, row: Dict[str, Any]) -> str:
+    def _extract_expectations(self, row: dict[str, Any]) -> str:
         """Extract what_to_expect_{1..n} columns as a key:value JSON object.
 
         CSV values look like "Week 1-2: Reduced inflammation..." so the text
@@ -117,7 +130,7 @@ class ProtocolMapper(BaseMapper):
                 expectations[key] = statement
         return json.dumps(expectations) if expectations else json.dumps([])
 
-    def _extract_quick_start_guide(self, row: Dict[str, Any]) -> str:
+    def _extract_quick_start_guide(self, row: dict[str, Any]) -> str:
         """Build the quick_start_guide JSON object from the quick guide CSV columns.
 
         Every CSV column starting with ``quick_guide_`` (e.g. quick_guide_typical_dose)
@@ -137,7 +150,7 @@ class ProtocolMapper(BaseMapper):
             if prefix:
                 trimmed = value.strip()
                 if trimmed:
-                    guide[key[len(prefix):]] = trimmed
+                    guide[key[len(prefix) :]] = trimmed
 
         for field, col in (
             ("mechanism_of_action", "overview_mechanism_of_action"),

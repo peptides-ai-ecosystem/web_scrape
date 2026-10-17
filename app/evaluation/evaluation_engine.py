@@ -4,23 +4,25 @@ EvaluationEngine
 Compares the *expected* payload (from CsvExpectationBuilder) against the
 *actual* DB state (from DbActualFetcher) and produces structured results.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.repositories.interaction import map_interaction_type
-
 
 # ---------------------------------------------------------------------------
 # Result dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CheckResult:
     """Outcome of a single evaluation check."""
+
     name: str
-    status: str          # "PASS" | "FAIL" | "WARN" | "SKIP"
+    status: str  # "PASS" | "FAIL" | "WARN" | "SKIP"
     expected: Any = None
     actual: Any = None
     detail: str = ""
@@ -33,10 +35,11 @@ class CheckResult:
 @dataclass
 class PeptideEvalResult:
     """All check results for one peptide."""
+
     peptide_name: str
     slug: str
     administration_method: str = ""
-    checks: List[CheckResult] = field(default_factory=list)
+    checks: list[CheckResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -59,6 +62,7 @@ class PeptideEvalResult:
 # Engine
 # ---------------------------------------------------------------------------
 
+
 class EvaluationEngine:
     """
     Runs all checks for one peptide and returns a PeptideEvalResult.
@@ -70,8 +74,8 @@ class EvaluationEngine:
 
     def evaluate(
         self,
-        expected: Dict[str, Any],
-        actual: Optional[Dict[str, Any]],
+        expected: dict[str, Any],
+        actual: dict[str, Any] | None,
     ) -> PeptideEvalResult:
         """
         Parameters
@@ -87,22 +91,26 @@ class EvaluationEngine:
 
         # ── Check 1: Peptide existence ──────────────────────────────────────
         if actual is None:
-            result.checks.append(CheckResult(
-                name="peptide_existence",
-                status="FAIL",
-                expected="exists in DB",
-                actual="not found",
-                detail="Peptide row is missing from the peptides table",
-            ))
+            result.checks.append(
+                CheckResult(
+                    name="peptide_existence",
+                    status="FAIL",
+                    expected="exists in DB",
+                    actual="not found",
+                    detail="Peptide row is missing from the peptides table",
+                )
+            )
             # Remaining checks are meaningless without the row — return early
             return result
 
-        result.checks.append(CheckResult(
-            name="peptide_existence",
-            status="PASS",
-            expected="exists in DB",
-            actual="found",
-        ))
+        result.checks.append(
+            CheckResult(
+                name="peptide_existence",
+                status="PASS",
+                expected="exists in DB",
+                actual="found",
+            )
+        )
 
         # ── Check 2: Peptide core fields ────────────────────────────────────
         result.checks.append(self._check_peptide_fields(expected, actual))
@@ -110,14 +118,10 @@ class EvaluationEngine:
         # ── Check 3: Benefits count ─────────────────────────────────────────
         exp_benefits = [b["name"] for b in expected.get("benefits", [])]
         act_benefits = actual.get("benefits", [])
-        result.checks.append(self._check_count(
-            "benefits_count", exp_benefits, act_benefits
-        ))
+        result.checks.append(self._check_count("benefits_count", exp_benefits, act_benefits))
 
         # ── Check 4: Benefits names ─────────────────────────────────────────
-        result.checks.append(self._check_names_present(
-            "benefits_names", exp_benefits, act_benefits
-        ))
+        result.checks.append(self._check_names_present("benefits_names", exp_benefits, act_benefits))
 
         # ── Check 5: Side effects count ─────────────────────────────────────
         exp_se = [s["name"] for s in expected.get("side_effects", [])]
@@ -125,9 +129,7 @@ class EvaluationEngine:
         result.checks.append(self._check_count("side_effects_count", exp_se, act_se))
 
         # ── Check 6: Side effects names ─────────────────────────────────────
-        result.checks.append(self._check_names_present(
-            "side_effects_names", exp_se, act_se
-        ))
+        result.checks.append(self._check_names_present("side_effects_names", exp_se, act_se))
 
         # ── Check 7: Dosages ────────────────────────────────────────────────
         result.checks.append(self._check_dosages(expected, actual))
@@ -135,10 +137,7 @@ class EvaluationEngine:
         # ── Check 8: Schedules ──────────────────────────────────────────────
         exp_sched = [s["name"] for s in expected.get("schedules", [])]
         act_sched = actual.get("schedules", [])
-        result.checks.append(self._check_names_present(
-            "schedules", exp_sched, act_sched,
-            warn_on_empty_expected=True
-        ))
+        result.checks.append(self._check_names_present("schedules", exp_sched, act_sched, warn_on_empty_expected=True))
 
         # ── Check 9: Administration method ──────────────────────────────────
         result.checks.append(self._check_admin_method(expected, actual))
@@ -157,16 +156,16 @@ class EvaluationEngine:
         # ── Check 13: References count ──────────────────────────────────────
         exp_refs = expected.get("references", [])
         act_ref_count = actual.get("references_count", 0)
-        status = "PASS" if act_ref_count >= len(exp_refs) else (
-            "WARN" if act_ref_count > 0 else "FAIL"
+        status = "PASS" if act_ref_count >= len(exp_refs) else ("WARN" if act_ref_count > 0 else "FAIL")
+        result.checks.append(
+            CheckResult(
+                name="references_count",
+                status=status,
+                expected=len(exp_refs),
+                actual=act_ref_count,
+                detail="" if status == "PASS" else f"Expected ≥{len(exp_refs)}, got {act_ref_count}",
+            )
         )
-        result.checks.append(CheckResult(
-            name="references_count",
-            status=status,
-            expected=len(exp_refs),
-            actual=act_ref_count,
-            detail="" if status == "PASS" else f"Expected ≥{len(exp_refs)}, got {act_ref_count}",
-        ))
 
         # NOTE: Graph data checks moved to GraphEvaluator (app/evaluation/graph_evaluator.py).
         # Use the /evaluation/graph endpoint to evaluate graph data separately.
@@ -177,9 +176,7 @@ class EvaluationEngine:
     # Individual check helpers
     # ------------------------------------------------------------------
 
-    def _check_peptide_fields(
-        self, expected: Dict, actual: Dict
-    ) -> CheckResult:
+    def _check_peptide_fields(self, expected: dict, actual: dict) -> CheckResult:
         """Compare core peptide scalar fields."""
         FIELDS = [
             ("name", "name"),
@@ -229,92 +226,98 @@ class EvaluationEngine:
     def _check_count(self, name: str, expected_list: list, actual_list: list) -> CheckResult:
         ec, ac = len(expected_list), len(actual_list)
         if ec == 0:
-            return CheckResult(name=name, status="SKIP",
-                detail="No items expected from CSV", expected=0, actual=ac)
+            return CheckResult(name=name, status="SKIP", detail="No items expected from CSV", expected=0, actual=ac)
         if ac >= ec:
             return CheckResult(name=name, status="PASS", expected=ec, actual=ac)
         if ac > 0:
-            return CheckResult(name=name, status="WARN", expected=ec, actual=ac,
-                detail=f"DB has fewer items than expected ({ac} < {ec})")
-        return CheckResult(name=name, status="FAIL", expected=ec, actual=ac,
-            detail="No items found in DB")
+            return CheckResult(
+                name=name,
+                status="WARN",
+                expected=ec,
+                actual=ac,
+                detail=f"DB has fewer items than expected ({ac} < {ec})",
+            )
+        return CheckResult(name=name, status="FAIL", expected=ec, actual=ac, detail="No items found in DB")
 
     def _check_names_present(
-        self, name: str, expected_names: List[str], actual_names: List[str],
+        self,
+        name: str,
+        expected_names: list[str],
+        actual_names: list[str],
         warn_on_empty_expected: bool = False,
     ) -> CheckResult:
         if not expected_names:
             status = "WARN" if warn_on_empty_expected else "SKIP"
-            return CheckResult(name=name, status=status,
-                detail="No items expected from CSV", expected=[], actual=actual_names)
+            return CheckResult(
+                name=name, status=status, detail="No items expected from CSV", expected=[], actual=actual_names
+            )
 
         actual_set = {n.lower() for n in actual_names}
         missing = [n for n in expected_names if n.lower() not in actual_set]
 
         if not missing:
-            return CheckResult(name=name, status="PASS",
-                expected=len(expected_names), actual=len(actual_names))
-        return CheckResult(name=name, status="FAIL",
-            expected=expected_names,
-            actual=actual_names,
-            detail=f"Missing from DB: {missing}")
+            return CheckResult(name=name, status="PASS", expected=len(expected_names), actual=len(actual_names))
+        return CheckResult(
+            name=name, status="FAIL", expected=expected_names, actual=actual_names, detail=f"Missing from DB: {missing}"
+        )
 
-    def _check_dosages(self, expected: Dict, actual: Dict) -> CheckResult:
+    def _check_dosages(self, expected: dict, actual: dict) -> CheckResult:
         exp_dosages = expected.get("dosages", [])
         act_dosages = actual.get("dosages", [])
         if not exp_dosages:
-            return CheckResult(name="dosages", status="SKIP",
-                detail="No dosages expected from CSV")
+            return CheckResult(name="dosages", status="SKIP", detail="No dosages expected from CSV")
 
         exp_count = len(exp_dosages)
         act_count = len(act_dosages)
 
         if act_count == 0:
-            return CheckResult(name="dosages", status="FAIL",
-                expected=exp_count, actual=0,
-                detail="No dosages found in DB at all")
+            return CheckResult(
+                name="dosages", status="FAIL", expected=exp_count, actual=0, detail="No dosages found in DB at all"
+            )
 
         # The DB stores parsed/normalised decimal values (e.g. '6.0000')
         # while the CSV may have range strings (e.g. '3-9') or truncated
         # values. A count-based check is more reliable than exact string match.
         if act_count >= exp_count:
-            return CheckResult(name="dosages", status="PASS",
-                expected=exp_count, actual=act_count)
+            return CheckResult(name="dosages", status="PASS", expected=exp_count, actual=act_count)
 
         # Has some, but fewer than expected — warn instead of fail
-        return CheckResult(name="dosages", status="WARN",
-            expected=exp_count, actual=act_count,
+        return CheckResult(
+            name="dosages",
+            status="WARN",
+            expected=exp_count,
+            actual=act_count,
             detail=(
                 f"DB has {act_count} dosage(s), expected {exp_count}. "
                 f"Note: DB stores parsed decimals, CSV may have range strings — "
                 f"a count mismatch may reflect deduplication."
-            ))
+            ),
+        )
 
-    def _check_admin_method(self, expected: Dict, actual: Dict) -> CheckResult:
+    def _check_admin_method(self, expected: dict, actual: dict) -> CheckResult:
         exp_method = expected.get("administration_method")
         act_methods = actual.get("administration_methods", [])
         if not exp_method:
-            return CheckResult(name="administration_method", status="SKIP",
-                detail="No method expected")
+            return CheckResult(name="administration_method", status="SKIP", detail="No method expected")
         if exp_method in act_methods:
-            return CheckResult(name="administration_method", status="PASS",
-                expected=exp_method, actual=act_methods)
-        return CheckResult(name="administration_method", status="FAIL",
-            expected=exp_method, actual=act_methods,
-            detail=f"'{exp_method}' not linked via protocols in DB")
+            return CheckResult(name="administration_method", status="PASS", expected=exp_method, actual=act_methods)
+        return CheckResult(
+            name="administration_method",
+            status="FAIL",
+            expected=exp_method,
+            actual=act_methods,
+            detail=f"'{exp_method}' not linked via protocols in DB",
+        )
 
-    def _check_interactions(self, expected: Dict, actual: Dict) -> CheckResult:
+    def _check_interactions(self, expected: dict, actual: dict) -> CheckResult:
         exp_ints = expected.get("interactions", [])
         act_ints = actual.get("interactions", [])
         if not exp_ints:
-            return CheckResult(name="interactions", status="SKIP",
-                detail="No interactions expected from CSV")
+            return CheckResult(name="interactions", status="SKIP", detail="No interactions expected from CSV")
 
         # Build set of (secondary_name, mapped_type) from DB
         act_keys = {
-            (i.get("secondary_peptide_name", "").lower(),
-             i.get("interaction_type", "").lower())
-            for i in act_ints
+            (i.get("secondary_peptide_name", "").lower(), i.get("interaction_type", "").lower()) for i in act_ints
         }
 
         # Map expected types through the same function used by the sync pipeline
@@ -326,63 +329,57 @@ class EvaluationEngine:
             mapped_type = map_interaction_type(raw_type)
             key = (i.get("secondary_peptide_name", "").lower(), mapped_type)
             if key not in act_keys:
-                missing.append(
-                    f"{i['secondary_peptide_name']} ({raw_type})"
-                )
+                missing.append(f"{i['secondary_peptide_name']} ({raw_type})")
             if raw_type.lower().strip() != mapped_type:
-                type_changes.append(
-                    f"{i['secondary_peptide_name']}: '{raw_type}' → '{mapped_type}'"
-                )
+                type_changes.append(f"{i['secondary_peptide_name']}: '{raw_type}' → '{mapped_type}'")
 
         if not missing:
             detail = ""
             if type_changes:
                 detail = f"Types remapped: {', '.join(type_changes)}"
-            return CheckResult(name="interactions", status="PASS",
-                expected=len(exp_ints), actual=len(act_ints),
-                detail=detail if type_changes else "")
+            return CheckResult(
+                name="interactions",
+                status="PASS",
+                expected=len(exp_ints),
+                actual=len(act_ints),
+                detail=detail if type_changes else "",
+            )
 
         # ── Build CSV vs DB comparison detail ──────────────────────
-        csv_list = "\n".join(
-            f"    {i['secondary_peptide_name']} ({i['interaction_type']})"
-            for i in exp_ints
+        csv_list = "\n".join(f"    {i['secondary_peptide_name']} ({i['interaction_type']})" for i in exp_ints)
+        db_list = (
+            "\n".join(f"    {i['secondary_peptide_name']} ({i['interaction_type']})" for i in act_ints)
+            if act_ints
+            else "    (none)"
         )
-        db_list = "\n".join(
-            f"    {i['secondary_peptide_name']} ({i['interaction_type']})"
-            for i in act_ints
-        ) if act_ints else "    (none)"
         comparison = (
-            f"\n  CSV expects ({len(exp_ints)}):\n{csv_list}"
-            f"\n  DB has ({len(act_ints)}):\n{db_list}"
-            f"\n  Missing:\n"
+            f"\n  CSV expects ({len(exp_ints)}):\n{csv_list}\n  DB has ({len(act_ints)}):\n{db_list}\n  Missing:\n"
         )
         for m in missing:
             comparison += f"    {m}\n"
         # if type_changes:
-            #comparison += "  Types remapped:\n"
-            # for tc in type_changes:
-            #     comparison += f"    {tc}\n"
+        # comparison += "  Types remapped:\n"
+        # for tc in type_changes:
+        #     comparison += f"    {tc}\n"
 
-        return CheckResult(name="interactions", status="FAIL",
-            expected=len(exp_ints), actual=len(act_ints),
-            detail=comparison.strip())
+        return CheckResult(
+            name="interactions", status="FAIL", expected=len(exp_ints), actual=len(act_ints), detail=comparison.strip()
+        )
 
-    def _check_indications(self, expected: Dict, actual: Dict) -> CheckResult:
+    def _check_indications(self, expected: dict, actual: dict) -> CheckResult:
         exp_inds = expected.get("indications", [])
         act_inds = actual.get("indications", [])
         if not exp_inds:
-            return CheckResult(name="indications", status="SKIP",
-                detail="No indications expected from CSV")
+            return CheckResult(name="indications", status="SKIP", detail="No indications expected from CSV")
 
         act_titles = {i.get("indication_title", "").lower() for i in act_inds}
-        missing = [
-            i["indication_title"]
-            for i in exp_inds
-            if i.get("indication_title", "").lower() not in act_titles
-        ]
+        missing = [i["indication_title"] for i in exp_inds if i.get("indication_title", "").lower() not in act_titles]
         if not missing:
-            return CheckResult(name="indications", status="PASS",
-                expected=len(exp_inds), actual=len(act_inds))
-        return CheckResult(name="indications", status="FAIL",
-            expected=len(exp_inds), actual=len(act_inds),
-            detail=f"Missing titles: {missing}")
+            return CheckResult(name="indications", status="PASS", expected=len(exp_inds), actual=len(act_inds))
+        return CheckResult(
+            name="indications",
+            status="FAIL",
+            expected=len(exp_inds),
+            actual=len(act_inds),
+            detail=f"Missing titles: {missing}",
+        )

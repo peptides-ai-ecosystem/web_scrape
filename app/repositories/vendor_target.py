@@ -5,16 +5,17 @@ Backed by ``vendor_scrape_targets`` in **this service's** database — see
 same :func:`~app.infrastructure.vendor_targets.parse_target` the file loader
 uses, so a target cannot be stored in a shape the scraper would refuse.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.core.vendor_models import VendorTarget
-from app.repositories.base import BaseRepository
 from app.infrastructure.vendor_targets import VendorTargetConfigError, parse_target
+from app.repositories.base import BaseRepository
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ def _json(value: Any, default: Any) -> Any:
     return value
 
 
-def row_to_target(row: Dict[str, Any]) -> VendorTarget:
+def row_to_target(row: dict[str, Any]) -> VendorTarget:
     """Hydrate a DB row through the shared validator."""
     interval = row.get("min_request_interval_seconds")
     raw = {
@@ -79,11 +80,9 @@ def _params(target: VendorTarget) -> tuple:
 class VendorTargetRepository(BaseRepository):
     """CRUD over ``vendor_scrape_targets``."""
 
-    def list_all(self) -> List[VendorTarget]:
-        rows = self.execute_all(
-            f"SELECT {_COLUMNS} FROM vendor_scrape_targets ORDER BY lower(slug)"
-        )
-        targets: List[VendorTarget] = []
+    def list_all(self) -> list[VendorTarget]:
+        rows = self.execute_all(f"SELECT {_COLUMNS} FROM vendor_scrape_targets ORDER BY lower(slug)")
+        targets: list[VendorTarget] = []
         for row in rows:
             try:
                 targets.append(row_to_target(row))
@@ -93,7 +92,7 @@ class VendorTargetRepository(BaseRepository):
                 logger.error("Skipping invalid DB vendor target %r: %s", row.get("slug"), exc)
         return targets
 
-    def get(self, slug: str) -> Optional[VendorTarget]:
+    def get(self, slug: str) -> VendorTarget | None:
         row = self.execute_one(
             f"SELECT {_COLUMNS} FROM vendor_scrape_targets WHERE lower(slug) = lower(%s)",
             (slug,),
@@ -112,15 +111,13 @@ class VendorTargetRepository(BaseRepository):
                    VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s,
                            %s, %s, %s, %s)
                    RETURNING {_COLUMNS}""",
-                (target.slug,)
-                + _params(target)
-                + (target.review_state.value, target.approved_at, target.approved_by),
+                (target.slug,) + _params(target) + (target.review_state.value, target.approved_at, target.approved_by),
             )
             row = cur.fetchone()
             self._commit()
         return row_to_target(row)
 
-    def update(self, slug: str, target: VendorTarget) -> Optional[VendorTarget]:
+    def update(self, slug: str, target: VendorTarget) -> VendorTarget | None:
         """Replace every editable field; the slug itself is immutable.
 
         ``review_state`` is not an editable field: only :meth:`approve`
@@ -144,7 +141,7 @@ class VendorTargetRepository(BaseRepository):
             self._commit()
         return row_to_target(row) if row else None
 
-    def approve(self, slug: str, approved_by: Optional[str] = None) -> Optional[VendorTarget]:
+    def approve(self, slug: str, approved_by: str | None = None) -> VendorTarget | None:
         """Mark a target approved (AAD-1): scrape runs read it from now on."""
         with self.get_cursor() as cur:
             cur.execute(
@@ -160,6 +157,4 @@ class VendorTargetRepository(BaseRepository):
         return row_to_target(row) if row else None
 
     def delete(self, slug: str) -> int:
-        return self.execute_update(
-            "DELETE FROM vendor_scrape_targets WHERE lower(slug) = lower(%s)", (slug,)
-        )
+        return self.execute_update("DELETE FROM vendor_scrape_targets WHERE lower(slug) = lower(%s)", (slug,))

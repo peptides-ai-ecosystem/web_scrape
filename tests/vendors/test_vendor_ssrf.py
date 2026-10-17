@@ -7,6 +7,7 @@ checked when the target is saved *and* again on every fetch and redirect hop
 (DNS rebinding). Offline: DNS is stubbed, the browser is faked, except for
 the last test, which uses a real Chromium when one is available.
 """
+
 from types import SimpleNamespace
 
 import pytest
@@ -40,14 +41,14 @@ BLOCKED_URLS = [
     "http://172.16.3.4/",
     "http://192.168.1.10/",
     "http://169.254.169.254/latest/meta-data/",
-    "http://100.64.0.1/",           # shared / CGNAT
-    "http://224.0.0.251/",          # multicast
-    "http://240.0.0.1/",            # reserved
+    "http://100.64.0.1/",  # shared / CGNAT
+    "http://224.0.0.251/",  # multicast
+    "http://240.0.0.1/",  # reserved
     "http://[fe80::1]/",
     "http://[fd00::1]/",
-    "http://[::ffff:127.0.0.1]/",   # IPv4-mapped loopback
+    "http://[::ffff:127.0.0.1]/",  # IPv4-mapped loopback
     "http://[::ffff:169.254.169.254]/",
-    "http://2130706433/",           # 127.0.0.1 as a decimal integer
+    "http://2130706433/",  # 127.0.0.1 as a decimal integer
 ]
 
 
@@ -136,16 +137,20 @@ def test_api_refuses_a_metadata_listing_url_on_update(api):
     vendors, repo, _ = api
     run(vendors.create_vendor_target(payload(vendors)))
     with pytest.raises(HTTPException) as exc:
-        run(vendors.update_vendor_target("rival", payload(
-            vendors, listing_url="http://169.254.169.254/", listing_link_selector="a")))
+        run(
+            vendors.update_vendor_target(
+                "rival", payload(vendors, listing_url="http://169.254.169.254/", listing_link_selector="a")
+            )
+        )
     assert exc.value.status_code == 422
     assert repo.targets["rival"].listing_url is None
 
 
 def test_api_refuses_a_hostname_that_resolves_internally(api, monkeypatch):
     vendors, repo, _ = api
-    monkeypatch.setattr(url_safety, "_system_resolver",
-                        lambda host: ["10.0.0.7"] if host == "intranet.example" else [PUBLIC_IP])
+    monkeypatch.setattr(
+        url_safety, "_system_resolver", lambda host: ["10.0.0.7"] if host == "intranet.example" else [PUBLIC_IP]
+    )
     with pytest.raises(HTTPException) as exc:
         run(vendors.create_vendor_target(payload(vendors, product_urls=["https://intranet.example/p"])))
     assert exc.value.status_code == 422
@@ -246,8 +251,9 @@ def _fetcher_with_context(later_hops):
 def test_redirect_to_the_metadata_endpoint_is_aborted_before_it_is_sent(dns):
     dns["rival.example"] = [PUBLIC_IP]
     fetcher, sent = _fetcher_with_context({})
-    route = _FakeRoute("https://rival.example/p/1",
-                       _FakeResponse(302, location="http://169.254.169.254/latest/meta-data/"))
+    route = _FakeRoute(
+        "https://rival.example/p/1", _FakeResponse(302, location="http://169.254.169.254/latest/meta-data/")
+    )
 
     fetcher._guard_route(route)
 
@@ -363,9 +369,12 @@ def test_robots_fetch_to_an_internal_address_is_never_sent(monkeypatch, dns):
 
 def test_robots_redirect_into_an_internal_address_is_not_followed(monkeypatch, dns):
     dns["rival.example"] = [PUBLIC_IP]
-    calls = _record_requests(monkeypatch, {
-        "https://rival.example/robots.txt": _Resp(302, location="http://169.254.169.254/latest/meta-data/"),
-    })
+    calls = _record_requests(
+        monkeypatch,
+        {
+            "https://rival.example/robots.txt": _Resp(302, location="http://169.254.169.254/latest/meta-data/"),
+        },
+    )
     assert default_robots_fetcher("https://rival.example/robots.txt") == (None, "")
     assert [url for url, _ in calls] == ["https://rival.example/robots.txt"]
     assert calls[0][1]["allow_redirects"] is False
@@ -374,10 +383,13 @@ def test_robots_redirect_into_an_internal_address_is_not_followed(monkeypatch, d
 def test_robots_public_redirect_is_followed(monkeypatch, dns):
     dns["rival.example"] = [PUBLIC_IP]
     dns["www.rival.example"] = [PUBLIC_IP]
-    _record_requests(monkeypatch, {
-        "https://rival.example/robots.txt": _Resp(301, location="https://www.rival.example/robots.txt"),
-        "https://www.rival.example/robots.txt": _Resp(200, text="User-agent: *\nDisallow: /private/"),
-    })
+    _record_requests(
+        monkeypatch,
+        {
+            "https://rival.example/robots.txt": _Resp(301, location="https://www.rival.example/robots.txt"),
+            "https://www.rival.example/robots.txt": _Resp(200, text="User-agent: *\nDisallow: /private/"),
+        },
+    )
     status, body = default_robots_fetcher("https://rival.example/robots.txt")
     assert status == 200 and "Disallow" in body
 

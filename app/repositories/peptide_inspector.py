@@ -3,29 +3,30 @@
 Every query reads platform-owned tables (XR-8); nothing here writes. The
 inspector page at ``/visualization/core.html`` renders the results.
 """
+
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.repositories.base import BaseRepository
 
 logger = logging.getLogger(__name__)
 
 # Every lookup catalog the inspector maps IDs back to names with.
-LOOKUP_QUERIES: Dict[str, str] = {
+LOOKUP_QUERIES: dict[str, str] = {
     "administration_methods": "SELECT id, name FROM administration_methods ORDER BY name",
-    "benefits":               "SELECT id, name, category FROM benefits ORDER BY name",
-    "side_effects":           "SELECT id, name, severity_level FROM side_effects ORDER BY name",
-    "dosages":                "SELECT id, name, amount, unit FROM dosages ORDER BY name LIMIT 500",
-    "schedules":              "SELECT id, name, frequency FROM schedules ORDER BY name",
-    "application_places":     "SELECT id, name, anatomical_region FROM application_places ORDER BY name",
-    "categories":             "SELECT id, category_name, slug FROM categories ORDER BY category_name",
+    "benefits": "SELECT id, name, category FROM benefits ORDER BY name",
+    "side_effects": "SELECT id, name, severity_level FROM side_effects ORDER BY name",
+    "dosages": "SELECT id, name, amount, unit FROM dosages ORDER BY name LIMIT 500",
+    "schedules": "SELECT id, name, frequency FROM schedules ORDER BY name",
+    "application_places": "SELECT id, name, anatomical_region FROM application_places ORDER BY name",
+    "categories": "SELECT id, category_name, slug FROM categories ORDER BY category_name",
 }
 
 
 class PeptideInspectorRepository(BaseRepository):
     """Fan-out reads for one peptide, the peptide list and the lookup catalogs."""
 
-    def list_peptides(self, q: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_peptides(self, q: str | None = None) -> list[dict[str, Any]]:
         """Every peptide (id, name, slug, category_id), optionally filtered by name/slug substring."""
         if q:
             like = f"%{q}%"
@@ -39,12 +40,10 @@ class PeptideInspectorRepository(BaseRepository):
                 (like, like),
             )
         else:
-            rows = self.execute_all(
-                "SELECT id, name, slug, category_id FROM peptides ORDER BY name"
-            )
+            rows = self.execute_all("SELECT id, name, slug, category_id FROM peptides ORDER BY name")
         return [dict(r) for r in rows]
 
-    def fetch_payload(self, peptide: Dict[str, Any]) -> Dict[str, Any]:
+    def fetch_payload(self, peptide: dict[str, Any]) -> dict[str, Any]:
         """
         Given a base peptide row, fan out and fetch every related entity needed
         by the inspector. All queries use the same connection so they share a
@@ -221,9 +220,9 @@ class PeptideInspectorRepository(BaseRepository):
             "graph": graph_rows,
         }
 
-    def lookups(self) -> Dict[str, List[Dict[str, Any]]]:
+    def lookups(self) -> dict[str, list[dict[str, Any]]]:
         """Every lookup catalog in one round-trip; a missing table yields an empty list."""
-        result: Dict[str, List[Dict[str, Any]]] = {}
+        result: dict[str, list[dict[str, Any]]] = {}
         for key, sql in LOOKUP_QUERIES.items():
             try:
                 rows = self.execute_all(sql)

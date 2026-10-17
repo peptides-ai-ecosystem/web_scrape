@@ -10,8 +10,9 @@ useful for ad-hoc DB inspection via Swagger or curl.
 All queries live in `app/repositories/peptide_inspector.py`;
 these routes call `app/services/core_data_service.py`.
 """
+
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
@@ -46,7 +47,7 @@ logger = logging.getLogger(__name__)
     },
 )
 async def list_core_peptides(
-    q: Optional[str] = Query(
+    q: str | None = Query(
         None,
         description="Optional case-insensitive substring filter on peptide name or slug.",
         examples=["bpc", "mk-677"],
@@ -142,7 +143,7 @@ async def get_core_peptide_by_slug(slug: str):
         500: {"description": "Database error."},
     },
 )
-async def get_core_lookups() -> Dict[str, List[Dict[str, Any]]]:
+async def get_core_lookups() -> dict[str, list[dict[str, Any]]]:
     """
     Single round-trip that returns every lookup catalog. Cheap and stable —
     intended to be called once on page load so the inspector can map IDs back

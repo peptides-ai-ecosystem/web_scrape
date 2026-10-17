@@ -1,8 +1,10 @@
 """Base repository with common database operations."""
-from contextlib import contextmanager
-from typing import Dict, Any, List, Optional
-import psycopg2
+
 import logging
+from contextlib import contextmanager
+from typing import Any
+
+import psycopg2
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +15,7 @@ class BaseRepository:
     def __init__(self, connection):
         """
         Initialize repository with a database connection.
-        
+
         Args:
             connection: psycopg2 connection object or DbConnection/DbPool.
         """
@@ -26,7 +28,7 @@ class BaseRepository:
         Automatically handles connection acquisition for different connection types.
         """
         # Handle DbConnection (single connection)
-        if hasattr(self.connection, 'connect'):
+        if hasattr(self.connection, "connect"):
             conn = self.connection.connect()
         # Handle raw psycopg2 connection
         else:
@@ -40,7 +42,7 @@ class BaseRepository:
 
     def _commit(self):
         """Commit transaction."""
-        if hasattr(self.connection, 'conn'):
+        if hasattr(self.connection, "conn"):
             # DbConnection object
             self.connection.conn.commit()
         else:
@@ -49,26 +51,26 @@ class BaseRepository:
 
     def _rollback(self):
         """Rollback transaction."""
-        if hasattr(self.connection, 'conn'):
+        if hasattr(self.connection, "conn"):
             # DbConnection object
             self.connection.conn.rollback()
         else:
             # Raw psycopg2 connection
             self.connection.rollback()
 
-    def execute_one(self, query: str, params: tuple) -> Optional[Dict[str, Any]]:
+    def execute_one(self, query: str, params: tuple) -> dict[str, Any] | None:
         """Execute query and fetch one row."""
         with self.get_cursor() as cur:
             cur.execute(query, params)
             return cur.fetchone()
 
-    def execute_all(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
+    def execute_all(self, query: str, params: tuple = ()) -> list[dict[str, Any]]:
         """Execute query and fetch all rows."""
         with self.get_cursor() as cur:
             cur.execute(query, params)
             return cur.fetchall()
 
-    def execute_scalar(self, query: str, params: tuple) -> Optional[Any]:
+    def execute_scalar(self, query: str, params: tuple) -> Any | None:
         """Execute query and fetch single value (first column of first row)."""
         with self.get_cursor() as cur:
             cur.execute(query, params)
@@ -85,7 +87,7 @@ class BaseRepository:
             self._commit()
             return cur.rowcount
 
-    def _insert_guarded(self, cursor, table: str, columns: List[str], params: List[Any]) -> Optional[int]:
+    def _insert_guarded(self, cursor, table: str, columns: list[str], params: list[Any]) -> int | None:
         """
         Insert a row into ``table`` and return the new ``id``.
 

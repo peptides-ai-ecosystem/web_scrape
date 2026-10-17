@@ -1,13 +1,16 @@
 from functools import partial
-from multiprocessing import Pool, cpu_count, TimeoutError as MpTimeoutError
+from multiprocessing import Pool, cpu_count
+from multiprocessing import TimeoutError as MpTimeoutError
 from pathlib import Path
-from typing import List, Optional
+
 from tqdm import tqdm
-from .page_scraper import PageScraper
+
+from app.core.logging import log_debug
 from app.core.models import ScrapeMode
 from app.infrastructure.csv_storage import CSVStorage
-from app.core.logging import log_debug, log_error
 from app.utils.error_tracker import ErrorTracker
+
+from .page_scraper import PageScraper
 
 POOL_JOIN_TIMEOUT = 60  # seconds to wait for pool workers to finish
 
@@ -22,7 +25,7 @@ def scrape_url_wrapper(url: str, scrape_mode: ScrapeMode = ScrapeMode.FULL):
 
 
 class ScraperManager:
-    def __init__(self, storage=None, max_processes=None, csv_path: Optional[Path] = None):
+    def __init__(self, storage=None, max_processes=None, csv_path: Path | None = None):
         if csv_path:
             self.storage = CSVStorage(csv_path=csv_path)
         else:
@@ -30,8 +33,13 @@ class ScraperManager:
         self.max_processes = max_processes or min(cpu_count(), 4)
         log_debug(f"ScraperManager initialized with {self.max_processes} processes", "scraper_manager.py")
 
-    def run(self, urls: List[str], tracker: ErrorTracker = None, cancel_check=None,
-            scrape_mode: ScrapeMode = ScrapeMode.FULL):
+    def run(
+        self,
+        urls: list[str],
+        tracker: ErrorTracker = None,
+        cancel_check=None,
+        scrape_mode: ScrapeMode = ScrapeMode.FULL,
+    ):
         all_results = []
 
         log_debug(f"Starting scrape batch with {len(urls)} URLs (mode={scrape_mode.value})", "scraper_manager.py")
@@ -90,16 +98,15 @@ def _drain_and_terminate_pool(pool: Pool):
     to SIGTERM during Pool cleanup.
     """
     import threading as _threading
+
     pool.close()
     joiner = _threading.Thread(target=pool.join, daemon=True)
     joiner.start()
     joiner.join(timeout=POOL_JOIN_TIMEOUT)
     if joiner.is_alive():
         log_debug(
-            f"Pool join timed out after {POOL_JOIN_TIMEOUT}s — "
-            f"terminating stubborn worker(s) forcefully",
-            "scraper_manager.py"
+            f"Pool join timed out after {POOL_JOIN_TIMEOUT}s — terminating stubborn worker(s) forcefully",
+            "scraper_manager.py",
         )
         pool.terminate()
         pool.join()
-

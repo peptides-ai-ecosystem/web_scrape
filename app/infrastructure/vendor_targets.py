@@ -17,15 +17,16 @@ yields *no targets*, so the scraper does nothing, rather than a crash that
 takes the whole service's scheduler down, and rather than a hardcoded default
 list that would keep hitting a site someone thought they had removed.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
-from urllib.parse import urlsplit
-
+from collections.abc import Sequence
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit
 
 from app.core.owned_stores import owned_reason
 from app.core.vendor_models import FieldSelectors, TargetReviewState, VendorTarget
@@ -38,15 +39,13 @@ class VendorTargetConfigError(ValueError):
     """A target entry is structurally unusable."""
 
 
-def _as_selector_tuple(value: Any, field_name: str, slug: str) -> Tuple[str, ...]:
+def _as_selector_tuple(value: Any, field_name: str, slug: str) -> tuple[str, ...]:
     if value is None:
         return ()
     if isinstance(value, str):
         value = [value]
     if not isinstance(value, (list, tuple)):
-        raise VendorTargetConfigError(
-            f"target '{slug}': selectors.{field_name} must be a string or list of strings"
-        )
+        raise VendorTargetConfigError(f"target '{slug}': selectors.{field_name} must be a string or list of strings")
     out = []
     for item in value:
         if not isinstance(item, str) or not item.strip():
@@ -57,7 +56,7 @@ def _as_selector_tuple(value: Any, field_name: str, slug: str) -> Tuple[str, ...
     return tuple(out)
 
 
-def _validated_urls(value: Any, slug: str) -> Tuple[str, ...]:
+def _validated_urls(value: Any, slug: str) -> tuple[str, ...]:
     if not value:
         return ()
     if not isinstance(value, (list, tuple)):
@@ -69,9 +68,7 @@ def _validated_urls(value: Any, slug: str) -> Tuple[str, ...]:
         candidate = item.strip()
         parsed = urlsplit(candidate)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise VendorTargetConfigError(
-                f"target '{slug}': '{candidate}' is not an absolute http(s) URL"
-            )
+            raise VendorTargetConfigError(f"target '{slug}': '{candidate}' is not an absolute http(s) URL")
         _refuse_internal(candidate, "product_urls", slug)
         out.append(candidate)
     return tuple(out)
@@ -88,9 +85,7 @@ def _refuse_internal(url: str, field_name: str, slug: str, *, resolve: bool = Fa
     try:
         check_url(url, resolve=resolve)
     except UnsafeTargetURLError as exc:
-        raise VendorTargetConfigError(
-            f"target '{slug}': {field_name} '{url}' is not allowed: {exc}"
-        ) from None
+        raise VendorTargetConfigError(f"target '{slug}': {field_name} '{url}' is not allowed: {exc}") from None
 
 
 def check_target_addresses(target: VendorTarget) -> None:
@@ -107,7 +102,7 @@ def check_target_addresses(target: VendorTarget) -> None:
         _refuse_internal(target.store_url, "store_url", target.slug, resolve=True)
 
 
-def target_urls(target: VendorTarget) -> List[str]:
+def target_urls(target: VendorTarget) -> list[str]:
     """Every URL a target points at (store, listing and product URLs)."""
     urls = [u for u in (target.store_url, target.listing_url) if u]
     return urls + list(target.product_urls)
@@ -124,7 +119,7 @@ def check_not_owned(target: VendorTarget) -> None:
         raise VendorTargetConfigError(f"target '{target.slug}': {reason}")
 
 
-def _optional_url(value: Any, field_name: str, slug: str) -> Optional[str]:
+def _optional_url(value: Any, field_name: str, slug: str) -> str | None:
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
     if not isinstance(value, str):
@@ -132,14 +127,12 @@ def _optional_url(value: Any, field_name: str, slug: str) -> Optional[str]:
     candidate = value.strip()
     parsed = urlsplit(candidate)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise VendorTargetConfigError(
-            f"target '{slug}': {field_name} '{candidate}' is not an absolute http(s) URL"
-        )
+        raise VendorTargetConfigError(f"target '{slug}': {field_name} '{candidate}' is not an absolute http(s) URL")
     _refuse_internal(candidate, field_name, slug)
     return candidate
 
 
-def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
+def parse_target(raw: dict[str, Any], *, source: str = "file") -> VendorTarget:
     """Build one :class:`VendorTarget` from a config dict, validating it."""
     if not isinstance(raw, dict):
         raise VendorTargetConfigError("each target must be a JSON object")
@@ -156,9 +149,7 @@ def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
         price=_as_selector_tuple(selectors_raw.get("price"), "price", slug),
         stock=_as_selector_tuple(selectors_raw.get("stock"), "stock", slug),
         coa=_as_selector_tuple(selectors_raw.get("coa"), "coa", slug),
-        product_name=_as_selector_tuple(
-            selectors_raw.get("product_name"), "product_name", slug
-        ),
+        product_name=_as_selector_tuple(selectors_raw.get("product_name"), "product_name", slug),
         variant=_as_selector_tuple(selectors_raw.get("variant"), "variant", slug),
     )
 
@@ -166,23 +157,17 @@ def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
     if currency is not None:
         currency = str(currency).strip().upper() or None
         if currency and len(currency) != 3:
-            raise VendorTargetConfigError(
-                f"target '{slug}': currency must be a 3-letter ISO-4217 code"
-            )
+            raise VendorTargetConfigError(f"target '{slug}': currency must be a 3-letter ISO-4217 code")
 
     max_products = raw.get("max_products_per_run")
     if max_products is not None:
         max_products = int(max_products)
         if max_products < 1:
-            raise VendorTargetConfigError(
-                f"target '{slug}': max_products_per_run must be >= 1 when set"
-            )
+            raise VendorTargetConfigError(f"target '{slug}': max_products_per_run must be >= 1 when set")
 
     interval = float(raw.get("min_request_interval_seconds", 5.0))
     if interval < 0:
-        raise VendorTargetConfigError(
-            f"target '{slug}': min_request_interval_seconds cannot be negative"
-        )
+        raise VendorTargetConfigError(f"target '{slug}': min_request_interval_seconds cannot be negative")
 
     listing_url = _optional_url(raw.get("listing_url"), "listing_url", slug)
     link_selector = raw.get("listing_link_selector")
@@ -204,8 +189,7 @@ def parse_target(raw: Dict[str, Any], *, source: str = "file") -> VendorTarget:
         review_state = TargetReviewState(review_raw)
     except ValueError:
         raise VendorTargetConfigError(
-            f"target '{slug}': review_state must be one of "
-            f"{sorted(s.value for s in TargetReviewState)}"
+            f"target '{slug}': review_state must be one of {sorted(s.value for s in TargetReviewState)}"
         ) from None
     approved_at = raw.get("approved_at")
     if isinstance(approved_at, str):
@@ -242,14 +226,14 @@ def merge_targets(
     file_targets: Sequence[VendorTarget],
     *,
     include_disabled: bool = False,
-) -> List[VendorTarget]:
+) -> list[VendorTarget]:
     """DB targets, plus file targets whose slug the DB does not define.
 
     The DB wins on a slug clash — including a *disabled* DB row, which is how
     an admin pauses a site that is also in the file. ``include_disabled``
     filters only after the merge for exactly that reason.
     """
-    merged: List[VendorTarget] = []
+    merged: list[VendorTarget] = []
     seen: set = set()
     for target in list(db_targets) + list(file_targets):
         key = target.slug.lower()
@@ -262,9 +246,7 @@ def merge_targets(
     return [t for t in merged if t.enabled]
 
 
-def load_targets(
-    path: Optional[Path] = None, *, include_disabled: bool = False
-) -> List[VendorTarget]:
+def load_targets(path: Path | None = None, *, include_disabled: bool = False) -> list[VendorTarget]:
     """Read every configured target.
 
     Args:
@@ -301,7 +283,7 @@ def load_targets(
         logger.error("Vendor targets file %s must hold a list or {'targets': [...]}.", target_path)
         return []
 
-    targets: List[VendorTarget] = []
+    targets: list[VendorTarget] = []
     seen: set = set()
     for entry in entries:
         try:

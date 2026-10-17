@@ -1,12 +1,12 @@
-import pytest
 from unittest.mock import MagicMock
-from app.scrapers.pep_pedia.extractors.graph import GraphExtractor
-from app.core.models import GraphPoint, AxisLabel
 
+from app.core.models import GraphPoint
+from app.scrapers.pep_pedia.extractors.graph import GraphExtractor
 
 # -----------------------------------------------------------------------
 # _parse_path_data
 # -----------------------------------------------------------------------
+
 
 def test_parse_path_data_cubic_bezier():
     """Original cubic-bezier (C) path still works."""
@@ -72,6 +72,7 @@ def test_parse_path_data_empty():
 # _has_graph
 # -----------------------------------------------------------------------
 
+
 def test_has_graph_returns_false_when_no_elements():
     """_has_graph should return False when driver finds no matching container."""
     extractor = GraphExtractor()
@@ -92,6 +93,7 @@ def test_has_graph_returns_true_when_elements_found():
 # _scrape_current_view (mock)
 # -----------------------------------------------------------------------
 
+
 def test_scrape_current_view_mock():
     extractor = GraphExtractor()
     mock_container = MagicMock()
@@ -99,7 +101,9 @@ def test_scrape_current_view_mock():
     # Mock summary buttons
     mock_btn1 = MagicMock()
     mock_btn1.text = "Peak: 2 hrs"
-    mock_container.find_elements.side_effect = lambda by, selector: [mock_btn1] if "flex.items-center.gap-4" in selector else []
+    mock_container.find_elements.side_effect = lambda by, selector: (
+        [mock_btn1] if "flex.items-center.gap-4" in selector else []
+    )
 
     # Mock SVG
     mock_svg = MagicMock()
@@ -124,4 +128,3 @@ def test_scrape_current_view_mock():
     assert data.points[0].x == 10.0
     assert len(data.x_axis_labels) == 1
     assert data.x_axis_labels[0].label == "Dose"
-

@@ -1,4 +1,5 @@
 """Pydantic settings keep the environment variable names, defaults and boolean parsing of the old src/config.py."""
+
 import re
 from pathlib import Path
 
@@ -10,14 +11,37 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # Every variable the former src/config.py read.
 OLD_NAMES = {
-    "DATABASE_URL", "TIMEOUT", "API_TOKEN", "GATEWAY_AUTH_HEADER", "START_SCHEDULER", "OUTPUT_DIR", "LOG_DIR",
-    "VENDOR_TARGETS_FILE", "VENDOR_SCRAPER_CONTACT_URL", "VENDOR_SCRAPER_USER_AGENT",
-    "VENDOR_SCRAPE_MIN_INTERVAL_SECONDS", "VENDOR_SCRAPE_MAX_RETRIES", "VENDOR_SCRAPE_BACKOFF_SECONDS",
-    "VENDOR_SCRAPE_TIMEOUT_MS", "VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS", "VENDOR_PRICE_DELTA_THRESHOLD",
-    "VENDOR_MIN_CONFIDENCE", "VENDOR_SCRAPE_CRON_ENABLED", "VENDOR_SCRAPE_CRON_HOUR", "VENDOR_SCRAPE_CRON_MINUTE",
-    "VENDOR_PRODUCTS_PUBLISH_ENABLED", "VENDOR_DISCOVERY_MAX_REQUESTS", "VENDOR_DISCOVERY_MAX_PRODUCTS",
-    "VENDOR_DISCOVERY_CONCURRENCY", "VENDOR_DISCOVERY_TIMEOUT_SECONDS", "OWNED_STORE_DOMAINS",
-    "OWNED_STORE_VENDORS", "VENDOR_SCHEMA_AUTO_CREATE", "SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_RELEASE",
+    "DATABASE_URL",
+    "TIMEOUT",
+    "API_TOKEN",
+    "GATEWAY_AUTH_HEADER",
+    "START_SCHEDULER",
+    "OUTPUT_DIR",
+    "LOG_DIR",
+    "VENDOR_TARGETS_FILE",
+    "VENDOR_SCRAPER_CONTACT_URL",
+    "VENDOR_SCRAPER_USER_AGENT",
+    "VENDOR_SCRAPE_MIN_INTERVAL_SECONDS",
+    "VENDOR_SCRAPE_MAX_RETRIES",
+    "VENDOR_SCRAPE_BACKOFF_SECONDS",
+    "VENDOR_SCRAPE_TIMEOUT_MS",
+    "VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS",
+    "VENDOR_PRICE_DELTA_THRESHOLD",
+    "VENDOR_MIN_CONFIDENCE",
+    "VENDOR_SCRAPE_CRON_ENABLED",
+    "VENDOR_SCRAPE_CRON_HOUR",
+    "VENDOR_SCRAPE_CRON_MINUTE",
+    "VENDOR_PRODUCTS_PUBLISH_ENABLED",
+    "VENDOR_DISCOVERY_MAX_REQUESTS",
+    "VENDOR_DISCOVERY_MAX_PRODUCTS",
+    "VENDOR_DISCOVERY_CONCURRENCY",
+    "VENDOR_DISCOVERY_TIMEOUT_SECONDS",
+    "OWNED_STORE_DOMAINS",
+    "OWNED_STORE_VENDORS",
+    "VENDOR_SCHEMA_AUTO_CREATE",
+    "SENTRY_DSN",
+    "SENTRY_ENVIRONMENT",
+    "SENTRY_RELEASE",
     "SENTRY_TRACES_SAMPLE_RATE",
 }
 
@@ -52,8 +76,20 @@ def test_defaults_match_the_old_module(monkeypatch):
     assert s.ENHANCED_CSV.name == "pep_pedia_enhanced.csv" and s.MASTER_CSV == s.ENHANCED_CSV
 
 
-@pytest.mark.parametrize("raw,expected", [("false", False), ("FALSE", False), ("0", False), ("off", False),
-                                          ("true", True), (" Yes ", True), ("1", True), ("on", True), ("banana", False)])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("false", False),
+        ("FALSE", False),
+        ("0", False),
+        ("off", False),
+        ("true", True),
+        (" Yes ", True),
+        ("1", True),
+        ("on", True),
+        ("banana", False),
+    ],
+)
 def test_booleans_parse_like_the_old_module(monkeypatch, raw, expected):
     assert _clean(monkeypatch, START_SCHEDULER=raw).START_SCHEDULER is expected
 
@@ -67,6 +103,8 @@ def test_explicit_user_agent_wins(monkeypatch):
     assert _clean(monkeypatch, VENDOR_SCRAPER_USER_AGENT="Bot/2").VENDOR_SCRAPER_USER_AGENT == "Bot/2"
 
 
-@pytest.mark.parametrize("raw", ["postgres://u:p@h:5432/d", "postgresql://u:p@h:5432/d", "postgresql+psycopg2://u:p@h:5432/d"])
+@pytest.mark.parametrize(
+    "raw", ["postgres://u:p@h:5432/d", "postgresql://u:p@h:5432/d", "postgresql+psycopg2://u:p@h:5432/d"]
+)
 def test_alembic_url_uses_the_psycopg2_driver(monkeypatch, raw):
     assert _clean(monkeypatch, DATABASE_URL=raw).sqlalchemy_database_url == "postgresql+psycopg2://u:p@h:5432/d"
