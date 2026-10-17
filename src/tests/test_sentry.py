@@ -296,14 +296,14 @@ class TestBackgroundCapture:
         assert tags["trace_id"] not in (None, "-")
 
     def test_api_triggered_scrape_failure_mints_a_new_trace(self, sentry_capture):
-        from src.api.v1.endpoints import vendors
+        from src.controllers import vendor_scrape_controller as controller
         from src.core.job_queue import get_job_queue
         from src.core.request_context import bound_trace
 
-        job = get_job_queue().create_job(vendors.SCRAPE_JOB_ENDPOINT, {})
-        with patch.object(vendors, "run_vendor_scrape", side_effect=RuntimeError("browser crashed")):
+        job = get_job_queue().create_job(controller.SCRAPE_JOB_ENDPOINT, {})
+        with patch.object(controller, "run_vendor_scrape", side_effect=RuntimeError("browser crashed")):
             with bound_trace(TRACE_ID):
-                vendors._run_scrape_task(job.job_id, None, None)
+                controller._run_scrape_task(job.job_id, None, None)
 
         assert len(sentry_capture) == 1
         tags = sentry_capture[0]["tags"]

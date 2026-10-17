@@ -382,7 +382,9 @@ class FakeObsRepo:
 @pytest.fixture
 def api(monkeypatch):
     import src.api.v1.endpoints.vendors as vendors
+    import src.services.vendor_observation_service as observation_service
     import src.services.vendor_scrape_runner as runner
+    import src.services.vendor_target_service as target_service
 
     target_repo = FakeTargetRepo()
     obs_repo = FakeObsRepo(
@@ -392,8 +394,8 @@ def api(monkeypatch):
             {"id": 3, "vendor": "rival", "url": "https://rival.example/p/3", "price": Decimal("12.00"), "review_status": "flagged"},
         ]
     )
-    monkeypatch.setattr(vendors, "_target_repository", lambda: target_repo)
-    monkeypatch.setattr(vendors, "_repository", lambda: obs_repo)
+    monkeypatch.setattr(target_service, "_target_repository", lambda: target_repo)
+    monkeypatch.setattr(observation_service, "_repository", lambda: obs_repo)
     monkeypatch.setattr(runner, "load_db_targets", lambda: target_repo.list_all())
     monkeypatch.setattr(runner, "load_targets", lambda include_disabled=False: [])
     # Saving a target resolves its host (SSRF guard). Keep these tests offline:
@@ -478,7 +480,9 @@ class TestTargetEndpoints:
         from src.core.job_queue import get_job_queue
 
         run(vendors.create_vendor_target(payload(vendors)))
-        job = get_job_queue().create_job(vendors.SCRAPE_JOB_ENDPOINT, {})
+        from src.controllers.vendor_scrape_controller import SCRAPE_JOB_ENDPOINT
+
+        job = get_job_queue().create_job(SCRAPE_JOB_ENDPOINT, {})
         job.start()
         try:
             with pytest.raises(HTTPException) as exc:
@@ -496,9 +500,11 @@ class TestTargetEndpoints:
             on_progress(4, 4)
             return {"urls_processed": 4, "review_counts": {"accepted": 4}, "observations": []}
 
-        monkeypatch.setattr(vendors, "run_vendor_scrape", fake_run)
-        job = get_job_queue().create_job(vendors.SCRAPE_JOB_ENDPOINT, {})
-        vendors._run_scrape_task(job.job_id, ["rival"], None)
+        import src.controllers.vendor_scrape_controller as controller
+
+        monkeypatch.setattr(controller, "run_vendor_scrape", fake_run)
+        job = get_job_queue().create_job(controller.SCRAPE_JOB_ENDPOINT, {})
+        controller._run_scrape_task(job.job_id, ["rival"], None)
         view = run(vendors.get_vendor_scrape_job(job.job_id))
         assert view["status"] == "completed"
         assert view["progress"] == 100

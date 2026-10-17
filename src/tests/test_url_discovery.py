@@ -582,7 +582,9 @@ def api(monkeypatch):
             return updated
 
     repo = ApprovingRepo()
-    monkeypatch.setattr(vendors, "_target_repository", lambda: repo)
+    import src.services.vendor_target_service as target_service
+
+    monkeypatch.setattr(target_service, "_target_repository", lambda: repo)
     monkeypatch.setattr(runner, "load_db_targets", lambda: repo.list_all())
     monkeypatch.setattr(runner, "load_targets", lambda include_disabled=False: [])
     return vendors, repo
@@ -710,7 +712,9 @@ class TestUrlOnlyEndpoints:
             def count_flagged(self, vendor=None):
                 return 7
 
-        monkeypatch.setattr(vendors, "_repository", lambda: Obs())
+        import src.services.vendor_observation_service as observation_service
+
+        monkeypatch.setattr(observation_service, "_repository", lambda: Obs())
         default = run(vendors.list_flagged_observations(limit=50, vendor=None))
         assert default["count"] == 7 and default["total"] == 7 and default["offset"] == 0
         page = run(vendors.list_flagged_observations(limit=3, vendor=None, offset=6))
@@ -726,7 +730,9 @@ class TestUrlOnlyEndpoints:
             seen.update(url=url, max_products=max_products)
             return {"seed_url": url, "method": "woo_store_api", "readings": []}
 
-        monkeypatch.setattr(vendors, "preview_discovery", fake_preview)
+        import src.services.vendor_target_service as target_service
+
+        monkeypatch.setattr(target_service, "preview_discovery", fake_preview)
         out = run(vendors.discover_from_url(vendors.DiscoverRequest(url="https://rival.example/", max_products=3)))
         assert out["method"] == "woo_store_api" and seen == {"url": "https://rival.example/", "max_products": 3}
         assert runner.preview_discovery is not None
