@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import sys
 import logging
 from typing import List, Dict, Any
-from pydantic import BaseModel, Field
+from src.models.graph import MethodItem, PeptideItem
 
 # Load environment variables
 load_dotenv()
@@ -41,15 +41,6 @@ def get_pool() -> DbPool:
 # ---------------------------------------------------------------------------
 # Response schemas (documentation only — also used as return types)
 # ---------------------------------------------------------------------------
-
-class PeptideItem(BaseModel):
-    id: int = Field(..., description="Peptide database ID.")
-    name: str = Field(..., description="Peptide display name.")
-
-
-class MethodItem(BaseModel):
-    id: int = Field(..., description="Administration method database ID.")
-    name: str = Field(..., description="Administration method name (e.g. 'Injectable', 'Oral').")
 
 
 # NOTE: Intentionally not declared as a strict Pydantic response_model.
