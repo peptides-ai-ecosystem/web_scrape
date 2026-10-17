@@ -31,7 +31,7 @@ from app.scrapers.vendors.extractors.vendor_listing import (
     parse_stock,
     resolve_coa_url,
 )
-from app.infrastructure.playwright_fetcher import FetchResult, StaticPageDocument
+from app.infrastructure.page_models import FetchResult, StaticPageDocument
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
 from app.infrastructure.vendor_targets import load_targets, parse_target

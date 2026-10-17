@@ -45,6 +45,7 @@ from app.scrapers.vendors.extractors.store_api import (
     woo_variation_readings,
 )
 from app.scrapers.vendors.extractors.structured_data import parse_product_page
+from app.scrapers.vendors.discovery_result import DiscoveryFailure, DiscoveryResult, hold_sizeless
 from app.infrastructure.polite_http import (
     ACCEPT_HTML,
     ACCEPT_JSON,
@@ -60,85 +61,6 @@ SHOPIFY_PAGE_SIZE = 250
 #: Child sitemaps read from one index, at most.
 MAX_CHILD_SITEMAPS = 4
 _SITEMAP_PATHS = ("/sitemap_index.xml", "/sitemap.xml", "/wp-sitemap.xml", "/product-sitemap.xml")
-#: A size/amount in a product name: "10mg", "5 mg", "500mcg", "10ml", "60 caps".
-_SIZE_RE = re.compile(
-    r"\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|ug|g|ml|iu|units?|caps?|capsules|tabs?|tablets|vials?|kits?|pcs)\b",
-    re.IGNORECASE,
-)
-#: Confidence for a reading with no size anywhere: the platform import matches
-#: competitor prices by size, so a size-less price is held for review instead
-#: of being accepted and then refused by the import (e.g. a JSON-LD Offer on a
-#: multi-size page that only publishes the default size's price).
-NO_SIZE_CONFIDENCE = 0.55
-
-
-def has_size(reading: ProductReading) -> bool:
-    return bool(reading.variant_label) or bool(_SIZE_RE.search(reading.product_name or ""))
-
-
-def _hold_sizeless(result: DiscoveryResult) -> None:
-    held = 0
-    for index, reading in enumerate(result.readings):
-        if reading.price is not None and not has_size(reading) and reading.confidence > NO_SIZE_CONFIDENCE:
-            result.readings[index] = replace(reading, confidence=NO_SIZE_CONFIDENCE)
-            held += 1
-    if held:
-        result.notes.append(
-            f"{held} reading(s) name no size; held for review (the import matches prices by size)"
-        )
-
-
-@dataclass
-class DiscoveryFailure:
-    url: str
-    status: ScrapeStatus
-    detail: str
-
-
-@dataclass
-class DiscoveryResult:
-    """What one discovery found, and how."""
-
-    seed_url: str
-    method: str | None = None
-    readings: list[ProductReading] = field(default_factory=list)
-    products_seen: int = 0
-    requests_made: int = 0
-    notes: list[str] = field(default_factory=list)
-    failures: list[DiscoveryFailure] = field(default_factory=list)
-
-    def to_dict(self, include_readings: bool = True) -> dict[str, Any]:
-        out: dict[str, Any] = {
-            "seed_url": self.seed_url,
-            "method": self.method,
-            "products_seen": self.products_seen,
-            "variants_found": len(self.readings),
-            "priced": sum(1 for r in self.readings if r.price is not None),
-            "requests_made": self.requests_made,
-            "notes": list(self.notes),
-            "failures": [
-                {"url": f.url, "status": f.status.value, "detail": f.detail} for f in self.failures
-            ],
-        }
-        if include_readings:
-            out["readings"] = [
-                {
-                    "url": r.url,
-                    "page_url": r.page_url,
-                    "product_name": r.product_name,
-                    "variant_label": r.variant_label,
-                    "sku": r.sku,
-                    "price": str(r.price) if r.price is not None else None,
-                    "currency": r.currency,
-                    "stock_status": r.stock_status.value if r.stock_status else None,
-                    "method": r.method,
-                    "confidence": round(r.confidence, 4),
-                }
-                for r in self.readings
-            ]
-        return out
-
-
 def _status_of(result: HttpResult) -> ScrapeStatus:
     if result.robots_disallowed:
         return ScrapeStatus.ROBOTS_DISALLOWED
@@ -194,7 +116,7 @@ class UrlOnlyDiscovery:
                     "no Store API, products.json, sitemap or structured price found; "
                     "add CSS selectors to this target"
                 )
-        _hold_sizeless(result)
+        hold_sizeless(result)
         result.requests_made = self._client.requests_made
         return result
 
@@ -212,7 +134,7 @@ class UrlOnlyDiscovery:
             self._read_pages([product_url], result)
             if result.readings:
                 result.method = result.method or "product_page"
-        _hold_sizeless(result)
+        hold_sizeless(result)
         result.requests_made = self._client.requests_made
         return result
 

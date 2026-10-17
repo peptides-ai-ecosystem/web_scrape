@@ -25,7 +25,8 @@ from app.scrapers.vendors.extractors.store_api import (
     rank_child_sitemaps,
     woo_price,
 )
-from app.scrapers.vendors.extractors.structured_data import compose_name, parse_product_page, to_price
+from app.scrapers.vendors.extractors.structured_data import parse_product_page
+from app.scrapers.vendors.extractors.value_parsing import compose_name, to_price
 from app.infrastructure.polite_http import HttpResult, PoliteHttpClient
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
@@ -377,7 +378,7 @@ class TestSizeless:
 
 class TestRenderingFallback:
     def test_page_without_structured_price_is_rendered_once(self):
-        from app.infrastructure.playwright_fetcher import (
+        from app.infrastructure.page_models import (
             FetchResult,
             StaticPageDocument,
         )

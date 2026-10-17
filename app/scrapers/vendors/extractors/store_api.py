@@ -21,8 +21,8 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from app.core.vendor_models import ProductReading, StockStatus
-from app.scrapers.vendors.extractors.structured_data import (
-    CONFIDENCE,
+from app.scrapers.vendors.extractors.structured_data import CONFIDENCE
+from app.scrapers.vendors.extractors.value_parsing import (
     clean_text,
     compose_name,
     to_currency,

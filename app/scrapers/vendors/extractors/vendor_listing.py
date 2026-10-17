@@ -32,7 +32,7 @@ from app.core.vendor_models import (
     StockStatus,
     VendorTarget,
 )
-from app.infrastructure.playwright_fetcher import PageDocument
+from app.infrastructure.page_models import PageDocument
 
 logger = logging.getLogger(__name__)
 

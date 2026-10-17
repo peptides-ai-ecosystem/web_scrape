@@ -26,7 +26,7 @@ from app.core.vendor_models import (
     StockStatus,
     VendorTarget,
 )
-from app.infrastructure.playwright_fetcher import FetchResult, StaticPageDocument
+from app.infrastructure.page_models import FetchResult, StaticPageDocument
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
 from app.infrastructure.vendor_targets import (

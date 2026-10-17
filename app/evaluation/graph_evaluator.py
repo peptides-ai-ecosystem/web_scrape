@@ -22,6 +22,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from app.evaluation.graph_report import print_graph_console, save_graph_json
 from app.infrastructure.db.service import DbManager
 from app.services.sync.group_d.graph_mapper import GraphMapper
 from app.utils.peptide_utils import find_best_match, extract_essence
@@ -356,10 +357,10 @@ def run_graph_evaluation(
         }
 
     # ── Step 3: Report ────────────────────────────────────────────────────
-    _print_graph_console(results)
+    print_graph_console(results)
 
     if output_json:
-        _save_graph_json(results, output_json)
+        save_graph_json(results, output_json)
 
     return {
         "total": len(rows),
@@ -368,59 +369,3 @@ def run_graph_evaluation(
         "evaluated_peptides": evaluated_peptides,
         "skipped_peptides": skipped_peptides,
     }
-
-
-# ---------------------------------------------------------------------------
-# Reporting helpers
-# ---------------------------------------------------------------------------
-
-def _print_graph_console(results: List[GraphPeptideEvalResult]) -> None:
-    total_peptides = len(results)
-    passed = sum(1 for r in results if r.passed)
-    failed = total_peptides - passed
-
-    print(f"\n{'='*60}")
-    print("  GRAPH EVALUATION SUMMARY")
-    print(f"{'='*60}")
-    print(f"  Peptides evaluated : {total_peptides}")
-    print(f"  Passed             : {passed}")
-    print(f"  Failed             : {failed}")
-    print(f"{'='*60}")
-
-    for r in results:
-        status_icon = "✓" if r.passed else "✗"
-        print(f"\n  [{status_icon}] {r.peptide_name}  (method: {r.administration_method})")
-        for check in r.checks:
-            detail_str = f"  → {check.detail}" if check.detail else ""
-            print(f"       {check.icon} {check.name:<28} "
-                  f"exp={check.expected!r:20}  act={check.actual!r}{detail_str}")
-
-
-def _save_graph_json(results: List[GraphPeptideEvalResult], path: str) -> None:
-    import json as _json
-
-    def _serialise(r: GraphPeptideEvalResult) -> dict:
-        return {
-            "peptide_name": r.peptide_name,
-            "slug": r.slug,
-            "administration_method": r.administration_method,
-            "passed": r.passed,
-            "fail_count": r.fail_count,
-            "pass_count": r.pass_count,
-            "total_checks": r.total,
-            "checks": [
-                {
-                    "name": c.name,
-                    "status": c.status,
-                    "expected": c.expected,
-                    "actual": c.actual,
-                    "detail": c.detail,
-                }
-                for c in r.checks
-            ],
-        }
-
-    payload = [_serialise(r) for r in results]
-    with open(path, "w", encoding="utf-8") as f:
-        _json.dump(payload, f, indent=2, default=str)
-    print(f"\n[GRAPH-EVAL] JSON report saved to: {path}")
