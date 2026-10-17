@@ -1,5 +1,5 @@
 """Request model for the pep-pedia sync API (``/api/v1/sync``)."""
-from typing import List, Optional
+
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator
@@ -13,13 +13,14 @@ class SyncRequest(BaseModel):
     - Provide a specific `urls` list for **targeted scraping** of known pages.
     - Use `limit` to cap the number of URLs processed (useful for testing).
     """
-    limit: Optional[int] = Field(
+
+    limit: int | None = Field(
         None,
         description="Maximum number of URLs to scrape & sync. `null` means unlimited (process all discovered or provided URLs).",
         ge=1,
         examples=[5, 10, 50],
     )
-    urls: Optional[List[str]] = Field(
+    urls: list[str] | None = Field(
         None,
         description="Specific peptide page URLs to scrape. When `null` or empty, URLs are auto-discovered via the peptide URL crawler.",
         examples=[None, ["https://pep-pedia.org/peptide/1", "https://pep-pedia.org/peptide/2"]],
@@ -71,5 +72,3 @@ class SyncRequest(BaseModel):
             ]
         }
     }
-
-

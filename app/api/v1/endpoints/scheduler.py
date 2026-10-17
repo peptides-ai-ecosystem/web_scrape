@@ -5,22 +5,22 @@ The APScheduler-based background sync scheduler runs core sync operations
 on a recurring interval. These endpoints let you inspect, start, pause,
 and resume the scheduler independently of manual sync operations.
 """
+
 from fastapi import APIRouter
-from app.models.scheduler import SchedulerConfigRequest, VendorScrapeScheduleRequest
 
 from app.core.scheduler import (
-    start_scheduler,
-    pause_scheduler,
-    resume_scheduler,
     get_scheduler_status,
-    start_vendor_scrape_scheduler,
-    pause_vendor_scrape_scheduler,
-    resume_vendor_scrape_scheduler,
     get_vendor_scrape_scheduler_status,
+    pause_scheduler,
+    pause_vendor_scrape_scheduler,
+    resume_scheduler,
+    resume_vendor_scrape_scheduler,
+    start_scheduler,
+    start_vendor_scrape_scheduler,
 )
+from app.models.scheduler import SchedulerConfigRequest, VendorScrapeScheduleRequest
 
 router = APIRouter()
-
 
 
 # ---------------------------------------------------------------------------

@@ -19,12 +19,12 @@ a move beyond the threshold is flagged for a human and, critically, **does not
 replace the last accepted value** — the previously good price stays the
 current one until someone confirms the new one.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Optional
 
 from app.core.vendor_models import (
     ConfidenceBreakdown,
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 #: What each field is worth. Price dominates because it is the thing we are
 #: actually here for; a run that read the stock badge and the COA link but not
 #: the price has learned almost nothing worth publishing.
-FIELD_WEIGHTS: Dict[str, float] = {
+FIELD_WEIGHTS: dict[str, float] = {
     "price": 0.55,
     "stock": 0.20,
     "coa": 0.15,
@@ -81,9 +81,7 @@ def score_confidence(fields: ExtractedFields, target: VendorTarget) -> Confidenc
     breakdown = ConfidenceBreakdown(score=0.0)
 
     if total_weight <= 0:
-        breakdown.notes.append(
-            "target declares no selectors — nothing could be matched, confidence 0"
-        )
+        breakdown.notes.append("target declares no selectors — nothing could be matched, confidence 0")
         return breakdown
 
     earned = 0.0
@@ -100,8 +98,7 @@ def score_confidence(fields: ExtractedFields, target: VendorTarget) -> Confidenc
         earned += contribution
         if match.selector_index > 0:
             breakdown.notes.append(
-                f"{field_name}: matched on fallback selector #{match.selector_index} "
-                f"({match.selector!r}) — discounted"
+                f"{field_name}: matched on fallback selector #{match.selector_index} ({match.selector!r}) — discounted"
             )
 
     breakdown.score = max(0.0, min(1.0, earned / total_weight))
@@ -116,8 +113,8 @@ def score_confidence(fields: ExtractedFields, target: VendorTarget) -> Confidenc
 @dataclass(frozen=True)
 class ReviewDecision:
     status: ReviewStatus
-    reason: Optional[ReviewReason] = None
-    note: Optional[str] = None
+    reason: ReviewReason | None = None
+    note: str | None = None
 
     @property
     def supersedes_previous(self) -> bool:
@@ -141,7 +138,7 @@ class DeltaReviewer:
     def assess(
         self,
         current: VendorObservation,
-        previous: Optional[VendorObservation] = None,
+        previous: VendorObservation | None = None,
     ) -> ReviewDecision:
         # 1. No price at all. Store the observation (it is evidence that the
         #    page changed) but never let it stand in for a price, and never
@@ -158,8 +155,7 @@ class DeltaReviewer:
             return ReviewDecision(
                 ReviewStatus.FLAGGED,
                 ReviewReason.LOW_CONFIDENCE,
-                f"confidence {current.confidence:.2f} below threshold "
-                f"{self._min_confidence:.2f}",
+                f"confidence {current.confidence:.2f} below threshold {self._min_confidence:.2f}",
             )
 
         if previous is None or previous.price is None:
@@ -168,11 +164,7 @@ class DeltaReviewer:
 
         # 3. A currency change is never a price move — it is a different
         #    number entirely, and comparing them would be meaningless.
-        if (
-            current.currency
-            and previous.currency
-            and current.currency != previous.currency
-        ):
+        if current.currency and previous.currency and current.currency != previous.currency:
             return ReviewDecision(
                 ReviewStatus.FLAGGED,
                 ReviewReason.CURRENCY_CHANGED,

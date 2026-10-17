@@ -1,4 +1,5 @@
 """Map the typed service errors (``app.core.errors``) to HTTP responses."""
+
 from fastapi import HTTPException
 
 from app.core.errors import ServiceError

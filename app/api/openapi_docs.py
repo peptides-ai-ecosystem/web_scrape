@@ -130,7 +130,7 @@ OPENAPI_TAGS = [
     },
 ]
 
-HOME_HTML = '''
+HOME_HTML = """
     <!DOCTYPE html>
     <html>
     <head>
@@ -169,4 +169,4 @@ HOME_HTML = '''
         </div>
     </body>
     </html>
-    '''
+    """

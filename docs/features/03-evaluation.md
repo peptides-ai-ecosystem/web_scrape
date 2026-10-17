@@ -155,16 +155,16 @@ class CsvExpectationBuilder:
     "peptide_name": str,
     "slug": str,
     "administration_method": str,
-    "peptide": { ... },           # Group B fields
-    "benefits": [...],            # Group A
+    "peptide": {...},  # Group B fields
+    "benefits": [...],  # Group A
     "side_effects": [...],
     "dosages": [...],
     "schedules": [...],
     "references": [...],
-    "interactions": [...],        # Group C
+    "interactions": [...],  # Group C
     "indications": [...],
-    "protocols": [...],           # Group D
-    "graph_data": [...],          # Graph mapper
+    "protocols": [...],  # Group D
+    "graph_data": [...],  # Graph mapper
 }
 ```
 
@@ -241,10 +241,10 @@ flowchart TD
 @dataclass
 class CheckResult:
     name: str
-    status: str     # "PASS" | "FAIL" | "WARN" | "SKIP"
-    expected: Any   # What the CSV says should be there
-    actual: Any     # What the DB actually has
-    detail: str     # Human-readable explanation
+    status: str  # "PASS" | "FAIL" | "WARN" | "SKIP"
+    expected: Any  # What the CSV says should be there
+    actual: Any  # What the DB actually has
+    detail: str  # Human-readable explanation
 ```
 
 #### PeptideEvalResult Dataclass

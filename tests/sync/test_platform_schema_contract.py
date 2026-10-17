@@ -10,6 +10,7 @@ Skipped unless the checkout exists. Point ``PLATFORM_SCHEMA_REPO`` at it
 (default: the canonical workspace checkout). Run it against the platform
 branch you are about to deploy with (staging), not an old checkout.
 """
+
 from __future__ import annotations
 
 import ast
@@ -50,10 +51,7 @@ def _tables_in(sql: str) -> set[str]:
 
 def _platform_schema() -> dict[str, set[str]]:
     """Table name -> column names, from every Drizzle schema file."""
-    files = [
-        p for p in (PLATFORM_REPO / "apps" / "api" / "src").rglob("*.ts")
-        if "db/schema/" in p.as_posix()
-    ]
+    files = [p for p in (PLATFORM_REPO / "apps" / "api" / "src").rglob("*.ts") if "db/schema/" in p.as_posix()]
     tables: dict[str, set[str]] = {}
     for path in files:
         text = path.read_text(encoding="utf-8")
@@ -115,7 +113,7 @@ def _written_columns() -> dict[str, set[str]]:
 
 def _cascade_tables() -> list[str]:
     source = (ROOT / "app/repositories/peptide.py").read_text(encoding="utf-8")
-    body = source[source.index("def delete_peptide_cascading"):]
+    body = source[source.index("def delete_peptide_cascading") :]
     nxt = re.search(r"\n    def ", body[1:])
     body = body[: nxt.start() + 1] if nxt else body
     return sorted(set(re.findall(r"DELETE FROM ([a-z_0-9]+)", body)))

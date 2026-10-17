@@ -19,7 +19,8 @@ API and the orchestrator gateway (``/web_scrape/api/v1/vendors/...``):
 * list observations with filters and resolve flagged ones,
 * ``observations/accepted-latest`` — the one read PeptiPrices imports from.
 """
-from typing import Annotated, Any, Dict, Optional
+
+from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Query, Response
 from fastapi.concurrency import run_in_threadpool
@@ -48,16 +49,14 @@ router = APIRouter()
 @router.get("/targets")
 async def list_vendor_targets(
     limit: Annotated[
-        Optional[int],
+        int | None,
         Query(ge=1, le=500, description="Page size. Omitted = every target (the original behaviour)."),
     ] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
-    q: Annotated[
-        Optional[str], Query(max_length=255, description="Search slug, name, platform slug and URLs.")
-    ] = None,
-    review_state: Annotated[Optional[str], Query(description="draft | approved")] = None,
-    discovery_mode: Annotated[Optional[str], Query(description="selectors | auto")] = None,
-) -> Dict[str, Any]:
+    q: Annotated[str | None, Query(max_length=255, description="Search slug, name, platform slug and URLs.")] = None,
+    review_state: Annotated[str | None, Query(description="draft | approved")] = None,
+    discovery_mode: Annotated[str | None, Query(description="selectors | auto")] = None,
+) -> dict[str, Any]:
     """🎯 List competitor targets (DB-managed, plus file fallbacks).
 
     `source` says where each came from: `db` (managed here, editable) or
@@ -78,7 +77,7 @@ async def list_vendor_targets(
 
 
 @router.get("/targets/{slug}", responses={404: {"description": "No such target."}})
-async def get_vendor_target(slug: str) -> Dict[str, Any]:
+async def get_vendor_target(slug: str) -> dict[str, Any]:
     """One target by slug (DB first, then the file)."""
     try:
         return vendor_target_service.get_target(slug)
@@ -91,7 +90,7 @@ async def get_vendor_target(slug: str) -> Dict[str, Any]:
     status_code=201,
     responses={409: {"description": "A DB target with that slug exists."}, 422: {"description": "Invalid target."}},
 )
-async def create_vendor_target(payload: TargetPayload) -> Dict[str, Any]:
+async def create_vendor_target(payload: TargetPayload) -> dict[str, Any]:
     """➕ Add a competitor target (stored in `vendor_scrape_targets`).
 
     With a price selector it is approved at once, as before. Without one it is
@@ -105,7 +104,7 @@ async def create_vendor_target(payload: TargetPayload) -> Dict[str, Any]:
 
 
 @router.put("/targets/{slug}", responses={422: {"description": "Invalid target."}})
-async def update_vendor_target(slug: str, payload: TargetPayload) -> Dict[str, Any]:
+async def update_vendor_target(slug: str, payload: TargetPayload) -> dict[str, Any]:
     """✏️ Replace a target. A file-only target is taken over into the DB."""
     try:
         return vendor_target_service.update_target(slug, payload)
@@ -135,7 +134,7 @@ async def delete_vendor_target(slug: str) -> Response:
         422: {"description": "Not a public http(s) URL, or one of our own stores."},
     },
 )
-async def create_target_from_url(payload: FromUrlRequest) -> Dict[str, Any]:
+async def create_target_from_url(payload: FromUrlRequest) -> dict[str, Any]:
     """🔗 AAD-1: a competitor target from a URL only — no selectors.
 
     Give a store's home, shop or product URL. The target is created as a
@@ -163,7 +162,7 @@ async def create_target_from_url(payload: FromUrlRequest) -> Dict[str, Any]:
         422: {"description": "The target points at one of our own stores."},
     },
 )
-async def approve_vendor_target(slug: str, payload: Optional[ApproveRequest] = None) -> Dict[str, Any]:
+async def approve_vendor_target(slug: str, payload: ApproveRequest | None = None) -> dict[str, Any]:
     """✅ AAD-1: approve a draft target so scrape runs read it.
 
     Idempotent: approving an approved target refreshes `approved_at`/`by`.
@@ -178,7 +177,7 @@ async def approve_vendor_target(slug: str, payload: Optional[ApproveRequest] = N
     "/discover",
     responses={422: {"description": "Not a public http(s) URL, or one of our own stores."}},
 )
-async def discover_from_url(payload: DiscoverRequest) -> Dict[str, Any]:
+async def discover_from_url(payload: DiscoverRequest) -> dict[str, Any]:
     """🔎 AAD-1: preview selector-free discovery for a URL. Nothing is stored.
 
     Tries the WooCommerce Store API, Shopify `products.json`, then sitemaps +
@@ -210,9 +209,7 @@ async def discover_from_url(payload: DiscoverRequest) -> Dict[str, Any]:
     },
     status_code=202,
 )
-async def trigger_vendor_scrape(
-    request: VendorScrapeRequest, background_tasks: BackgroundTasks
-) -> Dict[str, Any]:
+async def trigger_vendor_scrape(request: VendorScrapeRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
     """🕷️ Trigger a competitor price scrape now (all enabled targets, or named ones).
 
     Runs the identical pipeline the nightly cron runs — robots.txt is checked
@@ -231,13 +228,13 @@ async def trigger_vendor_scrape(
 @router.get("/scrape/jobs")
 async def list_vendor_scrape_jobs(
     limit: int = Query(10, ge=1, le=100),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Recent vendor scrape jobs, newest first (in-memory; cleared on restart)."""
     return VendorScrapeController.list_jobs(limit)
 
 
 @router.get("/scrape/jobs/{job_id}", responses={404: {"description": "Unknown job."}})
-async def get_vendor_scrape_job(job_id: str) -> Dict[str, Any]:
+async def get_vendor_scrape_job(job_id: str) -> dict[str, Any]:
     """Status of one scrape: `progress` (0-100), `progress_detail` {done,total}, result."""
     try:
         return VendorScrapeController.get_job(job_id)
@@ -252,12 +249,12 @@ async def get_vendor_scrape_job(job_id: str) -> Dict[str, Any]:
 
 @router.get("/observations")
 async def list_observations(
-    vendor: Optional[str] = Query(None, description="Restrict to one vendor slug."),
-    review_status: Optional[str] = Query(None, description="accepted | flagged | rejected"),
-    status: Optional[str] = Query(None, description="ok | robots_disallowed | blocked | error | skipped"),
+    vendor: str | None = Query(None, description="Restrict to one vendor slug."),
+    review_status: str | None = Query(None, description="accepted | flagged | rejected"),
+    status: str | None = Query(None, description="ok | robots_disallowed | blocked | error | skipped"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """📋 Every reading, newest first, filterable by vendor / review status / scrape status."""
     try:
         return vendor_observation_service.list_observations(vendor, review_status, status, limit, offset)
@@ -268,9 +265,9 @@ async def list_observations(
 @router.get("/observations/flagged")
 async def list_flagged_observations(
     limit: int = Query(50, ge=1, le=500, description="Maximum rows to return."),
-    vendor: Optional[str] = Query(None, description="Restrict to one vendor slug."),
+    vendor: str | None = Query(None, description="Restrict to one vendor slug."),
     offset: Annotated[int, Query(ge=0, description="Rows to skip (pagination).")] = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """🚩 The review queue.
 
     Every reading the scraper did not trust enough to stand on its own: a
@@ -283,8 +280,8 @@ async def list_flagged_observations(
 
 @router.get("/observations/accepted-latest")
 async def list_latest_accepted_observations(
-    vendor: Optional[str] = Query(None, description="Restrict to one vendor slug."),
-) -> Dict[str, Any]:
+    vendor: str | None = Query(None, description="Restrict to one vendor slug."),
+) -> dict[str, Any]:
     """✅ The current accepted reading per listing — what PeptiPrices imports.
 
     One row per `(vendor, url)`: the newest **accepted** observation with a
@@ -303,7 +300,7 @@ async def list_latest_accepted_observations(
         409: {"description": "Already resolved, or accepting a reading with no price."},
     },
 )
-async def review_observation(observation_id: int, request: ReviewRequest) -> Dict[str, Any]:
+async def review_observation(observation_id: int, request: ReviewRequest) -> dict[str, Any]:
     """✅ Resolve one flagged observation.
 
     `accept` makes this reading the current value for its listing; `reject`
@@ -315,5 +312,3 @@ async def review_observation(observation_id: int, request: ReviewRequest) -> Dic
         return vendor_observation_service.review(observation_id, request.decision, request.reviewer)
     except ServiceError as exc:
         raise http_error(exc)
-
-

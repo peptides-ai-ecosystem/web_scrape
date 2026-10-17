@@ -14,29 +14,31 @@ Checks per peptide
 4. points_populated      – points JSON array is non-empty
 5. markers_populated     – markers JSON array is non-empty
 """
+
 from __future__ import annotations
 
 import csv
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.evaluation.graph_report import print_graph_console, save_graph_json
 from app.infrastructure.db.service import DbManager
 from app.services.sync.group_d.graph_mapper import GraphMapper
-from app.utils.peptide_utils import find_best_match, extract_essence
-
+from app.utils.peptide_utils import extract_essence, find_best_match
 
 # ---------------------------------------------------------------------------
 # Result dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class GraphCheckResult:
     """Outcome of a single graph evaluation check."""
+
     name: str
-    status: str          # "PASS" | "FAIL" | "WARN" | "SKIP"
+    status: str  # "PASS" | "FAIL" | "WARN" | "SKIP"
     expected: Any = None
     actual: Any = None
     detail: str = ""
@@ -49,10 +51,11 @@ class GraphCheckResult:
 @dataclass
 class GraphPeptideEvalResult:
     """All graph check results for one peptide."""
+
     peptide_name: str
     slug: str
     administration_method: str = ""
-    checks: List[GraphCheckResult] = field(default_factory=list)
+    checks: list[GraphCheckResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -75,7 +78,8 @@ class GraphPeptideEvalResult:
 # Fetcher helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_graph_rows(db: DbManager, peptide_id: int) -> List[Dict[str, Any]]:
+
+def _fetch_graph_rows(db: DbManager, peptide_id: int) -> list[dict[str, Any]]:
     """Return all peptide_graph rows for the given peptide_id."""
     conn = db.conn
     if conn is None or conn.closed:
@@ -83,8 +87,7 @@ def _fetch_graph_rows(db: DbManager, peptide_id: int) -> List[Dict[str, Any]]:
         conn = db.conn
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT time_range, path_data, points, markers "
-            "FROM peptide_graph WHERE peptide_id = %s",
+            "SELECT time_range, path_data, points, markers FROM peptide_graph WHERE peptide_id = %s",
             (peptide_id,),
         )
         rows = cur.fetchall()
@@ -113,6 +116,7 @@ def _is_nonempty_json(value: Any) -> bool:
 # Evaluator
 # ---------------------------------------------------------------------------
 
+
 class GraphEvaluator:
     """
     Runs graph-specific checks for each peptide in a CSV and returns
@@ -126,8 +130,8 @@ class GraphEvaluator:
         self,
         peptide_name: str,
         slug: str,
-        expected_graph: List[Dict[str, Any]],
-        actual_rows: List[Dict[str, Any]],
+        expected_graph: list[dict[str, Any]],
+        actual_rows: list[dict[str, Any]],
         method: str,
     ) -> GraphPeptideEvalResult:
         result = GraphPeptideEvalResult(
@@ -138,94 +142,117 @@ class GraphEvaluator:
 
         # ── Check 1: any graph rows exist ──────────────────────────────────
         if not actual_rows:
-            result.checks.append(GraphCheckResult(
-                name="graph_rows_exist",
-                status="FAIL" if expected_graph else "SKIP",
-                expected=f"{len(expected_graph)} row(s)",
-                actual="0 row(s)",
-                detail="No graph rows found in peptide_graph table" if expected_graph
-                       else "No graph data expected from CSV",
-            ))
+            result.checks.append(
+                GraphCheckResult(
+                    name="graph_rows_exist",
+                    status="FAIL" if expected_graph else "SKIP",
+                    expected=f"{len(expected_graph)} row(s)",
+                    actual="0 row(s)",
+                    detail="No graph rows found in peptide_graph table"
+                    if expected_graph
+                    else "No graph data expected from CSV",
+                )
+            )
             return result  # all remaining checks are meaningless
 
-        result.checks.append(GraphCheckResult(
-            name="graph_rows_exist",
-            status="PASS",
-            expected=f"{len(expected_graph)} row(s)",
-            actual=f"{len(actual_rows)} row(s)",
-        ))
+        result.checks.append(
+            GraphCheckResult(
+                name="graph_rows_exist",
+                status="PASS",
+                expected=f"{len(expected_graph)} row(s)",
+                actual=f"{len(actual_rows)} row(s)",
+            )
+        )
 
         # Index actual rows by time_range for O(1) lookup
-        actual_by_tr: Dict[str, Dict] = {r["time_range"]: r for r in actual_rows}
+        actual_by_tr: dict[str, dict] = {r["time_range"]: r for r in actual_rows}
         expected_ranges = [g["time_range"] for g in expected_graph]
 
         # ── Check 2: time_range coverage ──────────────────────────────────
         missing_tr = [tr for tr in expected_ranges if tr not in actual_by_tr]
         if not expected_ranges:
-            result.checks.append(GraphCheckResult(
-                name="time_range_coverage",
-                status="SKIP",
-                detail="No expected time_ranges from CSV",
-            ))
+            result.checks.append(
+                GraphCheckResult(
+                    name="time_range_coverage",
+                    status="SKIP",
+                    detail="No expected time_ranges from CSV",
+                )
+            )
         elif missing_tr:
-            result.checks.append(GraphCheckResult(
-                name="time_range_coverage",
-                status="FAIL",
-                expected=expected_ranges,
-                actual=list(actual_by_tr.keys()),
-                detail=f"Missing time_ranges: {missing_tr}",
-            ))
+            result.checks.append(
+                GraphCheckResult(
+                    name="time_range_coverage",
+                    status="FAIL",
+                    expected=expected_ranges,
+                    actual=list(actual_by_tr.keys()),
+                    detail=f"Missing time_ranges: {missing_tr}",
+                )
+            )
         else:
-            result.checks.append(GraphCheckResult(
-                name="time_range_coverage",
-                status="PASS",
-                expected=expected_ranges,
-                actual=list(actual_by_tr.keys()),
-            ))
+            result.checks.append(
+                GraphCheckResult(
+                    name="time_range_coverage",
+                    status="PASS",
+                    expected=expected_ranges,
+                    actual=list(actual_by_tr.keys()),
+                )
+            )
 
         # ── Checks 3-5: field quality for matched rows ─────────────────────
         matched_ranges = [tr for tr in expected_ranges if tr in actual_by_tr]
         if not matched_ranges:
             for check_name in ("path_data_populated", "points_populated", "markers_populated"):
-                result.checks.append(GraphCheckResult(
-                    name=check_name, status="SKIP",
-                    detail="No matched time_ranges to evaluate",
-                ))
+                result.checks.append(
+                    GraphCheckResult(
+                        name=check_name,
+                        status="SKIP",
+                        detail="No matched time_ranges to evaluate",
+                    )
+                )
             return result
 
         def _field_check(check_name: str, field_key: str) -> GraphCheckResult:
-            empty = [tr for tr in matched_ranges
-                     if not _is_nonempty_json(actual_by_tr[tr].get(field_key))
-                        and not actual_by_tr[tr].get(field_key)]
+            empty = [
+                tr
+                for tr in matched_ranges
+                if not _is_nonempty_json(actual_by_tr[tr].get(field_key)) and not actual_by_tr[tr].get(field_key)
+            ]
             if not empty:
                 return GraphCheckResult(
-                    name=check_name, status="PASS",
+                    name=check_name,
+                    status="PASS",
                     expected=f"all {len(matched_ranges)} row(s) populated",
                     actual=f"{len(matched_ranges)} OK",
                 )
             return GraphCheckResult(
-                name=check_name, status="FAIL",
+                name=check_name,
+                status="FAIL",
                 expected="all rows populated",
                 actual=f"{len(matched_ranges) - len(empty)} / {len(matched_ranges)} populated",
                 detail=f"Empty in time_ranges: {empty}",
             )
 
         # path_data is plain TEXT, not JSON
-        path_empty = [tr for tr in matched_ranges
-                      if not actual_by_tr[tr].get("path_data")]
+        path_empty = [tr for tr in matched_ranges if not actual_by_tr[tr].get("path_data")]
         if not path_empty:
-            result.checks.append(GraphCheckResult(
-                name="path_data_populated", status="PASS",
-                expected=f"all {len(matched_ranges)} row(s) populated",
-                actual=f"{len(matched_ranges)} OK",
-            ))
+            result.checks.append(
+                GraphCheckResult(
+                    name="path_data_populated",
+                    status="PASS",
+                    expected=f"all {len(matched_ranges)} row(s) populated",
+                    actual=f"{len(matched_ranges)} OK",
+                )
+            )
         else:
-            result.checks.append(GraphCheckResult(
-                name="path_data_populated", status="FAIL",
-                expected="all rows populated",
-                actual=f"{len(matched_ranges) - len(path_empty)} / {len(matched_ranges)} populated",
-                detail=f"Empty path_data in time_ranges: {path_empty}",
-            ))
+            result.checks.append(
+                GraphCheckResult(
+                    name="path_data_populated",
+                    status="FAIL",
+                    expected="all rows populated",
+                    actual=f"{len(matched_ranges) - len(path_empty)} / {len(matched_ranges)} populated",
+                    detail=f"Empty path_data in time_ranges: {path_empty}",
+                )
+            )
 
         result.checks.append(_field_check("points_populated", "points"))
         result.checks.append(_field_check("markers_populated", "markers"))
@@ -236,8 +263,8 @@ class GraphEvaluator:
 def run_graph_evaluation(
     db_url: str,
     csv_path: str,
-    limit: Optional[int] = None,
-    output_json: Optional[str] = None,
+    limit: int | None = None,
+    output_json: str | None = None,
 ) -> dict:
     """
     Main entry point for graph evaluation.
@@ -253,14 +280,14 @@ def run_graph_evaluation(
     -------
     dict with keys: total, evaluated_count, skipped_count, evaluated_peptides, skipped_peptides
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  GRAPH DATA EVALUATION")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  CSV  : {csv_path}")
     print(f"  DB   : {db_url.split('@')[-1] if '@' in db_url else db_url}")
     if limit:
         print(f"  Limit: {limit} row(s)")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # ── Step 1: Read CSV ──────────────────────────────────────────────────
     if not os.path.exists(csv_path):
@@ -273,8 +300,8 @@ def run_graph_evaluation(
             "skipped_peptides": [f"CSV not found: {csv_path}"],
         }
 
-    rows: List[Dict[str, Any]] = []
-    with open(csv_path, mode="r", encoding="utf-8") as f:
+    rows: list[dict[str, Any]] = []
+    with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append(row)
@@ -295,7 +322,7 @@ def run_graph_evaluation(
         db_identifiers = db.get_all_peptide_identifiers()
         db_essences = {extract_essence(ident): ident for ident in db_identifiers}
 
-        results: List[GraphPeptideEvalResult] = []
+        results: list[GraphPeptideEvalResult] = []
 
         for row in rows:
             raw_name = (row.get("Peptide_Name") or row.get("name") or "").strip()

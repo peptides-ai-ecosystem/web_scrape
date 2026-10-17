@@ -2,10 +2,12 @@
 Simple in-memory job queue for tracking background operations.
 No persistence - jobs cleared on server restart.
 """
-from datetime import datetime
-from typing import Dict, Any, Optional
-from enum import Enum
+
 import uuid
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
 
 class JobStatus(str, Enum):
     PENDING = "pending"
@@ -17,17 +19,17 @@ class JobStatus(str, Enum):
 
 class Job:
     """Represents a background job."""
-    
-    def __init__(self, job_id: str, endpoint: str, parameters: Dict[str, Any]):
+
+    def __init__(self, job_id: str, endpoint: str, parameters: dict[str, Any]):
         self.job_id = job_id
         self.endpoint = endpoint
         self.parameters = parameters
         self.status = JobStatus.PENDING
         self.created_at = datetime.utcnow()
-        self.start_time: Optional[datetime] = None
-        self.end_time: Optional[datetime] = None
-        self.result: Optional[Any] = None
-        self.error: Optional[str] = None
+        self.start_time: datetime | None = None
+        self.end_time: datetime | None = None
+        self.result: Any | None = None
+        self.error: str | None = None
         self.progress: int = 0  # 0-100
 
     def start(self):
@@ -48,7 +50,7 @@ class Job:
         self.status = JobStatus.CANCELLED
         self.end_time = datetime.utcnow()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary for API responses."""
         return {
             "job_id": self.job_id,
@@ -66,22 +68,22 @@ class Job:
 
 class JobQueue:
     """Simple in-memory job queue."""
-    
-    def __init__(self):
-        self.jobs: Dict[str, Job] = {}
 
-    def create_job(self, endpoint: str, parameters: Dict[str, Any]) -> Job:
+    def __init__(self):
+        self.jobs: dict[str, Job] = {}
+
+    def create_job(self, endpoint: str, parameters: dict[str, Any]) -> Job:
         """Create and register a new job."""
         job_id = f"{endpoint.replace('/', '_')}_{int(datetime.utcnow().timestamp())}_{str(uuid.uuid4())[:8]}"
         job = Job(job_id, endpoint, parameters)
         self.jobs[job_id] = job
         return job
 
-    def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str) -> Job | None:
         """Retrieve a job by ID."""
         return self.jobs.get(job_id)
 
-    def list_jobs(self, status: Optional[JobStatus] = None) -> list[Job]:
+    def list_jobs(self, status: JobStatus | None = None) -> list[Job]:
         """List jobs, optionally filtered by status."""
         if status:
             return [j for j in self.jobs.values() if j.status == status]
@@ -99,7 +101,8 @@ class JobQueue:
         """Remove completed jobs older than specified hours."""
         cutoff = datetime.utcnow().timestamp() - (hours * 3600)
         to_remove = [
-            jid for jid, job in self.jobs.items()
+            jid
+            for jid, job in self.jobs.items()
             if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]
             and job.end_time
             and job.end_time.timestamp() < cutoff

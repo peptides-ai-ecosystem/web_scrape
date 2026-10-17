@@ -1,9 +1,8 @@
 """Name -> scraper descriptor. Adding a site is one new package and one line here."""
-from typing import Dict
 
 from app.scrapers.base import ScraperInfo
 
-SCRAPERS: Dict[str, ScraperInfo] = {
+SCRAPERS: dict[str, ScraperInfo] = {
     "pep_pedia": ScraperInfo(
         name="pep_pedia",
         summary="pep-pedia.org peptide pages -> CSV -> platform peptide and PK-graph tables",

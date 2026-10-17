@@ -1,21 +1,22 @@
-from typing import Any, Dict, List, Optional
-import re
+from typing import Any
+
+from app.core.logging import log_debug, log_info, log_success
+from app.infrastructure.db import DbManager
 from app.services.sync.group_a.lookup_mappers import (
     AdministrationMethodMapper,
     BenefitMapper,
-    SideEffectMapper,
     DosageMapper,
+    ResearchStudyMapper,
     ScheduleMapper,
-    ResearchStudyMapper
+    SideEffectMapper,
 )
 from app.services.sync.group_b.peptide_mapper import PeptideMapper
 from app.services.sync.group_c.relation_mappers import RelationMapper
 from app.services.sync.group_d.protocol_mapper import ProtocolMapper
-from app.infrastructure.db import DbManager
 from app.services.sync.group_sync import GroupSyncMixin
 from app.utils.error_tracker import ErrorTracker
-from app.utils.peptide_utils import get_peptide_candidates, extract_essence, normalize_to_slug
-from app.core.logging import log_debug, log_error, log_info, log_success
+from app.utils.peptide_utils import extract_essence, get_peptide_candidates
+
 
 class DbImportOrchestrator(GroupSyncMixin):
     """
@@ -30,21 +31,21 @@ class DbImportOrchestrator(GroupSyncMixin):
         self.dosage_mapper = DosageMapper()
         self.schedule_mapper = ScheduleMapper()
         self.study_mapper = ResearchStudyMapper()
-        
+
         # Group B
         self.peptide_mapper = PeptideMapper()
-        
+
         # Groups C-F
         self.relation_mapper = RelationMapper()
         self.protocol_mapper = ProtocolMapper()
 
-    def map_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def map_row(self, row: dict[str, Any]) -> dict[str, Any]:
         """
         Maps a single row into a grouped payload structure.
         """
         protocols = self.protocol_mapper.map(row)
         app_places = list({place for p in protocols for place in p["application_places"]})
-        
+
         return {
             "group_a": {
                 "administration_methods": self.admin_method_mapper.map(row),
@@ -53,16 +54,21 @@ class DbImportOrchestrator(GroupSyncMixin):
                 "dosages": self.dosage_mapper.map(row),
                 "schedules": self.schedule_mapper.map(row),
                 "studies": self.study_mapper.map(row),
-                "application_places": app_places
+                "application_places": app_places,
             },
-            "group_b": {
-                "peptide": self.peptide_mapper.map(row)
-            },
+            "group_b": {"peptide": self.peptide_mapper.map(row)},
             "relations": self.relation_mapper.map(row),
-            "protocols": protocols
+            "protocols": protocols,
         }
 
-    def sync_to_db(self, db_url: str, rows: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, activity_type: Optional[str] = None, fill_empty_only: bool = False) -> Dict[str, Any]:
+    def sync_to_db(
+        self,
+        db_url: str,
+        rows: list[dict[str, Any]],
+        tracker: ErrorTracker | None = None,
+        activity_type: str | None = None,
+        fill_empty_only: bool = False,
+    ) -> dict[str, Any]:
         """
         Main entry point to sync rows using the grouped logic.
         Only processes peptides that already exist in the database.
@@ -90,12 +96,18 @@ class DbImportOrchestrator(GroupSyncMixin):
             # Pre-fetch all existing peptide identifiers and their essences
             db_identifiers = db.get_all_peptide_identifiers()
             db_essences = {extract_essence(ident): ident for ident in db_identifiers}
-            log_info(f"Found {len(db_identifiers)} peptides in DB, {len(db_essences)} unique essences", "db_import_orchestrator")
+            log_info(
+                f"Found {len(db_identifiers)} peptides in DB, {len(db_essences)} unique essences",
+                "db_import_orchestrator",
+            )
 
             # Pre-fetch all existing administration methods from DB
             db_admin_methods = db.get_all_administration_methods()
             existing_method_names = {m["name"] for m in db_admin_methods}
-            log_info(f"Found {len(existing_method_names)} administration methods in DB: {existing_method_names}", "db_import_orchestrator")
+            log_info(
+                f"Found {len(existing_method_names)} administration methods in DB: {existing_method_names}",
+                "db_import_orchestrator",
+            )
 
             # Keyword-to-DB-name mapping rules
             METHOD_KEYWORD_MAP = {
@@ -123,25 +135,36 @@ class DbImportOrchestrator(GroupSyncMixin):
                 # matches when a shorter slug belongs to a different peptide.
                 sorted_candidates = sorted(candidates, key=len, reverse=True)
 
-                log_debug(f"[{idx}/{len(rows)}] Processing: '{raw_name}' - candidates: {sorted_candidates}", "db_import_orchestrator")
+                log_debug(
+                    f"[{idx}/{len(rows)}] Processing: '{raw_name}' - candidates: {sorted_candidates}",
+                    "db_import_orchestrator",
+                )
 
                 # Match candidates against DB identifiers or essences
                 matched_identifier = None
                 for cand in sorted_candidates:
                     if cand in db_identifiers:
                         matched_identifier = cand
-                        log_debug(f"  Match found: '{raw_name}' → DB slug '{cand}' (direct match)", "db_import_orchestrator")
+                        log_debug(
+                            f"  Match found: '{raw_name}' → DB slug '{cand}' (direct match)", "db_import_orchestrator"
+                        )
                         break
                     if cand in db_essences:
                         matched_identifier = db_essences[cand]
-                        log_debug(f"  Match found: '{raw_name}' → DB slug '{db_essences[cand]}' (via essence '{cand}')", "db_import_orchestrator")
+                        log_debug(
+                            f"  Match found: '{raw_name}' → DB slug '{db_essences[cand]}' (via essence '{cand}')",
+                            "db_import_orchestrator",
+                        )
                         break
 
                 # Skip if this peptide doesn't exist in DB
                 if not matched_identifier:
                     skipped_count += 1
                     skipped_peptides.append(f"{raw_name} (no DB match)")
-                    log_debug(f"  ✗ SKIPPED: '{raw_name}' - no match found in Peptides table (candidates: {candidates})", "db_import_orchestrator")
+                    log_debug(
+                        f"  ✗ SKIPPED: '{raw_name}' - no match found in Peptides table (candidates: {candidates})",
+                        "db_import_orchestrator",
+                    )
                     continue
 
                 # Use the matched identifier for slug-based lookups
@@ -164,10 +187,16 @@ class DbImportOrchestrator(GroupSyncMixin):
                     skipped_count += 1
                     if mapped_method and mapped_method not in existing_method_names:
                         reason = f"mapped method '{mapped_method}' not in DB"
-                        log_debug(f"  ✗ SKIPPED: '{raw_name}' - mapped method '{mapped_method}' does not exist in administrative method table", "db_import_orchestrator")
+                        log_debug(
+                            f"  ✗ SKIPPED: '{raw_name}' - mapped method '{mapped_method}' does not exist in administrative method table",
+                            "db_import_orchestrator",
+                        )
                     else:
                         reason = f"admin method '{raw_method}' has no mapping"
-                        log_debug(f"  ✗ SKIPPED: '{raw_name}' - administrative method '{raw_method}' has no mapping", "db_import_orchestrator")
+                        log_debug(
+                            f"  ✗ SKIPPED: '{raw_name}' - administrative method '{raw_method}' has no mapping",
+                            "db_import_orchestrator",
+                        )
                     skipped_peptides.append(f"{raw_name} ({reason})")
                     continue
 
@@ -175,13 +204,15 @@ class DbImportOrchestrator(GroupSyncMixin):
                 row["Method"] = mapped_method
 
                 print(f"\n{raw_name} : {mapped_method}")
-                log_debug(f"  ✓ MATCHED: '{raw_name}' → method='{mapped_method}', slug='{row_slug}'", "db_import_orchestrator")
+                log_debug(
+                    f"  ✓ MATCHED: '{raw_name}' → method='{mapped_method}', slug='{row_slug}'", "db_import_orchestrator"
+                )
 
                 # Fill-empty mode: resolve the existing row up front so a slug
                 # mismatch can never insert a second peptide, and record which
                 # child kinds already exist so they are left untouched.
                 existing_row = None
-                kinds_present: Dict[str, bool] = {}
+                kinds_present: dict[str, bool] = {}
                 if fill_empty_only:
                     existing_row = db.get_peptide_by_identifier(row_slug)
                     if not existing_row:
@@ -191,7 +222,7 @@ class DbImportOrchestrator(GroupSyncMixin):
                     kinds_present = db.get_child_kinds_present(existing_row["id"])
 
                 # Stage 1: Map raw row to payload
-                print(f"  Stage 1: Mapping raw row to structured payload")
+                print("  Stage 1: Mapping raw row to structured payload")
                 try:
                     payload = self.map_row(row)
                     ga = payload["group_a"]
@@ -213,7 +244,7 @@ class DbImportOrchestrator(GroupSyncMixin):
                     continue
 
                 # Stage 2: Sync Group A lookup tables
-                print(f"  Stage 2: Syncing lookup tables (dosages, benefits, side effects, schedules)")
+                print("  Stage 2: Syncing lookup tables (dosages, benefits, side effects, schedules)")
                 try:
                     a_summary = self._sync_group_a(db, payload["group_a"], tracker=tracker, row_id=str(row_id))
                     print(f"         → {a_summary}")
@@ -222,7 +253,7 @@ class DbImportOrchestrator(GroupSyncMixin):
                         tracker.record_db_error(row_id, "group_a", e)
 
                 # Stage 3: Upsert peptide record — check before to detect insert vs update
-                print(f"  Stage 3: Upserting peptide record")
+                print("  Stage 3: Upserting peptide record")
                 try:
                     if fill_empty_only:
                         # Never insert, never overwrite: fill empty columns only.
@@ -234,18 +265,19 @@ class DbImportOrchestrator(GroupSyncMixin):
                         pre_existing = db.get_peptide_by_slug(peptide_slug)
                         peptide_id = db.upsert_peptide_fill_nulls(payload["group_b"]["peptide"])
                         if not pre_existing:
-                            print(f"         → inserted new peptide record")
+                            print("         → inserted new peptide record")
                         else:
                             # Count how many fields were null before and now have values
                             pep_payload = payload["group_b"]["peptide"]
                             filled = sum(
-                                1 for col, val in pep_payload.items()
+                                1
+                                for col, val in pep_payload.items()
                                 if val and (pre_existing.get(col) is None or pre_existing.get(col) == "")
                             )
                             if filled:
                                 print(f"         → updated {filled} previously empty field(s)")
                             else:
-                                print(f"         → already complete, no changes")
+                                print("         → already complete, no changes")
                 except Exception as e:
                     if tracker:
                         tracker.record_db_error(row_id, "group_b", e)
@@ -256,12 +288,20 @@ class DbImportOrchestrator(GroupSyncMixin):
                     continue
 
                 # Stage 4: Link relations, protocols
-                print(f"  Stage 4: Linking relations and protocols")
+                print("  Stage 4: Linking relations and protocols")
                 try:
                     skip_kinds = {k for k, present in kinds_present.items() if present}
                     if skip_kinds:
                         print(f"         → fill_empty_only: keeping existing {', '.join(sorted(skip_kinds))}")
-                    r_count = self._sync_relations(db, peptide_id, payload["relations"], payload["protocols"], tracker=tracker, row_id=str(row_id), skip_kinds=skip_kinds)
+                    r_count = self._sync_relations(
+                        db,
+                        peptide_id,
+                        payload["relations"],
+                        payload["protocols"],
+                        tracker=tracker,
+                        row_id=str(row_id),
+                        skip_kinds=skip_kinds,
+                    )
                     print(f"         → {r_count} relation record(s) processed")
                 except Exception as e:
                     if tracker:
@@ -274,33 +314,37 @@ class DbImportOrchestrator(GroupSyncMixin):
                     if not fill_empty_only or not existing_row.get("activity_type"):
                         db.update_peptide_activity_type(peptide_id, activity_type)
                 print(f"  ✓ SYNCED: '{raw_name}' (slug: {row_slug})")
-                log_success(f"Core sync — '{raw_name}' (slug: {row_slug}, method: {mapped_method})", "db_import_orchestrator")
+                log_success(
+                    f"Core sync — '{raw_name}' (slug: {row_slug}, method: {mapped_method})", "db_import_orchestrator"
+                )
 
             # Summary section
             summary_lines = [
-                f"\n{'='*60}",
-                f"  CORE DB SYNC SUMMARY",
-                f"{'='*60}",
+                f"\n{'=' * 60}",
+                "  CORE DB SYNC SUMMARY",
+                f"{'=' * 60}",
                 f"  Total rows processed: {len(rows)}",
                 f"  ✅ Synced: {synced_count}",
                 f"  ❌ Skipped: {skipped_count}",
             ]
             if synced_peptides:
-                summary_lines.append(f"\n  --- Synced Peptides ---")
+                summary_lines.append("\n  --- Synced Peptides ---")
                 for p in synced_peptides:
                     summary_lines.append(f"  ✅ {p['name']} (slug: {p['slug']}) → method: {p['method']}")
             if skipped_peptides:
-                summary_lines.append(f"\n  --- Skipped Peptides ---")
+                summary_lines.append("\n  --- Skipped Peptides ---")
                 for name in skipped_peptides:
                     summary_lines.append(f"  ❌ {name}")
-            summary_lines.append(f"{'='*60}\n")
+            summary_lines.append(f"{'=' * 60}\n")
 
             summary = "\n".join(summary_lines)
             print(summary)
             log_debug(summary, "db_import_orchestrator")
 
             for p in synced_peptides:
-                log_success(f"Core sync — {p['name']} (slug: {p['slug']}, method: {p['method']})", "db_import_orchestrator")
+                log_success(
+                    f"Core sync — {p['name']} (slug: {p['slug']}, method: {p['method']})", "db_import_orchestrator"
+                )
             for name in skipped_peptides:
                 log_debug(f"Skipped — {name}", "db_import_orchestrator")
 

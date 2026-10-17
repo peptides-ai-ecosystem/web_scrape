@@ -9,6 +9,7 @@ so this module:
 
 A missing CSV or an unknown peptide raises ``NotFoundError`` (404).
 """
+
 from __future__ import annotations
 
 import csv
@@ -17,7 +18,7 @@ import logging
 import os
 import re
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.core.config import ENHANCED_CSV as MASTER_CSV
 from app.core.errors import NotFoundError
@@ -30,18 +31,23 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # A given prefix in the regex below is matched left-to-right; the first match
 # wins. The order matters — more specific prefixes come first.
-_GROUP_RULES: List[tuple] = [
-    ("identity",            re.compile(r"^(Peptide_Name|Full_Name|Method|URL)$")),
-    ("graph",               re.compile(r"^graph_data_json$")),
-    ("quick_guide",         re.compile(r"^(typical_dose|route|cycle|storage|how_to_administer|how_to_reconstitute|how_to_take|molecular_information)")),
-    ("overview",            re.compile(r"^overview_")),
-    ("indications",         re.compile(r"^research_indications_")),
-    ("protocols",           re.compile(r"^research_protocols_")),
-    ("interactions",        re.compile(r"^peptide_interactions_")),
-    ("side_effects",        re.compile(r"^(side_effects_|what_to_)")),
-    ("quality_indicators",  re.compile(r"^quality_indicators_")),
-    ("references_studies",  re.compile(r"^references_research_studies")),
-    ("references_citations",re.compile(r"^references_citations")),
+_GROUP_RULES: list[tuple] = [
+    ("identity", re.compile(r"^(Peptide_Name|Full_Name|Method|URL)$")),
+    ("graph", re.compile(r"^graph_data_json$")),
+    (
+        "quick_guide",
+        re.compile(
+            r"^(typical_dose|route|cycle|storage|how_to_administer|how_to_reconstitute|how_to_take|molecular_information)"
+        ),
+    ),
+    ("overview", re.compile(r"^overview_")),
+    ("indications", re.compile(r"^research_indications_")),
+    ("protocols", re.compile(r"^research_protocols_")),
+    ("interactions", re.compile(r"^peptide_interactions_")),
+    ("side_effects", re.compile(r"^(side_effects_|what_to_)")),
+    ("quality_indicators", re.compile(r"^quality_indicators_")),
+    ("references_studies", re.compile(r"^references_research_studies")),
+    ("references_citations", re.compile(r"^references_citations")),
 ]
 
 _GROUP_ORDER = [name for name, _ in _GROUP_RULES] + ["other"]
@@ -60,7 +66,7 @@ def _classify(column: str) -> str:
 
 
 _CACHE_LOCK = Lock()
-_CACHE: Dict[str, Any] = {
+_CACHE: dict[str, Any] = {
     "mtime": None,
     "headers": [],
     "rows": [],
@@ -75,13 +81,12 @@ def _slugify(value: str) -> str:
     return value.strip("-")
 
 
-def _load_csv_if_needed() -> Dict[str, Any]:
+def _load_csv_if_needed() -> dict[str, Any]:
     """Lazy-load and cache the master CSV; reload when mtime changes."""
     csv_path = str(MASTER_CSV)
     if not os.path.exists(csv_path):
         raise NotFoundError(
-            f"Master CSV not found at {csv_path}. "
-            "Run POST /api/v1/sync/core (or /sync/graph) first to populate it."
+            f"Master CSV not found at {csv_path}. Run POST /api/v1/sync/core (or /sync/graph) first to populate it."
         )
 
     mtime = os.path.getmtime(csv_path)
@@ -89,14 +94,14 @@ def _load_csv_if_needed() -> Dict[str, Any]:
         if _CACHE["mtime"] == mtime and _CACHE["rows"]:
             return _CACHE
 
-        rows: List[Dict[str, str]] = []
-        with open(csv_path, mode="r", encoding="utf-8", newline="") as f:
+        rows: list[dict[str, str]] = []
+        with open(csv_path, encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             headers = list(reader.fieldnames or [])
             for row in reader:
                 rows.append(row)
 
-        by_key: Dict[str, int] = {}
+        by_key: dict[str, int] = {}
         for idx, row in enumerate(rows):
             name = (row.get("Peptide_Name") or "").strip()
             method = (row.get("Method") or "").strip()
@@ -114,17 +119,19 @@ def _load_csv_if_needed() -> Dict[str, Any]:
         _CACHE["by_key"] = by_key
         logger.info(
             "CSV inspector cache refreshed: %d rows, %d columns from %s",
-            len(rows), len(headers), csv_path,
+            len(rows),
+            len(headers),
+            csv_path,
         )
         return _CACHE
 
 
-def _row_to_grouped(row: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
+def _row_to_grouped(row: dict[str, str]) -> dict[str, dict[str, Any]]:
     """
     Convert a wide CSV row into a `{group: {column: value}}` map, dropping
     empty cells. The `graph` group is JSON-parsed when possible.
     """
-    grouped: Dict[str, Dict[str, Any]] = {g: {} for g in _GROUP_ORDER}
+    grouped: dict[str, dict[str, Any]] = {g: {} for g in _GROUP_ORDER}
     for col, raw in row.items():
         if col is None:
             continue
@@ -146,11 +153,11 @@ def _row_to_grouped(row: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def list_peptides(q: Optional[str] = None) -> List[Dict[str, str]]:
+def list_peptides(q: str | None = None) -> list[dict[str, str]]:
     """Distinct ``(name, method)`` rows in the CSV, optionally filtered by name substring."""
     cache = _load_csv_if_needed()
     rows = cache["rows"]
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     needle = (q or "").lower()
     seen = set()
     for row in rows:
@@ -164,21 +171,23 @@ def list_peptides(q: Optional[str] = None) -> List[Dict[str, str]]:
         if key in seen:
             continue
         seen.add(key)
-        out.append({
-            "name": name,
-            "method": method,
-            "url": (row.get("URL") or "").strip(),
-            "slug": _slugify(name),
-            "full_name": (row.get("Full_Name") or "").strip(),
-        })
+        out.append(
+            {
+                "name": name,
+                "method": method,
+                "url": (row.get("URL") or "").strip(),
+                "slug": _slugify(name),
+                "full_name": (row.get("Full_Name") or "").strip(),
+            }
+        )
     out.sort(key=lambda r: (r["name"].lower(), r["method"].lower()))
     return out
 
 
-def get_peptide(name: str, method: Optional[str] = None) -> Dict[str, Any]:
+def get_peptide(name: str, method: str | None = None) -> dict[str, Any]:
     """One CSV row with its non-empty cells grouped by entity; 404 when none matches."""
     cache = _load_csv_if_needed()
-    by_key: Dict[str, int] = cache["by_key"]
+    by_key: dict[str, int] = cache["by_key"]
     rows = cache["rows"]
 
     needle_name = name.strip().lower()
@@ -191,9 +200,7 @@ def get_peptide(name: str, method: Optional[str] = None) -> Dict[str, Any]:
 
     idx = next((by_key[k] for k in candidates if k and k in by_key), None)
     if idx is None:
-        raise NotFoundError(
-            f"No CSV row found for name='{name}'" + (f", method='{method}'" if method else "")
-        )
+        raise NotFoundError(f"No CSV row found for name='{name}'" + (f", method='{method}'" if method else ""))
 
     row = rows[idx]
     payload = {
@@ -207,11 +214,11 @@ def get_peptide(name: str, method: Optional[str] = None) -> Dict[str, Any]:
     return payload
 
 
-def list_columns() -> Dict[str, Any]:
+def list_columns() -> dict[str, Any]:
     """Every CSV header bucketed by entity group."""
     cache = _load_csv_if_needed()
-    headers: List[str] = cache["headers"]
-    groups: Dict[str, List[str]] = {g: [] for g in _GROUP_ORDER}
+    headers: list[str] = cache["headers"]
+    groups: dict[str, list[str]] = {g: [] for g in _GROUP_ORDER}
     for h in headers:
         groups[_classify(h)].append(h)
     return {

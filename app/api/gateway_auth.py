@@ -9,7 +9,9 @@ shared upstream secret (``API_TOKEN``) in the ``GATEWAY_AUTH_HEADER`` header
 Local development without a gateway: leave ``API_TOKEN`` empty and the check
 is skipped, preserving the original open API behavior.
 """
+
 import hmac
+
 from fastapi import Header, HTTPException
 
 from app.core.config import API_TOKEN, GATEWAY_AUTH_HEADER

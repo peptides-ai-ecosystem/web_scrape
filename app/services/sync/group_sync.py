@@ -3,16 +3,18 @@
 A mixin split out of db_import_orchestrator.py to keep that file under 400
 lines. It uses the mapper attributes the orchestrator sets in ``__init__``.
 """
-from typing import Any, Dict, List, Optional
 
-from app.core.logging import log_debug, log_error, log_info, log_success
+from typing import Any
+
+from app.core.logging import log_debug, log_error
 from app.infrastructure.db import DbManager
 from app.utils.error_tracker import ErrorTracker
-from app.utils.peptide_utils import get_peptide_candidates, extract_essence, normalize_to_slug
 
 
 class GroupSyncMixin:
-    def _sync_group_a(self, db: DbManager, group_a: Dict[str, Any], tracker: Optional[ErrorTracker] = None, row_id: str = "") -> str:
+    def _sync_group_a(
+        self, db: DbManager, group_a: dict[str, Any], tracker: ErrorTracker | None = None, row_id: str = ""
+    ) -> str:
         """Sync Group A lookup tables and return a short summary string.
 
         Each lookup type is isolated in its own try/except so a failure in one
@@ -85,7 +87,16 @@ class GroupSyncMixin:
         parts = [f"{v} {k}" for k, v in counts.items() if v]
         return ", ".join(parts) if parts else "nothing to sync"
 
-    def _sync_relations(self, db: DbManager, peptide_id: int, relations: Dict[str, Any], protocols: List[Dict[str, Any]], tracker: Optional[ErrorTracker] = None, row_id: str = "", skip_kinds: Optional[set] = None) -> int:
+    def _sync_relations(
+        self,
+        db: DbManager,
+        peptide_id: int,
+        relations: dict[str, Any],
+        protocols: list[dict[str, Any]],
+        tracker: ErrorTracker | None = None,
+        row_id: str = "",
+        skip_kinds: set | None = None,
+    ) -> int:
         """Sync relations and return total count of records processed.
 
         Each relation sub-type is isolated in its own try/except so a failure
@@ -120,6 +131,7 @@ class GroupSyncMixin:
                     db.link_relation("peptide_benefits", "peptide_id", peptide_id, "benefit_id", b_id)
                     n += 1
             return n
+
         _safe("benefits", _link_benefits)
 
         # Link Side Effects (Group C)
@@ -131,6 +143,7 @@ class GroupSyncMixin:
                     db.link_relation("peptide_side_effects", "peptide_id", peptide_id, "side_effect_id", se_id)
                     n += 1
             return n
+
         _safe("side_effects", _link_side_effects)
 
         # Link Interactions (Group C)
@@ -144,11 +157,12 @@ class GroupSyncMixin:
                         inter["secondary_peptide_id"] = matched["id"]
                         log_debug(
                             f"  Resolved interaction '{secondary_name}' → peptide_id={matched['id']}",
-                            "db_import_orchestrator"
+                            "db_import_orchestrator",
                         )
                 db.upsert_interaction(peptide_id, inter)
                 n += 1
             return n
+
         _safe("interactions", _link_interactions)
 
         # Link Indications (Group C/F)
@@ -158,6 +172,7 @@ class GroupSyncMixin:
                 db.upsert_indication(peptide_id, ind)
                 n += 1
             return n
+
         _safe("indications", _link_indications)
 
         # Link Research Studies & Citations (Group C)
@@ -172,6 +187,7 @@ class GroupSyncMixin:
                 db.upsert_peptide_reference(peptide_id, ref_type, ref_id)
                 n += 1
             return n
+
         _safe("references", _link_references)
 
         # Handle Protocols (Groups D-F)
@@ -190,12 +206,15 @@ class GroupSyncMixin:
                 for place_name in p["application_places"]:
                     ap_id = db.get_lookup_id("application_places", place_name)
                     if ap_id:
-                        db.link_relation("protocol_application_places", "protocol_id", protocol_id, "application_place_id", ap_id)
+                        db.link_relation(
+                            "protocol_application_places", "protocol_id", protocol_id, "application_place_id", ap_id
+                        )
                 for dose in p["dosages"]:
                     # Dose already has 'notes' formatted
                     db.upsert_protocol_dosage(protocol_id, dose)
                 n += 1
             return n
+
         _safe("protocols", _link_protocols)
 
         return count

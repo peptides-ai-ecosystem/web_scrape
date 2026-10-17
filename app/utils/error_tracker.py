@@ -1,27 +1,26 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 
 class ErrorTracker:
     """Lightweight in-memory error tracker. Call save() at end of run."""
 
     def __init__(self):
-        self.scrape_errors: dict = {}   # url -> {error, ts}
-        self.db_errors: list = []       # [{row, stage, error, ts}]
+        self.scrape_errors: dict = {}  # url -> {error, ts}
+        self.db_errors: list = []  # [{row, stage, error, ts}]
 
     # ------------------------------------------------------------------ #
     # Scraping
     # ------------------------------------------------------------------ #
 
-    def record_scrape_error(self, url: str, error: str, category: Optional[str] = None):
+    def record_scrape_error(self, url: str, error: str, category: str | None = None):
         key = f"{url}::{category}" if category else url
         self.scrape_errors[key] = {
             "url": url,
             "category": category,
             "error": str(error),
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         }
 
     # ------------------------------------------------------------------ #
@@ -29,12 +28,14 @@ class ErrorTracker:
     # ------------------------------------------------------------------ #
 
     def record_db_error(self, row_id: str, stage: str, error: Exception):
-        self.db_errors.append({
-            "row": row_id,
-            "stage": stage,
-            "error": str(error),
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
+        self.db_errors.append(
+            {
+                "row": row_id,
+                "stage": stage,
+                "error": str(error),
+                "ts": datetime.now(UTC).isoformat(),
+            }
+        )
 
     # ------------------------------------------------------------------ #
     # Reporting
@@ -45,7 +46,7 @@ class ErrorTracker:
 
     def save(self, path: Path) -> Path:
         report = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "summary": {
                 "scrape_errors": len(self.scrape_errors),
                 "db_errors": len(self.db_errors),

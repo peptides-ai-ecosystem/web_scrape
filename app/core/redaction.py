@@ -11,6 +11,7 @@ Two layers, applied to any free text:
    written down: ``Bearer …`` values, JWTs, ``sk-…`` keys, and the password in
    any ``scheme://user:password@host`` URL.
 """
+
 from __future__ import annotations
 
 import os

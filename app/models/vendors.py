@@ -1,5 +1,6 @@
 """Request models for the competitor vendor-pricing API (``/api/v1/vendors``)."""
-from typing import Any, List, Optional
+
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -12,17 +13,16 @@ from app.infrastructure.vendor_targets import (
 )
 
 
-
 class VendorScrapeRequest(BaseModel):
     """On-demand trigger for a competitor scrape pass."""
 
-    vendors: Optional[List[str]] = Field(
+    vendors: list[str] | None = Field(
         None,
         description="Target slugs to scrape. `null` means every **enabled** target. "
         "Unknown slugs are ignored, not guessed at.",
         examples=[None, ["competitor-a"]],
     )
-    limit_per_vendor: Optional[int] = Field(
+    limit_per_vendor: int | None = Field(
         None,
         description="Cap on product URLs fetched per vendor this run. `null` means "
         "the vendor's own `max_products_per_run`, or all of them.",
@@ -50,9 +50,7 @@ class ReviewRequest(BaseModel):
         "`reject` discards it and leaves the previously accepted value standing.",
         examples=["accept", "reject"],
     )
-    reviewer: Optional[str] = Field(
-        None, description="Who reviewed it — recorded for the audit trail.", max_length=255
-    )
+    reviewer: str | None = Field(None, description="Who reviewed it — recorded for the audit trail.", max_length=255)
 
     @field_validator("decision")
     @classmethod
@@ -66,12 +64,12 @@ class ReviewRequest(BaseModel):
 class TargetSelectors(BaseModel):
     """Ordered CSS selector candidates per field — primary first."""
 
-    price: List[str] = Field(default_factory=list)
-    stock: List[str] = Field(default_factory=list)
-    coa: List[str] = Field(default_factory=list)
-    product_name: List[str] = Field(default_factory=list)
+    price: list[str] = Field(default_factory=list)
+    stock: list[str] = Field(default_factory=list)
+    coa: list[str] = Field(default_factory=list)
+    product_name: list[str] = Field(default_factory=list)
     #: Optional: selected size/variant, appended to the product name.
-    variant: List[str] = Field(default_factory=list)
+    variant: list[str] = Field(default_factory=list)
 
 
 class TargetPayload(BaseModel):
@@ -90,19 +88,19 @@ class TargetPayload(BaseModel):
     )
     name: str = Field(..., min_length=1, max_length=255)
     enabled: bool = True
-    product_urls: List[str] = Field(default_factory=list, max_length=500)
-    listing_url: Optional[str] = None
-    listing_link_selector: Optional[str] = Field(None, max_length=500)
+    product_urls: list[str] = Field(default_factory=list, max_length=500)
+    listing_url: str | None = None
+    listing_link_selector: str | None = Field(None, max_length=500)
     selectors: TargetSelectors = Field(default_factory=TargetSelectors)
-    currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    currency: str | None = Field(None, min_length=3, max_length=3)
     min_request_interval_seconds: float = Field(5.0, ge=0, le=3600)
-    max_products_per_run: Optional[int] = Field(None, ge=1, le=10000)
-    platform_vendor_slug: Optional[str] = Field(
+    max_products_per_run: int | None = Field(None, ge=1, le=10000)
+    platform_vendor_slug: str | None = Field(
         None,
         max_length=255,
         description="Platform `vendors.slug` the prices are imported onto. Empty = slug.",
     )
-    store_url: Optional[str] = Field(
+    store_url: str | None = Field(
         None,
         max_length=2048,
         description="AAD-1: a store's home, shop or product URL. With no price selector "
@@ -124,19 +122,19 @@ class FromUrlRequest(BaseModel):
     """AAD-1: a competitor target from nothing but a URL."""
 
     url: str = Field(..., min_length=8, max_length=2048, description="Store home, shop or product URL.")
-    name: Optional[str] = Field(None, max_length=255, description="Defaults to the host name.")
-    slug: Optional[str] = Field(
+    name: str | None = Field(None, max_length=255, description="Defaults to the host name.")
+    slug: str | None = Field(
         None,
         pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$",
         description="Defaults to one derived from the host (glpeptides.is -> glpeptides-is).",
     )
-    currency: Optional[str] = Field(None, min_length=3, max_length=3)
-    platform_vendor_slug: Optional[str] = Field(None, max_length=255)
-    max_products_per_run: Optional[int] = Field(None, ge=1, le=10000)
+    currency: str | None = Field(None, min_length=3, max_length=3)
+    platform_vendor_slug: str | None = Field(None, max_length=255)
+    max_products_per_run: int | None = Field(None, ge=1, le=10000)
 
 
 class ApproveRequest(BaseModel):
-    approved_by: Optional[str] = Field(None, max_length=255, description="Recorded for the audit trail.")
+    approved_by: str | None = Field(None, max_length=255, description="Recorded for the audit trail.")
 
 
 class DiscoverRequest(BaseModel):
@@ -144,5 +142,4 @@ class DiscoverRequest(BaseModel):
 
     url: str = Field(..., min_length=8, max_length=2048)
     max_products: int = Field(5, ge=1, le=25, description="Products (not variants) to read.")
-    currency: Optional[str] = Field(None, min_length=3, max_length=3)
-
+    currency: str | None = Field(None, min_length=3, max_length=3)

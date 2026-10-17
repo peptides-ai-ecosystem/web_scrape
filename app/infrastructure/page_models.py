@@ -5,11 +5,11 @@ what a fetch returns, ``PageFetcher`` the protocol the scrape service injects an
 ``StaticPageDocument`` the browser-free implementation tests and replays use.
 Split out of playwright_fetcher.py so that module holds only the browser code.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Protocol
-
+from typing import Protocol
 
 # ---------------------------------------------------------------------------
 # The seam every extractor is written against
@@ -23,10 +23,10 @@ class PageDocument(Protocol):
     be tested with a dictionary instead of a browser.
     """
 
-    def query_text(self, selector: str) -> Optional[str]:
+    def query_text(self, selector: str) -> str | None:
         """Visible text of the first match, or ``None``."""
 
-    def query_attr(self, selector: str, attr: str) -> Optional[str]:
+    def query_attr(self, selector: str, attr: str) -> str | None:
         """Attribute of the first match, or ``None``."""
 
 
@@ -36,11 +36,11 @@ class FetchResult:
 
     #: HTTP status of the main document. ``None`` when navigation never
     #: produced a response (DNS failure, timeout, browser crash).
-    status: Optional[int]
-    document: Optional[PageDocument] = None
-    error: Optional[str] = None
+    status: int | None
+    document: PageDocument | None = None
+    error: str | None = None
     #: ``Retry-After`` in seconds if the site sent one we could parse.
-    retry_after: Optional[float] = None
+    retry_after: float | None = None
 
     @property
     def ok(self) -> bool:
@@ -75,24 +75,24 @@ class StaticPageDocument:
     without a browser.
     """
 
-    texts: Dict[str, str] = field(default_factory=dict)
-    attrs: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    texts: dict[str, str] = field(default_factory=dict)
+    attrs: dict[str, dict[str, str]] = field(default_factory=dict)
     #: ``{selector: {attr: [value, ...]}}`` for :meth:`query_all_attr`.
-    attr_lists: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
+    attr_lists: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     #: Raw HTML for :meth:`html` (selector-free discovery).
-    raw_html: Optional[str] = None
+    raw_html: str | None = None
 
-    def html(self) -> Optional[str]:
+    def html(self) -> str | None:
         return self.raw_html
 
-    def query_text(self, selector: str) -> Optional[str]:
+    def query_text(self, selector: str) -> str | None:
         value = self.texts.get(selector)
         return value.strip() if isinstance(value, str) and value.strip() else None
 
-    def query_attr(self, selector: str, attr: str) -> Optional[str]:
+    def query_attr(self, selector: str, attr: str) -> str | None:
         value = (self.attrs.get(selector) or {}).get(attr)
         return value.strip() if isinstance(value, str) and value.strip() else None
 
-    def query_all_attr(self, selector: str, attr: str) -> List[str]:
+    def query_all_attr(self, selector: str, attr: str) -> list[str]:
         values = (self.attr_lists.get(selector) or {}).get(attr) or []
         return [v.strip() for v in values if isinstance(v, str) and v.strip()]

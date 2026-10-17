@@ -4,10 +4,11 @@ These tests deliberately avoid triggering the FastAPI lifespan (which warms a
 PostgreSQL pool and starts APScheduler), so they exercise the auth dependency
 directly and inspect route registration on the app object.
 """
+
 import pytest
+from fastapi import HTTPException
 
 from app.api.gateway_auth import require_gateway_token
-from fastapi import HTTPException
 
 
 @pytest.fixture

@@ -31,12 +31,14 @@ ranges), which this check complements rather than replaces.
 scheme check stays) for local testing against a fixture site on 127.0.0.1.
 It is off by default and must never be set in a deployed environment.
 """
+
 from __future__ import annotations
 
 import ipaddress
 import logging
 import socket
-from typing import Callable, Iterable, List, Optional, Union
+from collections.abc import Callable, Iterable
+from typing import Union
 from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
@@ -57,12 +59,12 @@ def private_targets_allowed() -> bool:
     return bool(getattr(settings, "VENDOR_SCRAPE_ALLOW_PRIVATE_TARGETS", False))
 
 
-def _system_resolver(host: str) -> List[str]:
+def _system_resolver(host: str) -> list[str]:
     infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     return [info[4][0] for info in infos]
 
 
-def is_public_address(address: Union[str, IPAddress]) -> bool:
+def is_public_address(address: str | IPAddress) -> bool:
     """True only for a globally routable unicast address."""
     try:
         ip = ipaddress.ip_address(str(address).split("%", 1)[0]) if isinstance(address, str) else address
@@ -90,7 +92,7 @@ def _normalise_host(host: str) -> str:
     return host.strip().strip("[]").rstrip(".").lower()
 
 
-def check_host(host: Optional[str], *, resolve: bool = True, resolver: Optional[Resolver] = None) -> None:
+def check_host(host: str | None, *, resolve: bool = True, resolver: Resolver | None = None) -> None:
     """Raise :class:`UnsafeTargetURLError` unless ``host`` is public.
 
     Args:
@@ -109,7 +111,7 @@ def check_host(host: Optional[str], *, resolve: bool = True, resolver: Optional[
     if name == "localhost" or name.endswith(".localhost"):
         raise UnsafeTargetURLError(f"host '{name}' is a loopback name")
     try:
-        literal: Optional[IPAddress] = ipaddress.ip_address(name.split("%", 1)[0])
+        literal: IPAddress | None = ipaddress.ip_address(name.split("%", 1)[0])
     except ValueError:
         literal = None
     if literal is not None:
@@ -129,7 +131,7 @@ def check_host(host: Optional[str], *, resolve: bool = True, resolver: Optional[
             raise UnsafeTargetURLError(f"host '{name}' resolves to a non-public address")
 
 
-def check_url(url: str, *, resolve: bool = True, resolver: Optional[Resolver] = None) -> None:
+def check_url(url: str, *, resolve: bool = True, resolver: Resolver | None = None) -> None:
     """Raise :class:`UnsafeTargetURLError` unless ``url`` is a public http(s) URL."""
     try:
         parts = urlsplit(url)

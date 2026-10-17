@@ -7,8 +7,9 @@ variables; import ``settings`` or one of the module-level names below.
 Booleans keep the old parsing: ``1``, ``true``, ``yes`` or ``on`` (any case)
 is true and anything else is false, so an odd value never stops the service.
 """
+
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, List
+from typing import Annotated, Any, ClassVar
 
 from dotenv import load_dotenv
 from pydantic import BeforeValidator, model_validator
@@ -39,7 +40,7 @@ def _float_or_zero(value: Any) -> Any:
 Flag = Annotated[bool, BeforeValidator(_flag)]
 Stripped = Annotated[str, BeforeValidator(_stripped)]
 
-TIME_RANGES_DEFAULT: List[str] = ["24h", "7d", "14d", "30d"]
+TIME_RANGES_DEFAULT: list[str] = ["24h", "7d", "14d", "30d"]
 
 
 class Settings(BaseSettings):
@@ -142,10 +143,15 @@ class Settings(BaseSettings):
     SENTRY_TRACES_SAMPLE_RATE: Annotated[float, BeforeValidator(_float_or_zero)] = 0.0
 
     # Time range settings (constants, not environment)
-    TIME_RANGES: ClassVar[List[str]] = TIME_RANGES_DEFAULT
+    TIME_RANGES: ClassVar[list[str]] = TIME_RANGES_DEFAULT
     # Skip list settings
-    BUTTON_SKIP_LIST: ClassVar[List[str]] = [
-        "peak", "half-life", "cleared", "hrs", "hr", "day",
+    BUTTON_SKIP_LIST: ClassVar[list[str]] = [
+        "peak",
+        "half-life",
+        "cleared",
+        "hrs",
+        "hr",
+        "day",
     ] + TIME_RANGES_DEFAULT
 
     @model_validator(mode="after")
@@ -192,7 +198,7 @@ class Settings(BaseSettings):
         url = self.DATABASE_URL
         for prefix in ("postgres://", "postgresql://"):
             if url.startswith(prefix):
-                return "postgresql+psycopg2://" + url[len(prefix):]
+                return "postgresql+psycopg2://" + url[len(prefix) :]
         return url
 
 

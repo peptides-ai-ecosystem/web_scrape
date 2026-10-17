@@ -11,6 +11,7 @@
 
 Pure functions over decoded JSON / XML text; no I/O.
 """
+
 from __future__ import annotations
 
 import logging
@@ -143,9 +144,7 @@ def woo_simple_reading(item: dict[str, Any]) -> ProductReading | None:
     )
 
 
-def woo_variation_readings(
-    parent: dict[str, Any], variations: list[dict[str, Any]]
-) -> list[ProductReading]:
+def woo_variation_readings(parent: dict[str, Any], variations: list[dict[str, Any]]) -> list[ProductReading]:
     """One reading per size of a variable product."""
     permalink = str(parent.get("permalink") or "").strip()
     base = clean_text(parent.get("name"))
@@ -185,9 +184,7 @@ def woo_variation_readings(
 # ---------------------------------------------------------------------------
 
 
-def shopify_readings(
-    product: dict[str, Any], origin: str, currency: str | None = None
-) -> list[ProductReading]:
+def shopify_readings(product: dict[str, Any], origin: str, currency: str | None = None) -> list[ProductReading]:
     handle = str(product.get("handle") or "").strip()
     if not handle:
         return []
@@ -199,11 +196,7 @@ def shopify_readings(
     for variant in variants:
         label = usable_label(variant.get("title"))
         available = variant.get("available")
-        stock = (
-            StockStatus.IN_STOCK if available is True
-            else StockStatus.OUT_OF_STOCK if available is False
-            else None
-        )
+        stock = StockStatus.IN_STOCK if available is True else StockStatus.OUT_OF_STOCK if available is False else None
         url = f"{page_url}?variant={variant.get('id')}" if many and variant.get("id") is not None else page_url
         readings.append(
             ProductReading(

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 
 class BaseMapper(ABC):
@@ -9,7 +9,7 @@ class BaseMapper(ABC):
     """
 
     @abstractmethod
-    def map(self, row: Dict[str, Any]) -> Any:
+    def map(self, row: dict[str, Any]) -> Any:
         """
         Maps the raw extracted dictionary (or CSV row) to a database table payload.
 

@@ -17,12 +17,13 @@ at all, so every parser here returns ``None`` rather than a best guess:
 Which selector produced each value is recorded, because that — not "the run
 finished" — is what the confidence score is computed from.
 """
+
 from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from decimal import Decimal, InvalidOperation
-from typing import Optional, Sequence, Tuple
 from urllib.parse import urljoin, urlsplit
 
 from app.core.vendor_models import (
@@ -90,7 +91,7 @@ _IN_STOCK_PATTERNS = (
 # ---------------------------------------------------------------------------
 
 
-def parse_currency(text: str) -> Optional[str]:
+def parse_currency(text: str) -> str | None:
     """ISO-4217 code stated by the page, or ``None`` if it states none."""
     lowered = text.lower()
     # Longest tokens first so "US$" wins over "$" and "CAD" over "cad" substrings.
@@ -114,7 +115,7 @@ def _is_hyphen_run(before: str, after: str) -> bool:
     return bool(re.search(r"\d-$", before)) or bool(re.match(r"^-\d", after))
 
 
-def parse_price(text: Optional[str]) -> Tuple[Optional[Decimal], Optional[str]]:
+def parse_price(text: str | None) -> tuple[Decimal | None, str | None]:
     """Parse ``"$129.99 USD"`` into ``(Decimal('129.99'), 'USD')``.
 
     Returns ``(None, currency_or_None)`` when no plausible amount is present.
@@ -142,8 +143,8 @@ def parse_price(text: Optional[str]) -> Tuple[Optional[Decimal], Optional[str]]:
         if value <= 0 or value > MAX_PLAUSIBLE_PRICE:
             continue
 
-        before = text[max(0, match.start() - 3):match.start()]
-        after = text[match.end():match.end() + 2]
+        before = text[max(0, match.start() - 3) : match.start()]
+        after = text[match.end() : match.end() + 2]
         symbol_anchored_here = before.strip().endswith(("$", "€", "£", "¥"))
 
         # "1-800-555-0100" is a phone number, not four prices. A digit-hyphen
@@ -163,7 +164,7 @@ def parse_price(text: Optional[str]) -> Tuple[Optional[Decimal], Optional[str]]:
     return min(pool), currency
 
 
-def parse_stock(text: Optional[str]) -> Optional[StockStatus]:
+def parse_stock(text: str | None) -> StockStatus | None:
     """Map stock wording to the platform's vocabulary, or ``None``.
 
     Order matters: "out of stock" contains "stock", and a backorder notice
@@ -182,7 +183,7 @@ def parse_stock(text: Optional[str]) -> Optional[StockStatus]:
     return None
 
 
-def resolve_coa_url(href: Optional[str], page_url: str) -> Optional[str]:
+def resolve_coa_url(href: str | None, page_url: str) -> str | None:
     """Absolutise a COA href; reject anything that is not http(s)."""
     if not href:
         return None
@@ -198,9 +199,7 @@ def resolve_coa_url(href: Optional[str], page_url: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-def _first_text(
-    document: PageDocument, selectors: Sequence[str]
-) -> Tuple[Optional[str], int, Optional[str]]:
+def _first_text(document: PageDocument, selectors: Sequence[str]) -> tuple[str | None, int, str | None]:
     """First selector that yields text. Returns ``(text, index, selector)``."""
     for index, selector in enumerate(selectors):
         text = document.query_text(selector)
@@ -209,9 +208,7 @@ def _first_text(
     return None, -1, None
 
 
-def _first_attr(
-    document: PageDocument, selectors: Sequence[str], attr: str
-) -> Tuple[Optional[str], int, Optional[str]]:
+def _first_attr(document: PageDocument, selectors: Sequence[str], attr: str) -> tuple[str | None, int, str | None]:
     for index, selector in enumerate(selectors):
         value = document.query_attr(selector, attr)
         if value:
@@ -222,9 +219,7 @@ def _first_attr(
 class VendorListingExtractor:
     """Reads one product page into :class:`ExtractedFields`."""
 
-    def extract(
-        self, document: PageDocument, target: VendorTarget, page_url: str
-    ) -> ExtractedFields:
+    def extract(self, document: PageDocument, target: VendorTarget, page_url: str) -> ExtractedFields:
         selectors: FieldSelectors = target.selectors
         fields = ExtractedFields()
 

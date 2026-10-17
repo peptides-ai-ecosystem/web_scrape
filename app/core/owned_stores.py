@@ -10,6 +10,7 @@ themselves.
 Read from settings on every call so tests (and an operator) can change the
 lists without a re-import.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable

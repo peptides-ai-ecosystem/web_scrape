@@ -2,6 +2,7 @@
 
 Split from structured_data.py to keep both files under 400 lines.
 """
+
 from __future__ import annotations
 
 from html.parser import HTMLParser

@@ -12,7 +12,9 @@ Table names verified against live DB schema:
   peptide_interactions       uses peptide_id_1, peptide_name_2
   protocol_dosages           links via dosage_id FK -> dosages table
 """
-from typing import Any, Dict, List, Optional
+
+from typing import Any
+
 from app.infrastructure.db.service import DbManager
 
 
@@ -30,7 +32,7 @@ class DbActualFetcher:
     # Public API
     # ------------------------------------------------------------------
 
-    def fetch(self, slug: str) -> Optional[Dict[str, Any]]:
+    def fetch(self, slug: str) -> dict[str, Any] | None:
         """
         Return the actual DB state for a peptide (by slug), or None if
         the peptide does not exist yet.
@@ -80,7 +82,7 @@ class DbActualFetcher:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _q(self, conn, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
+    def _q(self, conn, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
         """Run a query and return rows as list of dicts.
 
         Works with both regular cursors (rows are tuples) and
@@ -95,103 +97,106 @@ class DbActualFetcher:
                 return []
             # RealDictCursor rows are dict-like — convert directly.
             # Regular cursor rows are tuples — zip with column names.
-            if hasattr(rows[0], 'keys'):
+            if hasattr(rows[0], "keys"):
                 return [dict(r) for r in rows]
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in rows]
 
-    def _fetch_peptide(self, conn, slug: str) -> Optional[Dict[str, Any]]:
-        rows = self._q(conn,
+    def _fetch_peptide(self, conn, slug: str) -> dict[str, Any] | None:
+        rows = self._q(
+            conn,
             "SELECT id, name, slug, synonyms, overview, mechanism_of_action, "
             "       sequence, cycle_duration, storage_temperature, "
             "       fda_approval_status, wada_status, stop_signs, key_information "
             "FROM peptides WHERE slug = %s LIMIT 1",
-            (slug,)
+            (slug,),
         )
         return rows[0] if rows else None
 
-    def _fetch_benefit_names(self, conn, peptide_id: int) -> List[str]:
-        rows = self._q(conn,
-            "SELECT b.name FROM benefits b "
-            "JOIN peptide_benefits pb ON pb.benefit_id = b.id "
-            "WHERE pb.peptide_id = %s",
-            (peptide_id,)
+    def _fetch_benefit_names(self, conn, peptide_id: int) -> list[str]:
+        rows = self._q(
+            conn,
+            "SELECT b.name FROM benefits b JOIN peptide_benefits pb ON pb.benefit_id = b.id WHERE pb.peptide_id = %s",
+            (peptide_id,),
         )
         return [r["name"] for r in rows]
 
-    def _fetch_side_effect_names(self, conn, peptide_id: int) -> List[str]:
-        rows = self._q(conn,
+    def _fetch_side_effect_names(self, conn, peptide_id: int) -> list[str]:
+        rows = self._q(
+            conn,
             "SELECT se.name FROM side_effects se "
             "JOIN peptide_side_effects pse ON pse.side_effect_id = se.id "
             "WHERE pse.peptide_id = %s",
-            (peptide_id,)
+            (peptide_id,),
         )
         return [r["name"] for r in rows]
 
-    def _fetch_dosages(self, conn, peptide_id: int) -> List[Dict[str, Any]]:
+    def _fetch_dosages(self, conn, peptide_id: int) -> list[dict[str, Any]]:
         """Fetch dosages linked via peptide_protocols -> protocol_dosages -> dosages."""
-        rows = self._q(conn,
+        rows = self._q(
+            conn,
             "SELECT DISTINCT d.amount, d.unit "
             "FROM dosages d "
             "JOIN protocol_dosages pd ON pd.dosage_id = d.id "
             "JOIN peptide_protocols pp ON pp.id = pd.protocol_id "
             "WHERE pp.peptide_id = %s",
-            (peptide_id,)
+            (peptide_id,),
         )
         return rows
 
-    def _fetch_schedule_names(self, conn, peptide_id: int) -> List[str]:
+    def _fetch_schedule_names(self, conn, peptide_id: int) -> list[str]:
         """Fetch schedules linked via peptide_protocols -> protocol_dosages -> schedules."""
-        rows = self._q(conn,
+        rows = self._q(
+            conn,
             "SELECT DISTINCT s.name FROM schedules s "
             "JOIN protocol_dosages pd ON pd.schedule_id = s.id "
             "JOIN peptide_protocols pp ON pp.id = pd.protocol_id "
             "WHERE pp.peptide_id = %s",
-            (peptide_id,)
+            (peptide_id,),
         )
         return [r["name"] for r in rows]
 
-    def _fetch_admin_methods(self, conn, peptide_id: int) -> List[str]:
-        rows = self._q(conn,
+    def _fetch_admin_methods(self, conn, peptide_id: int) -> list[str]:
+        rows = self._q(
+            conn,
             "SELECT DISTINCT am.name "
             "FROM administration_methods am "
             "JOIN peptide_protocols pp ON pp.administration_method_id = am.id "
             "WHERE pp.peptide_id = %s",
-            (peptide_id,)
+            (peptide_id,),
         )
         return [r["name"] for r in rows]
 
-    def _fetch_interactions(self, conn, peptide_id: int) -> List[Dict[str, Any]]:
+    def _fetch_interactions(self, conn, peptide_id: int) -> list[dict[str, Any]]:
         # Interactions use peptide_id_1 (primary) and peptide_name_2 (secondary name)
-        rows = self._q(conn,
+        rows = self._q(
+            conn,
             "SELECT peptide_name_2 AS secondary_peptide_name, "
             "       interaction_type, description "
             "FROM peptide_interactions WHERE peptide_id_1 = %s",
-            (peptide_id,)
+            (peptide_id,),
         )
         return rows
 
-    def _fetch_indications(self, conn, peptide_id: int) -> List[Dict[str, Any]]:
-        rows = self._q(conn,
+    def _fetch_indications(self, conn, peptide_id: int) -> list[dict[str, Any]]:
+        rows = self._q(
+            conn,
             "SELECT indication_title, effectiveness_tag, description "
             "FROM peptide_research_indications WHERE peptide_id = %s",
-            (peptide_id,)
+            (peptide_id,),
         )
         return rows
 
-    def _fetch_protocols(self, conn, peptide_id: int) -> List[Dict[str, Any]]:
-        rows = self._q(conn,
+    def _fetch_protocols(self, conn, peptide_id: int) -> list[dict[str, Any]]:
+        rows = self._q(
+            conn,
             "SELECT id, name, description, administration_method_id, "
             "       best_timing, effects_timeline "
             "FROM peptide_protocols WHERE peptide_id = %s AND deleted_at IS NULL",
-            (peptide_id,)
+            (peptide_id,),
         )
         return rows
 
     def _count_references(self, conn, peptide_id: int) -> int:
-        rows = self._q(conn,
-            "SELECT COUNT(*) AS cnt FROM peptide_references "
-            "WHERE peptide_id = %s",
-            (peptide_id,)
-        )
+        rows = self._q(conn, "SELECT COUNT(*) AS cnt FROM peptide_references WHERE peptide_id = %s", (peptide_id,))
         return rows[0]["cnt"] if rows else 0

@@ -20,16 +20,23 @@ Everything goes through :class:`~app.infrastructure.polite_http.PoliteHttpClient
 (robots.txt, SSRF guard, per-host pacing, request budget, no retries), so this
 module holds only the discovery logic and is tested on recorded responses.
 """
+
 from __future__ import annotations
 
 import logging
-import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, replace
 from typing import Any
 from urllib.parse import quote
 
 from app.core.vendor_models import ProductReading, ScrapeStatus
+from app.infrastructure.polite_http import (
+    ACCEPT_HTML,
+    ACCEPT_JSON,
+    ACCEPT_XML,
+    HttpResult,
+    PoliteHttpClient,
+)
+from app.scrapers.vendors.discovery_result import DiscoveryFailure, DiscoveryResult, hold_sizeless
 from app.scrapers.vendors.extractors.store_api import (
     WOO_STORE_API_PATH,
     looks_like_product_url,
@@ -45,14 +52,6 @@ from app.scrapers.vendors.extractors.store_api import (
     woo_variation_readings,
 )
 from app.scrapers.vendors.extractors.structured_data import parse_product_page
-from app.scrapers.vendors.discovery_result import DiscoveryFailure, DiscoveryResult, hold_sizeless
-from app.infrastructure.polite_http import (
-    ACCEPT_HTML,
-    ACCEPT_JSON,
-    ACCEPT_XML,
-    HttpResult,
-    PoliteHttpClient,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +60,8 @@ SHOPIFY_PAGE_SIZE = 250
 #: Child sitemaps read from one index, at most.
 MAX_CHILD_SITEMAPS = 4
 _SITEMAP_PATHS = ("/sitemap_index.xml", "/sitemap.xml", "/wp-sitemap.xml", "/product-sitemap.xml")
+
+
 def _status_of(result: HttpResult) -> ScrapeStatus:
     if result.robots_disallowed:
         return ScrapeStatus.ROBOTS_DISALLOWED
@@ -113,8 +114,7 @@ class UrlOnlyDiscovery:
                 result.method = result.method or "product_page"
             elif not result.failures:
                 result.notes.append(
-                    "no Store API, products.json, sitemap or structured price found; "
-                    "add CSS selectors to this target"
+                    "no Store API, products.json, sitemap or structured price found; add CSS selectors to this target"
                 )
         hold_sizeless(result)
         result.requests_made = self._client.requests_made
@@ -190,9 +190,7 @@ class UrlOnlyDiscovery:
                 if readings:
                     result.readings.extend(readings)
                     continue
-                result.notes.append(
-                    f"{product.get('name')!s}: sizes not readable, kept the 'from' price for review"
-                )
+                result.notes.append(f"{product.get('name')!s}: sizes not readable, kept the 'from' price for review")
             reading = woo_simple_reading(product)
             if reading is not None:
                 result.readings.append(reading)
@@ -210,7 +208,7 @@ class UrlOnlyDiscovery:
         out: dict[int, list[dict[str, Any]]] = {}
         ids = list(wanted)
         for start in range(0, len(ids), WOO_PAGE_SIZE):
-            chunk = ids[start:start + WOO_PAGE_SIZE]
+            chunk = ids[start : start + WOO_PAGE_SIZE]
             url = (
                 f"{origin}{WOO_STORE_API_PATH}?type=variation&per_page={WOO_PAGE_SIZE}"
                 f"&include={','.join(str(i) for i in chunk)}"
@@ -331,6 +329,7 @@ class UrlOnlyDiscovery:
     def _read_pages(self, urls: list[str], result: DiscoveryResult) -> None:
         """Static HTML, ``concurrency`` at a time; a page without a structured
         price is rendered once (sequentially — the browser is single-threaded)."""
+
         def fetch(url: str) -> tuple[str, HttpResult]:
             return url, self._client.get(url, ACCEPT_HTML)
 

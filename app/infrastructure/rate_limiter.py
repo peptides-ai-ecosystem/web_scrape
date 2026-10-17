@@ -11,11 +11,12 @@ the User-Agent to get past a refusal.
 
 ``clock`` and ``sleeper`` are injected so tests run instantly and never sleep.
 """
+
 from __future__ import annotations
 
 import logging
 import time
-from typing import Callable, Dict, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,10 @@ class HostRateLimiter:
         self._max_backoff = max(0.0, max_backoff)
         self._clock = clock
         self._sleep = sleeper
-        self._last_request: Dict[str, float] = {}
-        self._intervals: Dict[str, float] = {}
-        self._strikes: Dict[str, int] = {}
-        self._abandoned: Dict[str, str] = {}
+        self._last_request: dict[str, float] = {}
+        self._intervals: dict[str, float] = {}
+        self._strikes: dict[str, int] = {}
+        self._abandoned: dict[str, str] = {}
 
     # -- configuration -----------------------------------------------------
 
@@ -79,7 +80,7 @@ class HostRateLimiter:
 
     # -- backoff -----------------------------------------------------------
 
-    def note_throttled(self, host: str, retry_after: Optional[float] = None) -> float:
+    def note_throttled(self, host: str, retry_after: float | None = None) -> float:
         """Record a 429/5xx from ``host`` and sleep for the backoff.
 
         Returns the seconds slept. After ``max_strikes`` the host is marked
@@ -97,10 +98,7 @@ class HostRateLimiter:
         backoff = min(backoff, self._max_backoff)
 
         if strikes > self._max_strikes:
-            self._abandoned[host] = (
-                f"host returned {strikes} throttle/error responses; "
-                "abandoned for this run"
-            )
+            self._abandoned[host] = f"host returned {strikes} throttle/error responses; abandoned for this run"
             logger.warning("Abandoning %s for this run after %d throttled responses.", host, strikes)
             return 0.0
 
@@ -128,5 +126,5 @@ class HostRateLimiter:
     def should_abandon(self, host: str) -> bool:
         return host in self._abandoned
 
-    def abandon_reason(self, host: str) -> Optional[str]:
+    def abandon_reason(self, host: str) -> str | None:
         return self._abandoned.get(host)

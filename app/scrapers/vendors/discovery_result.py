@@ -2,6 +2,7 @@
 
 Split out of url_discovery.py to keep that file under 400 lines.
 """
+
 from __future__ import annotations
 
 import re
@@ -33,9 +34,7 @@ def hold_sizeless(result: DiscoveryResult) -> None:
             result.readings[index] = replace(reading, confidence=NO_SIZE_CONFIDENCE)
             held += 1
     if held:
-        result.notes.append(
-            f"{held} reading(s) name no size; held for review (the import matches prices by size)"
-        )
+        result.notes.append(f"{held} reading(s) name no size; held for review (the import matches prices by size)")
 
 
 @dataclass
@@ -66,9 +65,7 @@ class DiscoveryResult:
             "priced": sum(1 for r in self.readings if r.price is not None),
             "requests_made": self.requests_made,
             "notes": list(self.notes),
-            "failures": [
-                {"url": f.url, "status": f.status.value, "detail": f.detail} for f in self.failures
-            ],
+            "failures": [{"url": f.url, "status": f.status.value, "detail": f.detail} for f in self.failures],
         }
         if include_readings:
             out["readings"] = [

@@ -7,13 +7,14 @@ under their own trace_id.
 transport, so every event the SDK would send is observable and nothing leaves
 the process. No test triggers the app lifespan (DB pool, scheduler).
 """
+
 import json
 import logging
 import os
 import subprocess
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,8 +22,8 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.core.config import settings
 from app.core import sentry as sentry_module
+from app.core.config import settings
 
 FAKE_DSN = "https://publickey1234@o0.ingest.invalid/1"
 SECRET_TOKEN = "s3cr3t-gateway-token-value-0123456789"
@@ -144,9 +145,7 @@ class TestDisabledMeansDisabled:
             "assert not sentry_sdk.get_client().is_active()\n"
             "print('ok')\n"
         )
-        result = subprocess.run(
-            [sys.executable, "-c", code], cwd=_REPO_ROOT, env=env, capture_output=True, text=True
-        )
+        result = subprocess.run([sys.executable, "-c", code], cwd=_REPO_ROOT, env=env, capture_output=True, text=True)
         assert result.returncode == 0, result.stderr[-2000:]
         assert "ok" in result.stdout
 
@@ -258,7 +257,7 @@ class TestBackgroundCapture:
         sched = BackgroundScheduler()
         sched.add_listener(sentry_module.capture_job_error, EVENT_JOB_ERROR)
         sched.add_listener(lambda _e: done.set(), EVENT_JOB_ERROR)
-        sched.add_job(failing_job, id="failing_job", next_run_time=datetime.now(timezone.utc))
+        sched.add_job(failing_job, id="failing_job", next_run_time=datetime.now(UTC))
         sched.start()
         try:
             assert done.wait(10), "the job never ran"
@@ -275,6 +274,7 @@ class TestBackgroundCapture:
 
     def test_service_scheduler_has_the_listener(self):
         from apscheduler.events import EVENT_JOB_ERROR
+
         from app.core.scheduler import scheduler
 
         assert any(

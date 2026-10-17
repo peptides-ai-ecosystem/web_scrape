@@ -26,12 +26,13 @@ Every collaborator (fetcher, robots policy, rate limiter, repository, clock,
 discovery factory) is injected, so the whole flow is exercised in tests with
 no network, no browser and no database.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
-from urllib.parse import urldefrag, urljoin, urlsplit
+from collections.abc import Callable, Iterable, Sequence
+from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 from app.core.owned_stores import owned_reason
 from app.core.vendor_models import (
@@ -43,13 +44,12 @@ from app.core.vendor_models import (
     VendorScrapeReport,
     VendorTarget,
 )
-from app.scrapers.vendors.extractors.vendor_listing import VendorListingExtractor
 from app.infrastructure.page_models import FetchResult, PageFetcher
 from app.infrastructure.rate_limiter import HostRateLimiter
 from app.infrastructure.robots import RobotsPolicy
 from app.infrastructure.vendor_targets import target_urls
+from app.scrapers.vendors.extractors.vendor_listing import VendorListingExtractor
 from app.scrapers.vendors.target_resolution import TargetResolutionMixin
-from app.scrapers.vendors.discovery_result import DiscoveryResult
 from app.scrapers.vendors.url_discovery import UrlOnlyDiscovery
 from app.scrapers.vendors.vendor_confidence import DeltaReviewer, score_confidence
 
@@ -70,10 +70,10 @@ class VendorScrapeService(TargetResolutionMixin):
         rate_limiter: HostRateLimiter,
         reviewer: DeltaReviewer,
         repository=None,
-        extractor: Optional[VendorListingExtractor] = None,
+        extractor: VendorListingExtractor | None = None,
         max_retries: int = 2,
-        clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-        discovery_factory: Optional[Callable[[VendorTarget, Optional[int]], UrlOnlyDiscovery]] = None,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        discovery_factory: Callable[[VendorTarget, int | None], UrlOnlyDiscovery] | None = None,
     ):
         self._fetcher = fetcher
         self._robots = robots
@@ -93,8 +93,8 @@ class VendorScrapeService(TargetResolutionMixin):
     def run(
         self,
         targets: Sequence[VendorTarget],
-        limit_per_target: Optional[int] = None,
-        on_progress: Optional[Callable[[int, int], None]] = None,
+        limit_per_target: int | None = None,
+        on_progress: Callable[[int, int], None] | None = None,
     ) -> VendorScrapeReport:
         """Scrape every enabled target.
 
@@ -106,8 +106,8 @@ class VendorScrapeService(TargetResolutionMixin):
         """
         report = VendorScrapeReport(started_at=self._clock())
         try:
-            plan: List[Tuple[VendorTarget, List[str]]] = []
-            auto_plan: List[Tuple[VendorTarget, List[ProductReading]]] = []
+            plan: list[tuple[VendorTarget, list[str]]] = []
+            auto_plan: list[tuple[VendorTarget, list[ProductReading]]] = []
             for target in targets:
                 if not target.enabled:
                     logger.info("Vendor target %s is disabled — skipping.", target.slug)
@@ -183,8 +183,10 @@ class VendorScrapeService(TargetResolutionMixin):
 
         if decision.status is not ReviewStatus.ACCEPTED:
             logger.warning(
-                "Flagged %s (%s): %s", observation.url,
-                decision.reason.value if decision.reason else "?", decision.note,
+                "Flagged %s (%s): %s",
+                observation.url,
+                decision.reason.value if decision.reason else "?",
+                decision.note,
             )
 
         self._persist(observation)
@@ -193,7 +195,7 @@ class VendorScrapeService(TargetResolutionMixin):
     # -- per target --------------------------------------------------------
 
     @staticmethod
-    def _notify(callback: Optional[Callable[[int, int], None]], done: int, total: int) -> None:
+    def _notify(callback: Callable[[int, int], None] | None, done: int, total: int) -> None:
         if callback is None:
             return
         try:
@@ -201,9 +203,7 @@ class VendorScrapeService(TargetResolutionMixin):
         except Exception:  # noqa: BLE001 — progress reporting never ends a run
             logger.debug("progress callback failed", exc_info=True)
 
-    def _run_target(
-        self, target: VendorTarget, urls: Sequence[str]
-    ) -> Iterable[VendorObservation]:
+    def _run_target(self, target: VendorTarget, urls: Sequence[str]) -> Iterable[VendorObservation]:
         for url in urls:
             host = _host_of(url)
 
@@ -241,7 +241,7 @@ class VendorScrapeService(TargetResolutionMixin):
         if crawl_delay:
             self._limiter.set_interval(host, crawl_delay)
 
-        result: Optional[FetchResult] = None
+        result: FetchResult | None = None
         attempts = self._max_retries + 1
         for _ in range(attempts):
             self._limiter.wait(host)
@@ -250,9 +250,7 @@ class VendorScrapeService(TargetResolutionMixin):
             if result.refused:
                 self._limiter.note_blocked(host, f"HTTP {result.status}")
                 self._close_page()
-                return self._failed(
-                    target, url, ScrapeStatus.BLOCKED, f"site refused with HTTP {result.status}"
-                )
+                return self._failed(target, url, ScrapeStatus.BLOCKED, f"site refused with HTTP {result.status}")
 
             if result.throttled:
                 self._close_page()
@@ -333,9 +331,7 @@ class VendorScrapeService(TargetResolutionMixin):
             except Exception:  # noqa: BLE001
                 logger.debug("close_page failed", exc_info=True)
 
-    def _failed(
-        self, target: VendorTarget, url: str, status: ScrapeStatus, detail: str
-    ) -> VendorObservation:
+    def _failed(self, target: VendorTarget, url: str, status: ScrapeStatus, detail: str) -> VendorObservation:
         """A non-result. No price, no stock, no placeholder — just the reason.
 
         Stored all the same: "we were told not to look" and "they blocked us"
@@ -354,7 +350,7 @@ class VendorScrapeService(TargetResolutionMixin):
         self._persist(observation)
         return observation
 
-    def _previous_accepted(self, vendor: str, url: str) -> Optional[VendorObservation]:
+    def _previous_accepted(self, vendor: str, url: str) -> VendorObservation | None:
         if self._repo is None:
             return None
         try:

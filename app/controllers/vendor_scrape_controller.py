@@ -6,11 +6,13 @@ background job in the in-memory queue. One run at a time: two concurrent runs
 would double the request rate against the same hosts. The nightly cron
 (``app/core/scheduler.py``) runs the same pipeline.
 """
-from typing import Any, Callable, Dict, List, Optional
 
-from app.core.logging import log_error, log_info
+from collections.abc import Callable
+from typing import Any
+
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.core.job_queue import JobStatus, get_job_queue
+from app.core.logging import log_error, log_info
 from app.core.sentry import capture_background_failure
 from app.services.vendor_scrape_runner import run_vendor_scrape, select_targets
 
@@ -26,13 +28,13 @@ def _running_scrape_job():
     return None
 
 
-def _job_view(job) -> Dict[str, Any]:
+def _job_view(job) -> dict[str, Any]:
     payload = job.to_dict()
     payload["progress_detail"] = getattr(job, "progress_detail", None)
     return payload
 
 
-def _run_scrape_task(job_id: str, vendors: Optional[List[str]], limit: Optional[int]):
+def _run_scrape_task(job_id: str, vendors: list[str] | None, limit: int | None):
     """Background task wrapper around the shared runner."""
     queue = get_job_queue()
     job = queue.get_job(job_id)
@@ -65,10 +67,10 @@ def _run_scrape_task(job_id: str, vendors: Optional[List[str]], limit: Optional[
 class VendorScrapeController:
     """Starts and reports competitor scrape runs. ``schedule(fn, *args)`` runs ``fn`` after the response."""
 
-    def __init__(self, schedule: Optional[Schedule] = None):
+    def __init__(self, schedule: Schedule | None = None):
         self._schedule = schedule
 
-    def trigger(self, vendors: Optional[List[str]], limit_per_vendor: Optional[int]) -> Dict[str, Any]:
+    def trigger(self, vendors: list[str] | None, limit_per_vendor: int | None) -> dict[str, Any]:
         """Queue a run; 409 while one is running, 400 when no enabled, approved target matches."""
         running = _running_scrape_job()
         if running is not None:
@@ -77,8 +79,7 @@ class VendorScrapeController:
         targets = select_targets(vendors)
         if not targets:
             raise BadRequestError(
-                "No enabled, approved vendor targets match this request. "
-                "Add, enable or approve one first."
+                "No enabled, approved vendor targets match this request. Add, enable or approve one first."
             )
 
         queue = get_job_queue()
@@ -99,7 +100,7 @@ class VendorScrapeController:
         }
 
     @staticmethod
-    def list_jobs(limit: int) -> Dict[str, Any]:
+    def list_jobs(limit: int) -> dict[str, Any]:
         """Recent scrape jobs, newest first, without the per-URL report."""
         jobs = [j for j in get_job_queue().list_jobs() if j.endpoint == SCRAPE_JOB_ENDPOINT]
         jobs.sort(key=lambda j: j.created_at, reverse=True)
@@ -113,7 +114,7 @@ class VendorScrapeController:
         return {"count": len(views), "jobs": views}
 
     @staticmethod
-    def get_job(job_id: str) -> Dict[str, Any]:
+    def get_job(job_id: str) -> dict[str, Any]:
         """One scrape job with ``progress_detail``; 404 for an unknown or non-scrape job."""
         job = get_job_queue().get_job(job_id)
         if job is None or job.endpoint != SCRAPE_JOB_ENDPOINT:

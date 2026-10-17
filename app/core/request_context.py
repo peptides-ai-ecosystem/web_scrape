@@ -11,18 +11,19 @@ if it can be matched to the gateway's log lines for the same request.
 * :func:`bound_trace` binds a trace for work that has no HTTP request — a
   scheduler job or a scrape run — so its Sentry event carries its own id.
 """
+
 from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Iterator, Optional
 
 TRACE_HEADER = "x-trace-id"
 
-trace_id_var: ContextVar[Optional[str]] = ContextVar("trace_id", default=None)
-request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
+trace_id_var: ContextVar[str | None] = ContextVar("trace_id", default=None)
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 # A trace id is echoed back in a header and written into Sentry tags, so an
 # incoming one is accepted only if it is short and plain.
@@ -33,16 +34,16 @@ def new_trace_id() -> str:
     return uuid.uuid4().hex
 
 
-def get_trace_id() -> Optional[str]:
+def get_trace_id() -> str | None:
     return trace_id_var.get()
 
 
-def get_request_id() -> Optional[str]:
+def get_request_id() -> str | None:
     return request_id_var.get()
 
 
 @contextmanager
-def bound_trace(trace_id: Optional[str] = None, request_id: Optional[str] = None) -> Iterator[str]:
+def bound_trace(trace_id: str | None = None, request_id: str | None = None) -> Iterator[str]:
     """Bind ``trace_id`` (minted when None) for the duration of the block."""
     trace_id = trace_id or new_trace_id()
     t_token = trace_id_var.set(trace_id)
@@ -54,7 +55,7 @@ def bound_trace(trace_id: Optional[str] = None, request_id: Optional[str] = None
         request_id_var.reset(r_token)
 
 
-def trace_ids_from_request(request) -> tuple[Optional[str], Optional[str]]:
+def trace_ids_from_request(request) -> tuple[str | None, str | None]:
     """``(trace_id, request_id)`` for a request, from state or the header.
 
     The catch-all 500 handler runs in Starlette's ServerErrorMiddleware, which

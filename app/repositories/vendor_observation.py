@@ -9,12 +9,13 @@ The one rule this repository enforces on behalf of the rest of the system:
 stored, is visible in the review queue, and is *not* the current price. That
 is what stops a broken selector from quietly overwriting a good value.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.core.vendor_models import (
     ReviewReason,
@@ -35,7 +36,7 @@ _COLUMNS = """
 """
 
 
-def _row_to_observation(row: Optional[Dict[str, Any]]) -> Optional[VendorObservation]:
+def _row_to_observation(row: dict[str, Any] | None) -> VendorObservation | None:
     """Hydrate a DB row. Unknown enum values degrade to ``None``, not a guess."""
     if not row:
         return None
@@ -81,7 +82,7 @@ def _row_to_observation(row: Optional[Dict[str, Any]]) -> Optional[VendorObserva
 class VendorObservationRepository(BaseRepository):
     """Reads and writes ``vendor_price_observations``."""
 
-    def latest_accepted(self, vendor: str, url: str) -> Optional[VendorObservation]:
+    def latest_accepted(self, vendor: str, url: str) -> VendorObservation | None:
         """The current trusted reading for a listing, or ``None``.
 
         Deliberately excludes ``flagged`` and ``rejected`` rows: the delta
@@ -143,9 +144,7 @@ class VendorObservationRepository(BaseRepository):
             self._commit()
         return int(row["id"]) if row else 0
 
-    def list_flagged(
-        self, limit: int = 100, vendor: Optional[str] = None, offset: int = 0
-    ) -> List[Dict[str, Any]]:
+    def list_flagged(self, limit: int = 100, vendor: str | None = None, offset: int = 0) -> list[dict[str, Any]]:
         """The review queue, newest first."""
         vendor_clause = "AND vendor = %s" if vendor else ""
         params: tuple = (ReviewStatus.FLAGGED.value,) + ((vendor,) if vendor else ())
@@ -158,7 +157,7 @@ class VendorObservationRepository(BaseRepository):
             params + (limit, offset),
         )
 
-    def count_flagged(self, vendor: Optional[str] = None) -> int:
+    def count_flagged(self, vendor: str | None = None) -> int:
         """Size of the review queue (for pagination)."""
         vendor_clause = "AND vendor = %s" if vendor else ""
         params: tuple = (ReviewStatus.FLAGGED.value,) + ((vendor,) if vendor else ())
@@ -168,7 +167,7 @@ class VendorObservationRepository(BaseRepository):
         )
         return int(total or 0)
 
-    def get_row(self, observation_id: int) -> Optional[Dict[str, Any]]:
+    def get_row(self, observation_id: int) -> dict[str, Any] | None:
         return self.execute_one(
             f"SELECT {_COLUMNS} FROM vendor_price_observations WHERE id = %s",
             (observation_id,),
@@ -177,20 +176,20 @@ class VendorObservationRepository(BaseRepository):
     def list_observations(
         self,
         *,
-        vendor: Optional[str] = None,
-        review_status: Optional[str] = None,
-        status: Optional[str] = None,
+        vendor: str | None = None,
+        review_status: str | None = None,
+        status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Filtered observation list for the admin Scrape tab, newest first.
 
         Returns ``{"total": int, "rows": [...]}`` so the UI can paginate.
         Filters are exact matches on the stored vocabulary; the endpoint
         validates them against the enums before they reach SQL.
         """
-        clauses: List[str] = []
-        params: List[Any] = []
+        clauses: list[str] = []
+        params: list[Any] = []
         if vendor:
             clauses.append("vendor = %s")
             params.append(vendor)
@@ -202,9 +201,7 @@ class VendorObservationRepository(BaseRepository):
             params.append(status)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
-        total = self.execute_scalar(
-            f"SELECT count(*) AS n FROM vendor_price_observations {where}", tuple(params)
-        )
+        total = self.execute_scalar(f"SELECT count(*) AS n FROM vendor_price_observations {where}", tuple(params))
         rows = self.execute_all(
             f"""SELECT {_COLUMNS}
                   FROM vendor_price_observations
@@ -215,7 +212,7 @@ class VendorObservationRepository(BaseRepository):
         )
         return {"total": int(total or 0), "rows": rows}
 
-    def list_latest_accepted(self, vendor: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_latest_accepted(self, vendor: str | None = None) -> list[dict[str, Any]]:
         """The current trusted reading per ``(vendor, url)`` — what an import reads.
 
         One row per listing: the newest ``accepted`` observation with a price.
@@ -235,9 +232,7 @@ class VendorObservationRepository(BaseRepository):
             params,
         )
 
-    def resolve_review(
-        self, observation_id: int, status: ReviewStatus, reviewer: Optional[str] = None
-    ) -> int:
+    def resolve_review(self, observation_id: int, status: ReviewStatus, reviewer: str | None = None) -> int:
         """Record a human's decision on a flagged observation.
 
         Only ``accepted`` or ``rejected`` are meaningful here, and only a

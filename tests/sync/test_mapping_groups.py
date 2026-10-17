@@ -1,9 +1,11 @@
 import json
+
 from app.services.sync.db_import_orchestrator import DbImportOrchestrator
+
 
 def test_mapping():
     orchestrator = DbImportOrchestrator()
-    
+
     # Sample row reflecting the columns found in pep_pedia_master.csv
     sample_row = {
         "Peptide_Name": "BPC-157",
@@ -24,22 +26,23 @@ def test_mapping():
         "peptide_interactions_tb_500_synergistic": "Synergistic effect for tissue repair.",
         "research_indications_longevity_most_effective_(tissue_repair)": "Highly effective for tissue repair.",
         "references_research_studies_(Study_A)": "http://example.com/study_a",
-        "what_to_expect_1": "Improved recovery in 1 week"
+        "what_to_expect_1": "Improved recovery in 1 week",
     }
-    
+
     payload = orchestrator.map_row(sample_row)
-    
+
     print("\n--- Group A (Lookups) ---")
     print(json.dumps(payload["group_a"], indent=2))
-    
+
     print("\n--- Group B (Peptide) ---")
     print(json.dumps(payload["group_b"], indent=2))
-    
+
     print("\n--- Relations (Groups C-F) ---")
     print(json.dumps(payload["relations"], indent=2))
-    
+
     print("\n--- Protocols ---")
     print(json.dumps(payload["protocols"], indent=2))
+
 
 if __name__ == "__main__":
     test_mapping()

@@ -1,22 +1,22 @@
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-from app.scrapers.pep_pedia.extractors.base import BaseExtractor
-from typing import List, Dict
+
 from app.core.config import BUTTON_SKIP_LIST as button_skip_list
+from app.scrapers.pep_pedia.extractors.base import BaseExtractor
 
 
 class SectionExtractor(BaseExtractor):
-    def extract(self, driver, wait) -> List[Dict[str, str]]:
+    def extract(self, driver, wait) -> list[dict[str, str]]:
         data = []
         try:
             wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "section.mb-12")))
             sections = driver.find_elements(By.CSS_SELECTOR, "section.mb-12")
-            
+
             for section in sections:
                 h2_text = self._get_h2_heading(driver, section)
                 section_data = {}
-                
+
                 if self._has_accordions(section):
                     self._process_accordions(section, h2_text, section_data, driver, wait)
                 elif self._has_tabs(section):
@@ -31,7 +31,7 @@ class SectionExtractor(BaseExtractor):
                     self._process_bullet_list(driver, section, h2_text, section_data)
                 else:
                     self._process_static_content(driver, section, h2_text, section_data)
-                
+
                 if section_data:
                     data.append(section_data)
         except TimeoutException:
@@ -73,11 +73,18 @@ class SectionExtractor(BaseExtractor):
 
     def _process_tabs(self, section, h2_text, section_data, driver, wait):
         tab_buttons = section.find_elements(By.XPATH, ".//div[contains(@class, 'border-b')]//button")
-        if not tab_buttons: return
+        if not tab_buttons:
+            return
 
         for tab_btn in tab_buttons:
             try:
-                tab_name = self.get_text(driver, tab_btn.find_element(By.CSS_SELECTOR, "span.font-medium")).strip().lower().replace(" ", "_").replace("&", "and")
+                tab_name = (
+                    self.get_text(driver, tab_btn.find_element(By.CSS_SELECTOR, "span.font-medium"))
+                    .strip()
+                    .lower()
+                    .replace(" ", "_")
+                    .replace("&", "and")
+                )
                 self.safe_click(driver, wait, tab_btn)
                 wait.until(lambda d: "border" in tab_btn.get_attribute("class"))
                 tab_parent = tab_btn.find_element(By.XPATH, "./ancestor::div[contains(@class, 'border-b')]")
@@ -145,7 +152,9 @@ class SectionExtractor(BaseExtractor):
                 btn_text = self.get_text(driver, btn).strip().lower()
                 if any(skip in btn_text for skip in button_skip_list):
                     continue
-                title = self.get_text(driver, btn).strip().lower().replace(" ", "_").replace("/", "_").replace("\n", "_")
+                title = (
+                    self.get_text(driver, btn).strip().lower().replace(" ", "_").replace("/", "_").replace("\n", "_")
+                )
                 if btn.get_attribute("data-state") == "closed":
                     self.safe_click(driver, wait, btn)
                     self.wait_for_loading(0.5)
@@ -177,7 +186,9 @@ class SectionExtractor(BaseExtractor):
         if disclaimer:
             section_data[f"{h2_text}_info"] = self.get_text(driver, disclaimer[0]).strip()
         table = section.find_element(By.TAG_NAME, "table")
-        headers = [self.get_text(driver, th).strip().lower().replace(" ", "_") for th in table.find_elements(By.TAG_NAME, "th")]
+        headers = [
+            self.get_text(driver, th).strip().lower().replace(" ", "_") for th in table.find_elements(By.TAG_NAME, "th")
+        ]
         rows = table.find_elements(By.TAG_NAME, "tbody")[0].find_elements(By.TAG_NAME, "tr")
         for row_idx, row in enumerate(rows, 1):
             cells = row.find_elements(By.TAG_NAME, "td")
@@ -196,7 +207,9 @@ class SectionExtractor(BaseExtractor):
         step_containers = section.find_elements(By.XPATH, ".//div[contains(@class, 'flex gap-4 items-start')]")
         for container in step_containers:
             try:
-                step_num = self.get_text(driver, container.find_element(By.XPATH, ".//div[contains(@class, 'rounded-full')]")).strip()
+                step_num = self.get_text(
+                    driver, container.find_element(By.XPATH, ".//div[contains(@class, 'rounded-full')]")
+                ).strip()
                 content = self.get_text(driver, container.find_element(By.TAG_NAME, "p")).strip()
                 section_data[f"{h2_text}_{step_num}"] = content
             except:
@@ -206,7 +219,9 @@ class SectionExtractor(BaseExtractor):
         list_containers = section.find_elements(By.XPATH, ".//div[contains(@class, 'flex gap-4 items-start')]")
         for container in list_containers:
             try:
-                icon = self.get_text(driver, container.find_element(By.XPATH, ".//div[contains(@class, 'rounded-full')]")).strip()
+                icon = self.get_text(
+                    driver, container.find_element(By.XPATH, ".//div[contains(@class, 'rounded-full')]")
+                ).strip()
                 content_div = container.find_element(By.XPATH, ".//div[not(contains(@class, 'rounded-full'))]")
                 h3_text = self.get_text(driver, content_div.find_element(By.TAG_NAME, "h3")).strip()
                 content = self.get_text(driver, content_div.find_element(By.TAG_NAME, "p")).strip()
@@ -229,7 +244,9 @@ class SectionExtractor(BaseExtractor):
                     section_data[f"{h2_text}_{h3_text}"] = content
                 except:
                     continue
-        grid_divs = section.find_elements(By.XPATH, ".//div[contains(@class, 'grid')]//div/p[@class and contains(@class, 'text-xs')]")
+        grid_divs = section.find_elements(
+            By.XPATH, ".//div[contains(@class, 'grid')]//div/p[@class and contains(@class, 'text-xs')]"
+        )
         if grid_divs:
             for div in grid_divs:
                 try:
@@ -243,7 +260,9 @@ class SectionExtractor(BaseExtractor):
         if grid_cards:
             for card in grid_cards:
                 try:
-                    label = self.get_text(driver, card.find_element(By.XPATH, "./p[1]")).strip().lower().replace(" ", "_")
+                    label = (
+                        self.get_text(driver, card.find_element(By.XPATH, "./p[1]")).strip().lower().replace(" ", "_")
+                    )
                     value = self.get_text(driver, card.find_element(By.XPATH, "./p[2]")).strip()
                     if label and value:
                         section_data[f"{h2_text}_{label}"] = value

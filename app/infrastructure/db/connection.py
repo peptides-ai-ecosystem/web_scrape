@@ -1,11 +1,12 @@
 """Database connection management."""
+
+import logging
+import time
+from contextlib import contextmanager
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
-from contextlib import contextmanager
-import logging
-import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class DbConnection:
     def connect(self):
         """Get a database connection, reusing if available and valid."""
         current_time = time.time()
-        
+
         # Try to reuse existing connection
         if self.conn and not self.conn.closed:
             # Check if connection is still valid
@@ -39,24 +40,22 @@ class DbConnection:
                 except:
                     pass
                 self.conn = None
-        
+
         # Create new connection with retry logic
         max_retries = 2
         retry_delay = 1.0
-        
+
         for attempt in range(max_retries):
             try:
                 logger.info(f"Creating new database connection (attempt {attempt + 1}/{max_retries})")
-                self.conn = psycopg2.connect(
-                    self.db_url,
-                    cursor_factory=RealDictCursor,
-                    connect_timeout=5
-                )
+                self.conn = psycopg2.connect(self.db_url, cursor_factory=RealDictCursor, connect_timeout=5)
                 self.last_used = current_time
                 return self.conn
             except psycopg2.OperationalError as e:
                 if attempt < max_retries - 1:
-                    logger.warning(f"Connection attempt {attempt + 1} failed, retrying in {retry_delay}s: {str(e)[:80]}")
+                    logger.warning(
+                        f"Connection attempt {attempt + 1} failed, retrying in {retry_delay}s: {str(e)[:80]}"
+                    )
                     time.sleep(retry_delay)
                 else:
                     logger.error(f"Failed to connect to database after {max_retries} attempts")
@@ -121,7 +120,7 @@ class DbPool:
             # Always reset state and return connection to pool
             try:
                 if not conn.closed:
-                    conn.rollback()   # no-op if already committed; clears any open txn
+                    conn.rollback()  # no-op if already committed; clears any open txn
             except Exception:
                 pass
             self._pool.putconn(conn)

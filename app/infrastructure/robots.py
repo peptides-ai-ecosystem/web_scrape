@@ -20,12 +20,13 @@ Two decisions worth stating explicitly:
 The fetcher is injected, so tests exercise every branch without network
 access.
 """
+
 from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 #: ``(status_code, body_text)``. ``status_code`` is ``None`` for a transport
 #: failure (DNS, timeout, reset) — indistinguishable from a 5xx for our
 #: purposes: we do not know the rules, so we do not crawl.
-RobotsFetchResult = Tuple[Optional[int], str]
+RobotsFetchResult = tuple[int | None, str]
 RobotsFetcher = Callable[[str], RobotsFetchResult]
 
 
@@ -79,7 +80,7 @@ def default_robots_fetcher(url: str, *, timeout: float = 10.0, user_agent: str =
 
 @dataclass
 class _CachedRobots:
-    parser: Optional[RobotFileParser]
+    parser: RobotFileParser | None
     #: True when we could not establish the rules and must refuse everything.
     unknown: bool
     fetched_at: float
@@ -98,7 +99,7 @@ class RobotsPolicy:
     def __init__(
         self,
         user_agent: str,
-        fetcher: Optional[RobotsFetcher] = None,
+        fetcher: RobotsFetcher | None = None,
         ttl_seconds: float = 3600.0,
         clock: Callable[[], float] = time.monotonic,
     ):
@@ -106,7 +107,7 @@ class RobotsPolicy:
         self._fetcher = fetcher or (lambda url: default_robots_fetcher(url, user_agent=user_agent))
         self._ttl = ttl_seconds
         self._clock = clock
-        self._cache: Dict[str, _CachedRobots] = {}
+        self._cache: dict[str, _CachedRobots] = {}
 
     # -- internals ---------------------------------------------------------
 
@@ -161,7 +162,7 @@ class RobotsPolicy:
     def user_agent(self) -> str:
         return self._user_agent
 
-    def sitemaps(self, url: str) -> List[str]:
+    def sitemaps(self, url: str) -> list[str]:
         """``Sitemap:`` URLs the site's robots.txt lists (AAD-1 discovery)."""
         entry = self._load(self._origin(url))
         if entry.parser is None:
@@ -171,7 +172,7 @@ class RobotsPolicy:
         except Exception:  # noqa: BLE001 — a malformed directive is just "none"
             return []
 
-    def crawl_delay(self, url: str) -> Optional[float]:
+    def crawl_delay(self, url: str) -> float | None:
         """The site's requested Crawl-delay for us, in seconds, if any."""
         entry = self._load(self._origin(url))
         if entry.parser is None:

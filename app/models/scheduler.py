@@ -1,25 +1,25 @@
 """Request models for the scheduler API (``/api/v1/scheduler``)."""
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SchedulerConfigRequest(BaseModel):
     """Configuration for the automated background sync scheduler."""
-    interval_hours: Optional[float] = Field(
+
+    interval_hours: float | None = Field(
         12.0,
         description="Interval in hours between scheduled sync runs. Defaults to 12.",
         ge=0.0,
         examples=[6.0, 12.0, 24.0],
     )
-    interval_minutes: Optional[float] = Field(
+    interval_minutes: float | None = Field(
         0.0,
         description="Additional interval in minutes. Added to `interval_hours` for finer control.",
         ge=0.0,
         le=59.0,
         examples=[0, 30],
     )
-    limit: Optional[int] = Field(
+    limit: int | None = Field(
         None,
         description="Maximum URLs to scrape per scheduled run. `null` means unlimited.",
         ge=1,
@@ -38,8 +38,7 @@ class SchedulerConfigRequest(BaseModel):
         total_hours = (self.interval_hours or 0.0) + (self.interval_minutes or 0.0) / 60.0
         if total_hours <= 0:
             raise ValueError(
-                "interval_hours and interval_minutes cannot both be zero — "
-                "the scheduler needs a positive interval."
+                "interval_hours and interval_minutes cannot both be zero — the scheduler needs a positive interval."
             )
         return self
 
@@ -59,12 +58,12 @@ class VendorScrapeScheduleRequest(BaseModel):
 
     hour: int = Field(3, description="Hour of day (server time) to run at.", ge=0, le=23)
     minute: int = Field(15, description="Minute of the hour to run at.", ge=0, le=59)
-    vendors: Optional[list[str]] = Field(
+    vendors: list[str] | None = Field(
         None,
         description="Target slugs to scrape nightly. `null` means every enabled target.",
         examples=[None, ["competitor-a"]],
     )
-    limit_per_vendor: Optional[int] = Field(
+    limit_per_vendor: int | None = Field(
         None,
         description="Cap on product URLs fetched per vendor per run.",
         ge=1,

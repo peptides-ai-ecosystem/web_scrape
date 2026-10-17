@@ -4,6 +4,7 @@ Offline: the pool is a fake, so no database is touched. Each case pins the
 status code and ``detail`` the endpoint returned before the logic moved into
 ``graph_service`` / ``core_data_service``.
 """
+
 from contextlib import contextmanager
 from types import SimpleNamespace
 

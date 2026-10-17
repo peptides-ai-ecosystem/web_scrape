@@ -5,6 +5,7 @@ dropped every `*.sql` and the Dockerfile copied only the app, so the old boot
 bootstrap failed with "No such file or directory". The tables are now an
 Alembic revision, so the image needs `alembic.ini` and `alembic/`.
 """
+
 from __future__ import annotations
 
 import fnmatch

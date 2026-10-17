@@ -3,6 +3,7 @@
 Pure functions over strings (price, currency, availability, size labels, URLs).
 Split from structured_data.py to keep both files under 400 lines.
 """
+
 from __future__ import annotations
 
 import html as html_lib
@@ -115,7 +116,7 @@ def label_from_names(base: str | None, variant_name: str | None) -> str | None:
     if not name:
         return None
     if base and name.lower().startswith(base.lower()):
-        rest = name[len(base):].strip(" -–—:|,/()")
+        rest = name[len(base) :].strip(" -–—:|,/()")
         return rest or None
     if base and name.lower() == base.lower():
         return None

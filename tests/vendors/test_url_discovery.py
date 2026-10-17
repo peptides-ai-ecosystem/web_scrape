@@ -4,6 +4,7 @@ Offline: every HTTP response is replayed from ``fixtures/url_discovery``
 through an injected transport, robots.txt comes from an injected fetcher, and
 the rate limiter's clock and sleep are fake. No test reaches the network.
 """
+
 import asyncio
 import json
 from datetime import UTC, datetime
@@ -19,6 +20,9 @@ from app.core.vendor_models import (
     TargetReviewState,
     VendorTarget,
 )
+from app.infrastructure.polite_http import HttpResult, PoliteHttpClient
+from app.infrastructure.rate_limiter import HostRateLimiter
+from app.infrastructure.robots import RobotsPolicy
 from app.scrapers.vendors.extractors.store_api import (
     looks_like_product_url,
     parse_sitemap,
@@ -27,9 +31,6 @@ from app.scrapers.vendors.extractors.store_api import (
 )
 from app.scrapers.vendors.extractors.structured_data import parse_product_page
 from app.scrapers.vendors.extractors.value_parsing import compose_name, to_price
-from app.infrastructure.polite_http import HttpResult, PoliteHttpClient
-from app.infrastructure.rate_limiter import HostRateLimiter
-from app.infrastructure.robots import RobotsPolicy
 from app.scrapers.vendors.url_discovery import UrlOnlyDiscovery
 from app.scrapers.vendors.vendor_confidence import DeltaReviewer
 from app.scrapers.vendors.vendor_scraper import VendorScrapeService
@@ -195,7 +196,10 @@ class TestWooStoreApi:
         assert reading.confidence < 0.6  # a range is flagged, never auto-accepted
 
     def test_minor_units(self):
-        assert woo_price({"price": "1250", "currency_minor_unit": 2, "currency_code": "usd"}) == (Decimal("12.50"), "USD")
+        assert woo_price({"price": "1250", "currency_minor_unit": 2, "currency_code": "usd"}) == (
+            Decimal("12.50"),
+            "USD",
+        )
         assert woo_price({"price": "1250", "currency_minor_unit": 0, "currency_code": "JPY"}) == (Decimal(1250), "JPY")
         assert woo_price({"price": "0", "currency_minor_unit": 2}) == (None, None)
 
@@ -262,9 +266,7 @@ SITEMAP_ROUTES = {
 
 class TestSitemapDiscovery:
     def test_robots_sitemap_index_to_product_pages(self):
-        disc, transport, _ = discovery(
-            SITEMAP_ROUTES, robots=robots_policy(fixture("robots_sitemap.txt"))
-        )
+        disc, transport, _ = discovery(SITEMAP_ROUTES, robots=robots_policy(fixture("robots_sitemap.txt")))
         result = disc.discover(ORIGIN)
 
         assert result.method == "sitemap"
@@ -333,7 +335,10 @@ class TestStructuredData:
         micro = parse_product_page(fixture("page_microdata.html"), f"{ORIGIN}/p/selank")
         assert len(micro) == 1
         assert (micro[0].product_name, micro[0].price, micro[0].currency, micro[0].method) == (
-            "Selank 10mg", Decimal("42.50"), "GBP", "microdata",
+            "Selank 10mg",
+            Decimal("42.50"),
+            "GBP",
+            "microdata",
         )
         assert micro[0].stock_status is StockStatus.IN_STOCK
         og = parse_product_page(fixture("page_opengraph.html"), f"{ORIGIN}/p/semax")
@@ -521,9 +526,7 @@ class TestScrapeRun:
 
     def test_draft_target_is_not_scraped(self):
         repo = FakeRepo()
-        target = VendorTarget(
-            slug="rival", name="Rival", store_url=f"{ORIGIN}/", review_state=TargetReviewState.DRAFT
-        )
+        target = VendorTarget(slug="rival", name="Rival", store_url=f"{ORIGIN}/", review_state=TargetReviewState.DRAFT)
         report = scrape_service(WOO_ROUTES, repo).run([target])
         assert report.observations == [] and repo.inserted == []
 
@@ -538,8 +541,12 @@ class TestScrapeRun:
 
         ten_url = "https://rival.example/product/retatrutide/?attribute_pa_size=10mg"
         previous = VendorObservation(
-            vendor="rival", url=ten_url, observed_at=FIXED_NOW, price=Decimal("40.00"),
-            review_status=ReviewStatus.ACCEPTED, confidence=0.95,
+            vendor="rival",
+            url=ten_url,
+            observed_at=FIXED_NOW,
+            price=Decimal("40.00"),
+            review_status=ReviewStatus.ACCEPTED,
+            confidence=0.95,
         )
         report = scrape_service(WOO_ROUTES, FakeRepo({ten_url: previous})).run(
             [VendorTarget(slug="rival", name="Rival", store_url=ORIGIN)]
@@ -603,9 +610,7 @@ class TestUrlOnlyEndpoints:
 
         assert select_targets() == [] and select_targets(["rival-example"]) == []
 
-        approved = run(
-            vendors.approve_vendor_target("rival-example", vendors.ApproveRequest(approved_by="admin@x"))
-        )
+        approved = run(vendors.approve_vendor_target("rival-example", vendors.ApproveRequest(approved_by="admin@x")))
         assert approved["review_state"] == "approved" and approved["approved_by"] == "admin@x"
         assert [t.slug for t in select_targets()] == ["rival-example"]
 
@@ -664,8 +669,10 @@ class TestUrlOnlyEndpoints:
             vendors.update_vendor_target(
                 "rival-example",
                 vendors.TargetPayload(
-                    slug="rival-example", name="Rival",
-                    product_urls=["https://rival.example/p/1"], selectors={"price": [".price"]},
+                    slug="rival-example",
+                    name="Rival",
+                    product_urls=["https://rival.example/p/1"],
+                    selectors={"price": [".price"]},
                 ),
             )
         )
@@ -678,8 +685,10 @@ class TestUrlOnlyEndpoints:
             run(
                 vendors.create_vendor_target(
                     vendors.TargetPayload(
-                        slug=f"rival-{i}", name=f"Rival {i}",
-                        product_urls=[f"https://rival{i}.example/p/1"], selectors={"price": [".price"]},
+                        slug=f"rival-{i}",
+                        name=f"Rival {i}",
+                        product_urls=[f"https://rival{i}.example/p/1"],
+                        selectors={"price": [".price"]},
                     )
                 )
             )
@@ -708,7 +717,7 @@ class TestUrlOnlyEndpoints:
 
             def list_flagged(self, limit, vendor=None, offset=0):
                 rows = [{"id": i} for i in range(7)]
-                return rows[offset: offset + limit]
+                return rows[offset : offset + limit]
 
             def count_flagged(self, vendor=None):
                 return 7

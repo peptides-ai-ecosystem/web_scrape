@@ -1,22 +1,25 @@
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from app.scrapers.pep_pedia.extractors.base import BaseExtractor
-from app.core.models import GraphData, GraphPoint, AxisLabel
-from app.core.config import TIME_RANGES
-from typing import Dict, List, Optional
 import re
 import time
+
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+
+from app.core.config import TIME_RANGES
 from app.core.logging import log_debug, log_error, log_info, log_success
+from app.core.models import AxisLabel, GraphData, GraphPoint
+from app.scrapers.pep_pedia.extractors.base import BaseExtractor
+
+
 class GraphExtractor(BaseExtractor):
     """Extracts pharmacokinetics graph data for the currently active delivery method.
-    
+
     Aligned with graph/scraper.py extraction logic:
     - Extracts path_data (raw SVG d attribute), markers (circle elements), legend (color mapping)
     - Uses wait-for-change strategy to detect tab transitions
     """
 
-    def extract(self, driver, wait) -> Dict[str, GraphData]:
+    def extract(self, driver, wait) -> dict[str, GraphData]:
         all_graph_data = {}
 
         # Guard: skip if graph section doesn't exist for this method
@@ -25,18 +28,17 @@ class GraphExtractor(BaseExtractor):
             return all_graph_data
 
         try:
-            graph_container = wait.until(EC.presence_of_element_located((
-                By.XPATH,
-                "//div[contains(@class, 'rounded-xl') and .//span[contains(text(), 'Peak:')]]"
-            )))
+            graph_container = wait.until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//div[contains(@class, 'rounded-xl') and .//span[contains(text(), 'Peak:')]]")
+                )
+            )
 
             # Wait for the initial SVG path to be ready before doing anything
             self._wait_for_graph_ready(graph_container, wait)
 
             # Find time-range buttons within the graph container
-            time_buttons = graph_container.find_elements(
-                By.CSS_SELECTOR, "div.rounded-full button"
-            )
+            time_buttons = graph_container.find_elements(By.CSS_SELECTOR, "div.rounded-full button")
 
             # Track the current path data to detect changes between tabs
             current_d = None
@@ -69,7 +71,9 @@ class GraphExtractor(BaseExtractor):
                     log_error(f"Failed to scrape tab {btn_text}: {e}", "graph_extractor.py")
                     continue
 
-            log_success(f"Graph extraction complete — {len(all_graph_data)} time-range(s) captured", "graph_extractor.py")
+            log_success(
+                f"Graph extraction complete — {len(all_graph_data)} time-range(s) captured", "graph_extractor.py"
+            )
 
         except TimeoutException:
             log_debug("Graph container not found within timeout.", "graph_extractor.py")
@@ -84,10 +88,11 @@ class GraphExtractor(BaseExtractor):
 
     def _has_graph(self, driver) -> bool:
         """Return True if a graph section exists in the current DOM."""
-        return bool(driver.find_elements(
-            By.XPATH,
-            "//div[contains(@class, 'rounded-xl') and .//span[contains(text(), 'Peak:')]]"
-        ))
+        return bool(
+            driver.find_elements(
+                By.XPATH, "//div[contains(@class, 'rounded-xl') and .//span[contains(text(), 'Peak:')]]"
+            )
+        )
 
     # ------------------------------------------------------------------
     # Wait helpers
@@ -95,11 +100,10 @@ class GraphExtractor(BaseExtractor):
 
     def _wait_for_graph_ready(self, container, wait):
         """Wait until the SVG path data is present and non-trivial (initial graph rendered)."""
+
         def _svg_path_loaded(driver):
             try:
-                path = container.find_element(
-                    By.CSS_SELECTOR, "path[stroke='#3b82f6']"
-                )
+                path = container.find_element(By.CSS_SELECTOR, "path[stroke='#3b82f6']")
                 d = path.get_attribute("d")
                 is_ready = bool(d and len(d) > 10)
                 if is_ready:
@@ -123,11 +127,10 @@ class GraphExtractor(BaseExtractor):
         to actually change, which properly detects tab transitions.
         Without this, we can capture stale data from the previous tab.
         """
+
         def _graph_updated(driver):
             try:
-                path = container.find_element(
-                    By.CSS_SELECTOR, "path[stroke='#3b82f6']"
-                )
+                path = container.find_element(By.CSS_SELECTOR, "path[stroke='#3b82f6']")
                 new_d = path.get_attribute("d")
                 if not new_d or len(new_d) < 10:
                     return False
@@ -187,13 +190,17 @@ class GraphExtractor(BaseExtractor):
             )
 
             # Debug logging
-            log_debug(f"{time_range}: peak={bool(peak)}, path_data={len(path_data) if path_data else 0}B, "
-                      f"markers={len(markers)}, legend={len(legend)}, labels_x={len(x_labels)}, labels_y={len(y_labels)}", "graph_extractor.py")
+            log_debug(
+                f"{time_range}: peak={bool(peak)}, path_data={len(path_data) if path_data else 0}B, "
+                f"markers={len(markers)}, legend={len(legend)}, labels_x={len(x_labels)}, labels_y={len(y_labels)}",
+                "graph_extractor.py",
+            )
 
             return graph_data, path_data
         except Exception as e:
             log_error(f"Graph view scraping failed for {time_range}: {e}", "graph_extractor.py")
             import traceback
+
             traceback.print_exc()
             return None, None
 
@@ -202,9 +209,7 @@ class GraphExtractor(BaseExtractor):
         peak = half_life = cleared = ""
 
         # Strategy 1: text directly inside summary buttons
-        summary_btns = container.find_elements(
-            By.CSS_SELECTOR, "div.flex.items-center.gap-4 button"
-        )
+        summary_btns = container.find_elements(By.CSS_SELECTOR, "div.flex.items-center.gap-4 button")
         for btn in summary_btns:
             text = self.get_text(driver, btn).strip().replace("\n", " ")
             if "Peak:" in text:
@@ -252,7 +257,7 @@ class GraphExtractor(BaseExtractor):
         except (NoSuchElementException, Exception):
             return "", []
 
-    def _extract_markers(self, container) -> List[Dict]:
+    def _extract_markers(self, container) -> list[dict]:
         """Extract circle marker elements from SVG.
 
         Matches graph/scraper.py extract_markers():
@@ -264,12 +269,14 @@ class GraphExtractor(BaseExtractor):
             circles = svg.find_elements(By.TAG_NAME, "circle")
             for circle in circles:
                 try:
-                    markers.append({
-                        "cx": float(circle.get_attribute("cx")),
-                        "cy": float(circle.get_attribute("cy")),
-                        "r": float(circle.get_attribute("r")),
-                        "fill": circle.get_attribute("fill")
-                    })
+                    markers.append(
+                        {
+                            "cx": float(circle.get_attribute("cx")),
+                            "cy": float(circle.get_attribute("cy")),
+                            "r": float(circle.get_attribute("r")),
+                            "fill": circle.get_attribute("fill"),
+                        }
+                    )
                 except (ValueError, TypeError):
                     # Skip markers with invalid numeric attributes
                     continue
@@ -277,7 +284,7 @@ class GraphExtractor(BaseExtractor):
             pass
         return markers
 
-    def _extract_legend(self, driver, container) -> Dict[str, str]:
+    def _extract_legend(self, driver, container) -> dict[str, str]:
         """Extract which color corresponds to which marker type from the legend.
 
         Matches graph/scraper.py extract_legend():
@@ -296,9 +303,7 @@ class GraphExtractor(BaseExtractor):
                     # The color is in a child div with rounded-full class
                     dot = item.find_element(By.CSS_SELECTOR, "div.rounded-full")
                     # Get the actual computed background-color
-                    color = driver.execute_script(
-                        "return window.getComputedStyle(arguments[0]).backgroundColor;", dot
-                    )
+                    color = driver.execute_script("return window.getComputedStyle(arguments[0]).backgroundColor;", dot)
                     legend[label.lower()] = color
                 except Exception:
                     pass
@@ -307,7 +312,7 @@ class GraphExtractor(BaseExtractor):
             pass
         return legend
 
-    def _extract_x_labels(self, driver, container) -> List[AxisLabel]:
+    def _extract_x_labels(self, driver, container) -> list[AxisLabel]:
         labels = []
         try:
             svg = container.find_element(By.TAG_NAME, "svg")
@@ -323,7 +328,7 @@ class GraphExtractor(BaseExtractor):
             pass
         return labels
 
-    def _extract_y_labels(self, driver, container) -> List[AxisLabel]:
+    def _extract_y_labels(self, driver, container) -> list[AxisLabel]:
         labels = []
         try:
             svg = container.find_element(By.TAG_NAME, "svg")
@@ -343,7 +348,7 @@ class GraphExtractor(BaseExtractor):
     # SVG Path Parser
     # ------------------------------------------------------------------
 
-    def _parse_path_data(self, d: str) -> List[GraphPoint]:
+    def _parse_path_data(self, d: str) -> list[GraphPoint]:
         """
         Parse SVG path data collecting end-points for M, L, C, Q commands.
 
@@ -353,13 +358,13 @@ class GraphExtractor(BaseExtractor):
         - Q x1 y1 x y   → quadratic bezier (4 coords, last pair = endpoint)
         """
         COORDS_PER_CMD = {"M": 2, "L": 2, "C": 6, "Q": 4}
-        points: List[GraphPoint] = []
+        points: list[GraphPoint] = []
 
         # Tokenise: split path into command letters and number strings
         tokens = re.findall(r"[MLCQZmlcqz]|[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", d)
 
-        current_cmd: Optional[str] = None
-        num_buf: List[float] = []
+        current_cmd: str | None = None
+        num_buf: list[float] = []
 
         for token in tokens:
             upper = token.upper()

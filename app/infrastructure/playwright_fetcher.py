@@ -18,11 +18,11 @@ this module — and everything that imports it — stays importable (and
 unit-testable) in an environment where the browser binaries were never
 installed. Tests inject a fake fetcher and never reach this code path.
 """
+
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any
 from urllib.parse import urljoin, urlsplit
 
 from app.infrastructure.page_models import FetchResult, PageDocument
@@ -59,7 +59,7 @@ class _PlaywrightPageDocument:
     def __init__(self, page: Any):
         self._page = page
 
-    def query_text(self, selector: str) -> Optional[str]:
+    def query_text(self, selector: str) -> str | None:
         try:
             element = self._page.query_selector(selector)
         except Exception as exc:  # noqa: BLE001 — a bad selector is a config bug, not a crash
@@ -74,7 +74,7 @@ class _PlaywrightPageDocument:
         text = (text or "").strip()
         return text or None
 
-    def query_attr(self, selector: str, attr: str) -> Optional[str]:
+    def query_attr(self, selector: str, attr: str) -> str | None:
         try:
             element = self._page.query_selector(selector)
         except Exception as exc:  # noqa: BLE001
@@ -89,21 +89,21 @@ class _PlaywrightPageDocument:
         value = (value or "").strip()
         return value or None
 
-    def html(self) -> Optional[str]:
+    def html(self) -> str | None:
         """The rendered DOM as HTML (selector-free discovery reads JSON-LD from it)."""
         try:
             return self._page.content()
         except Exception:  # noqa: BLE001
             return None
 
-    def query_all_attr(self, selector: str, attr: str) -> List[str]:
+    def query_all_attr(self, selector: str, attr: str) -> list[str]:
         """Attribute of every match, in document order (listing-page links)."""
         try:
             elements = self._page.query_selector_all(selector)
         except Exception as exc:  # noqa: BLE001
             logger.debug("Selector %r failed: %s", selector, exc)
             return []
-        out: List[str] = []
+        out: list[str] = []
         for element in elements:
             try:
                 value = (element.get_attribute(attr) or "").strip()
@@ -132,7 +132,7 @@ class PlaywrightPageFetcher:
         self._context: Any = None
         self._pending_page: Any = None
         #: Why the SSRF guard aborted a request during the current fetch.
-        self._blocked_reason: Optional[str] = None
+        self._blocked_reason: str | None = None
         #: Whether the current fetch lets the page run its scripts.
         self._render_scripts = False
 
@@ -148,7 +148,7 @@ class PlaywrightPageFetcher:
         self._playwright = sync_playwright().start()
         # Reuse the Chromium the image already installs for Selenium
         # (CHROME_BIN, see Dockerfile) instead of downloading a second copy.
-        launch_kwargs: Dict[str, Any] = {"headless": True}
+        launch_kwargs: dict[str, Any] = {"headless": True}
         chrome_bin = os.environ.get("CHROME_BIN")
         if chrome_bin and os.path.isfile(chrome_bin):
             launch_kwargs["executable_path"] = chrome_bin
@@ -184,7 +184,7 @@ class PlaywrightPageFetcher:
     # -- fetching ----------------------------------------------------------
 
     @staticmethod
-    def _retry_after(headers: Dict[str, str]) -> Optional[float]:
+    def _retry_after(headers: dict[str, str]) -> float | None:
         raw = (headers or {}).get("retry-after")
         if raw is None:
             return None
@@ -295,9 +295,7 @@ class PlaywrightPageFetcher:
             response = self._pending_page.goto(url, wait_until="domcontentloaded")
         except Exception as exc:  # noqa: BLE001
             if self._blocked_reason:
-                return FetchResult(
-                    status=None, error=f"blocked (non-public address): {self._blocked_reason}"
-                )
+                return FetchResult(status=None, error=f"blocked (non-public address): {self._blocked_reason}")
             return FetchResult(status=None, error=str(exc))
 
         if response is None:
@@ -305,7 +303,7 @@ class PlaywrightPageFetcher:
 
         status = response.status
         if status >= 400:
-            headers: Dict[str, str] = {}
+            headers: dict[str, str] = {}
             try:
                 headers = {k.lower(): v for k, v in (response.headers or {}).items()}
             except Exception:  # noqa: BLE001

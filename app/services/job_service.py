@@ -1,20 +1,19 @@
 """Background job queries for ``/api/v1/operations`` (the in-memory job queue)."""
-from typing import Any, Dict, Optional
+
+from typing import Any
 
 from app.core.errors import BadRequestError, NotFoundError
 from app.core.job_queue import JobStatus, get_job_queue
 
 
-def list_jobs(status: Optional[str] = None) -> Dict[str, Any]:
+def list_jobs(status: str | None = None) -> dict[str, Any]:
     """Every job in the queue, optionally filtered by status; 400 for an unknown status."""
     queue = get_job_queue()
 
     try:
         filter_status = JobStatus(status) if status else None
     except ValueError:
-        raise BadRequestError(
-            f"Invalid status '{status}'. Must be one of: {', '.join([s.value for s in JobStatus])}"
-        )
+        raise BadRequestError(f"Invalid status '{status}'. Must be one of: {', '.join([s.value for s in JobStatus])}")
 
     jobs = queue.list_jobs(filter_status)
     return {
@@ -24,7 +23,7 @@ def list_jobs(status: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-def get_job(job_id: str) -> Dict[str, Any]:
+def get_job(job_id: str) -> dict[str, Any]:
     """One job's full record; 404 when unknown."""
     job = get_job_queue().get_job(job_id)
     if not job:
@@ -32,7 +31,7 @@ def get_job(job_id: str) -> Dict[str, Any]:
     return job.to_dict()
 
 
-def cancel_job(job_id: str) -> Dict[str, Any]:
+def cancel_job(job_id: str) -> dict[str, Any]:
     """Cancel a pending or running job; 404 when unknown, 400 when already finished."""
     job = get_job_queue().get_job(job_id)
 
@@ -41,8 +40,7 @@ def cancel_job(job_id: str) -> Dict[str, Any]:
 
     if job.status not in [JobStatus.PENDING, JobStatus.RUNNING]:
         raise BadRequestError(
-            f"Cannot cancel job in '{job.status.value}' status. "
-            f"Only 'pending' or 'running' jobs can be cancelled."
+            f"Cannot cancel job in '{job.status.value}' status. Only 'pending' or 'running' jobs can be cancelled."
         )
 
     job.cancel()
@@ -52,7 +50,7 @@ def cancel_job(job_id: str) -> Dict[str, Any]:
     }
 
 
-def health() -> Dict[str, Any]:
+def health() -> dict[str, Any]:
     """Always "healthy" while the process answers, plus job counts by status."""
     jobs = get_job_queue().list_jobs()
 

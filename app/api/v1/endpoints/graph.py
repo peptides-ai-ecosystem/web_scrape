@@ -1,6 +1,6 @@
 """PK graph endpoints: status codes plus one call to ``app.services.graph_service``."""
+
 import logging
-from typing import List
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 @router.get(
     "/peptides",
-    response_model=List[PeptideItem],
+    response_model=list[PeptideItem],
     responses={
         200: {
             "description": "List of peptides that have at least one graph data row in `peptide_graph`.",
@@ -124,7 +124,7 @@ async def get_pk_summary():
 
 @router.get(
     "/peptide/{peptide_id}/methods",
-    response_model=List[MethodItem],
+    response_model=list[MethodItem],
     responses={
         200: {
             "description": "List of administration methods with graph data for the given peptide.",
@@ -189,14 +189,38 @@ async def get_peptide_methods(
                             "metadata": {"peak": "48 min", "half_life": "8 hrs", "cleared": "~1.7 days"},
                             "path_data": "M 10 35 C 10.258 35, ...",
                             "markers": [{"r": 0.7, "cx": 41.82, "cy": 20.60, "fill": "#f59e0b"}],
-                            "points":  [{"x": 10.0, "y": 35.0}, {"x": 10.86, "y": 26.3}],
+                            "points": [{"x": 10.0, "y": 35.0}, {"x": 10.86, "y": 26.3}],
                             "x_labels": [{"pos": 10.0, "label": "Dose"}, {"pos": 96.0, "label": "1d"}],
-                            "y_labels": [{"pos": 8.0,  "label": "100%"}, {"pos": 21.3, "label": "50%"}],
-                            "legend":   {"peak": "rgb(34, 197, 94)", "half-life": "rgb(245, 158, 11)"},
+                            "y_labels": [{"pos": 8.0, "label": "100%"}, {"pos": 21.3, "label": "50%"}],
+                            "legend": {"peak": "rgb(34, 197, 94)", "half-life": "rgb(245, 158, 11)"},
                         },
-                        "7d":  {"metadata": {}, "path_data": "...", "markers": [], "points": [], "x_labels": [], "y_labels": [], "legend": {}},
-                        "14d": {"metadata": {}, "path_data": "...", "markers": [], "points": [], "x_labels": [], "y_labels": [], "legend": {}},
-                        "30d": {"metadata": {}, "path_data": "...", "markers": [], "points": [], "x_labels": [], "y_labels": [], "legend": {}},
+                        "7d": {
+                            "metadata": {},
+                            "path_data": "...",
+                            "markers": [],
+                            "points": [],
+                            "x_labels": [],
+                            "y_labels": [],
+                            "legend": {},
+                        },
+                        "14d": {
+                            "metadata": {},
+                            "path_data": "...",
+                            "markers": [],
+                            "points": [],
+                            "x_labels": [],
+                            "y_labels": [],
+                            "legend": {},
+                        },
+                        "30d": {
+                            "metadata": {},
+                            "path_data": "...",
+                            "markers": [],
+                            "points": [],
+                            "x_labels": [],
+                            "y_labels": [],
+                            "legend": {},
+                        },
                     }
                 }
             },
@@ -204,7 +228,7 @@ async def get_peptide_methods(
         404: {"description": "No graph data for this peptide + method combination."},
         422: {
             "description": "Validation error — invalid `method` value. "
-                            "Must be one of the methods returned by `/peptide/{id}/methods`."
+            "Must be one of the methods returned by `/peptide/{id}/methods`."
         },
         500: {"description": "Database error."},
     },
@@ -248,4 +272,3 @@ async def get_graph_data(
     except Exception as e:
         logger.error(f"Failed to fetch graph data for peptide {peptide_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

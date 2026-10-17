@@ -2,6 +2,7 @@
 
 Offline: the DB pool is replaced by a fake, so no database is touched.
 """
+
 from contextlib import contextmanager
 from datetime import datetime
 

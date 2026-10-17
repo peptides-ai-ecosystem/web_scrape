@@ -17,19 +17,18 @@ below the acceptance threshold so a human looks at it before it is used.
 
 Pure functions over strings — no I/O — so they are tested on recorded pages.
 """
+
 from __future__ import annotations
 
-import html as html_lib
 import json
 import logging
 import re
 from collections.abc import Iterable
-from decimal import Decimal, InvalidOperation
-from html.parser import HTMLParser
+from decimal import Decimal
 from typing import Any
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit
 
-from app.core.vendor_models import ProductReading, StockStatus
+from app.core.vendor_models import ProductReading
 from app.scrapers.vendors.extractors.page_scan import PageScan
 from app.scrapers.vendors.extractors.value_parsing import (
     availability_of,
@@ -42,7 +41,6 @@ from app.scrapers.vendors.extractors.value_parsing import (
     usable_label,
     variant_url,
 )
-from app.scrapers.vendors.extractors.vendor_listing import MAX_PLAUSIBLE_PRICE
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +56,7 @@ CONFIDENCE = {
 #: Several prices on one page that we cannot tell apart by size, or only a
 #: price range: kept, but flagged for a human.
 AMBIGUOUS_CONFIDENCE = 0.5
+
 
 def _load_ld(block: str) -> list[Any]:
     text = block.strip()
@@ -173,8 +172,12 @@ def _product_readings(
         if many and offer_label is None:
             offer_label = (
                 label_from_names(base, clean_text(offer.get("name")))
-                or label_from_names(base, clean_text((offer.get("itemOffered") or {}).get("name"))
-                                    if isinstance(offer.get("itemOffered"), dict) else None)
+                or label_from_names(
+                    base,
+                    clean_text((offer.get("itemOffered") or {}).get("name"))
+                    if isinstance(offer.get("itemOffered"), dict)
+                    else None,
+                )
                 or usable_label(offer.get("size"))
             )
         offer_sku = clean_text(offer.get("sku")) or sku
@@ -249,7 +252,10 @@ def json_ld_readings(
                     if urlsplit(candidate).netloc == urlsplit(page_url).netloc:
                         variant_page = candidate
                 found = _product_readings(
-                    variant, variant_page, default_currency, base_name=group_name,
+                    variant,
+                    variant_page,
+                    default_currency,
+                    base_name=group_name,
                     variant_key=key if variant_page == page_url else None,
                 )
                 readings.extend(found)
@@ -267,9 +273,7 @@ def json_ld_readings(
     return list(unique.values())
 
 
-def parse_product_page(
-    html: str, page_url: str, default_currency: str | None = None
-) -> list[ProductReading]:
+def parse_product_page(html: str, page_url: str, default_currency: str | None = None) -> list[ProductReading]:
     """Every price reading a product page publishes, best source first."""
     if not html:
         return []
@@ -284,9 +288,12 @@ def parse_product_page(
     if readings:
         return readings
 
-    fallback_name = clean_text(scan.microdata.get("name")) or clean_text(scan.h1) or clean_text(
-        scan.meta.get("og:title")
-    ) or clean_text(scan.title)
+    fallback_name = (
+        clean_text(scan.microdata.get("name"))
+        or clean_text(scan.h1)
+        or clean_text(scan.meta.get("og:title"))
+        or clean_text(scan.title)
+    )
 
     price = to_price(scan.microdata.get("price")) or to_price(scan.microdata.get("lowPrice"))
     if price is not None:
