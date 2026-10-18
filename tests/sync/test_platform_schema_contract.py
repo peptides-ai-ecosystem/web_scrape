@@ -34,7 +34,8 @@ from tests.sync.platform_schema import (
 # Columns web_scrape writes that the platform's Drizzle schema does not declare.
 # They exist in the database only because migrations/ adds them by hand. Each
 # entry is a cross-repo bug to fix in the platform schema (XR-8); remove the
-# entry when it is fixed and the test will hold the line.
+# entry when it is fixed and the test will hold the line. Tracked in
+# https://github.com/peptides-apps/peptides-platform/issues/522 ([XR-8], ADR 0009).
 KNOWN_UNDECLARED_COLUMNS = {
     ("peptides", "molecular_type"),
     ("peptides", "molecular_length"),
