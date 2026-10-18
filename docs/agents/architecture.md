@@ -11,7 +11,7 @@ One FastAPI service (`main.py` -> `app/factory.py`) with three paths and a sched
 3. `app/infrastructure/csv_storage.py` writes the CSV.
 
 ## 2. Sync into the platform database (XR-8)
-1. `app/services/sync/db_import_orchestrator.py` maps each CSV row by group A-F (`group_a/` lookups, `group_b/` peptide, `group_c/` relations, `group_d/` protocols and graph, `group_e/`, `group_f/`); insert order is in `docs/structured.md`.
+1. `app/services/sync/db_import_orchestrator.py` maps each CSV row by group A-F (`group_a/` lookups, `group_b/` peptide, `group_c/` relations, `group_d/` protocols and graph, `group_e/`, `group_f/`); insert order is in `docs/product/sync-schema.md`.
 2. `group_sync.py` writes group A and the relations; `graph_import_orchestrator.py` writes `peptide_graph`.
 3. Writes go through `app/repositories/` (one file per platform table). Sync is fill-empty-only unless the request says otherwise. `delete_peptide_cascading` in `app/repositories/peptide.py` names every platform table that references a peptide.
 4. `app/evaluation/` compares CSV and database after a sync (`/api/v1/evaluation/*`).

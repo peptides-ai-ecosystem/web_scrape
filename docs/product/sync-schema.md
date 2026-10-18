@@ -1,4 +1,259 @@
-# Sync Pipeline: CSV → Database Field Mapping
+# Sync schema: insert order, entity relations and field mapping
+
+One document for how a scraped CSV row becomes rows of the platform's tables (XR-8). The platform's Drizzle schema owns the tables; this service only writes them.
+
+- [Insert order](#part-1-insert-order)
+- [Entity relations](#part-2-entity-relations)
+- [CSV column to table column](#part-3-csv-column-to-table-column)
+
+---
+
+## Part 1: Insert order
+
+This document defines the relational structure and the required insertion order for the `peptides` database to preserve referential integrity.
+
+### 1. Insertion Hierarchy
+
+To maintain foreign key constraints, data must be inserted in the following order:
+
+#### Group A: Independent Lookup Tables
+These tables have no dependencies on other entities (or only self-reference).
+1.  **`categories`**: Peptide categories (supports hierarchical structure via `parent_category_id`).
+2.  **`administration_methods`**: Methods of use (Injectable, Oral, etc.).
+3.  **`benefits`**: General benefits (Muscle Growth, Recovery, etc.).
+4.  **`side_effects`**: Potential side effects.
+5.  **`dosages`**: Base dosage units and amounts.
+6.  **`schedules`**: Frequency and timing schedules.
+7.  **`application_places`**: Body locations for application.
+8.  **`research_studies`** / **`citations`**: External references.
+
+#### Group B: Core Entities
+9.  **`peptides`**: The central record. Depends on `categories` (category_id).
+
+#### Group C: Peptide-Specific Relations
+These tables link directly to the peptide.
+10. **`peptide_benefits`**: Links `peptides` to `benefits`.
+11. **`peptide_side_effects`**: Links `peptides` to `side_effects`.
+12. **`peptide_interactions`**: Links `peptides` to other peptides (or names).
+13. **`peptide_research_indications`**: Specific research categories for a peptide.
+14. **`peptide_references`**: Links `peptides` to `research_studies`.
+
+#### Group D: Protocol Structure
+15. **`peptide_protocols`**: Defines a specific use protocol. Depends on `peptides` and `administration_methods`.
+
+#### Group E: Protocol Details
+16. **`peptide_protocol_reconstitution_steps`**: Steps to prepare the peptide. Depends on `peptide_protocols`.
+17. **`protocol_application_places`**: Junction between `peptide_protocols` and `application_places`.
+18. **`protocol_quality_indicators`**: Verification steps. Depends on `peptide_protocols`.
+19. **`protocol_dosages`**: The actual dosage plan. Depends on `peptide_protocols`, `dosages`, and `schedules`.
+
+#### Group F: Dosage Context
+20. **`protocol_dosage_benefits`**: Benefits linked to a specific protocol dose. Depends on `protocol_dosages` and `benefits`.
+21. **`protocol_dosage_side_effects`**: Side effects linked to a specific protocol dose. Depends on `protocol_dosages` and `side_effects`.
+22. **`peptide_research_indication_studies`**: Links an indication to a study. Depends on `peptide_research_indications` and `research_studies`.
+
+---
+
+### 2. Table Value Relationships & Constraints
+
+| Table Name | Linkage (Foreign Key) | Key Values / Columns |
+| :--- | :--- | :--- |
+| `peptides` | `category_id` -> `categories(id)` | `name`, `slug`, `overview`, `mechanism_of_action`, `sequence` |
+| `peptide_protocols` | `peptide_id`, `administration_method_id` | `name`, `expectations` (JSONB), `best_timing` |
+| `peptide_benefits` | `peptide_id`, `benefit_id` | `general_potency`, `general_evidence_level` |
+| `peptide_interactions` | `peptide_id_1`, `peptide_id_2` (opt) | `interaction_type` (Enum), `severity`, `description` |
+| `protocol_dosages` | `protocol_id`, `dosage_id`, `schedule_id` | `is_default`, `notes`, `sort_order` |
+| `protocol_application_places` | `protocol_id`, `application_place_id` | Junction table |
+
+---
+
+### 3. Data Mapping Guidance
+
+*   **Dictionaries**: Before inserting core data, ensure lookup tables (`benefits`, `side_effects`, etc.) are populated or checked for existing names to retrieve IDs.
+*   **JSONB Fields**: Columns like `expectations`, `quick_start_guide`, and `pharmacokinetics_json` contain structured nested data.
+*   **Enums**: Fields like `interaction_type`, `fda_approval_status`, and `wada_status` use custom types. Values must match the DB definitions.
+
+---
+
+## Part 2: Entity relations
+
+This document outlines the relational structure of the database based on the DBML schema, demonstrating how the raw scraped data should be normalized and mapped into the relational database.
+
+### Core Entities
+1. **Peptides** (`peptides`)
+   - The central entity in the schema.
+   - Primary Key: `id`
+
+2. **Administration Methods** (`administration_methods`) 
+   - Stores distinct methods (e.g., Injectable, Oral, Topical).
+   - Primary Key: `id`
+   - Relates to Peptides via Protocols.
+
+### Relational Linkages & Hierarchy
+
+#### 1. Peptide Level Relations
+- **Benefits**: `peptide_benefits` links directly to `benefits`.
+- **Side Effects**: `peptide_side_effects` links directly to `side_effects`.
+- **Interactions**: `peptide_interactions` links to other peptides (by ID or name).
+- **Research Indications**: `peptide_research_indications` identifies use cases.
+- **References**: `peptide_references` links to `research_studies` or `citations`.
+
+#### 2. Protocol Hierarchy (`peptide_protocols`)
+The protocol is a specific use-case for a peptide via an administration method.
+- **Core**: `peptides` + `administration_methods` -> `peptide_protocols`.
+- **Protocol Children ("Protocols Others")**:
+    - **Reconstitution**: `peptide_protocol_reconstitution_steps` (Step-by-step mixing).
+    - **Quality**: `protocol_quality_indicators` (Verify product integrity).
+    - **Application**: `protocol_application_places` (Junction to `application_places`).
+    - **Research Context**: `peptide_research_indication_studies` (Links a specific indication to this protocol and a study).
+
+#### 3. Dosage & Benefit Hierarchy
+- **Dosages**: `protocol_dosages` (Specific dose instances for a protocol).
+    - **Dosage Benefits**: `protocol_dosage_benefits` (Benefits achieved *at this specific dose*).
+    - **Dosage Side Effects**: `protocol_dosage_side_effects` (Side effects likely *at this specific dose*).
+
+---
+
+### Processing Flow Recommendation for Scraped Data
+
+When transforming the flattened scraped data into structured insertion payloads, it is recommended to group the output relationally to guarantee integrity constraints (Foreign Keys).
+
+```json
+{
+  "peptide": {
+    "name": "BPC-157",
+    "sequence": "...",
+    "interactions": [
+      { "peptide_name_2": "TB-500", "interaction_type": "synergistic", "description": "..." }
+    ],
+    "side_effects": [ "Nausea" ],
+    "benefits": [ "Wound healing" ],
+    "protocols": [
+      {
+        "administration_method": "Injectable",
+        "name": "Healing Protocol",
+        "reconstitution_steps": [ { "step_number": 1, "description": "..." } ],
+        "quality_indicators": [ { "indicator_title": "...", "indicator_description": "..." } ],
+        "application_places": [ "Belly fat" ],
+        "dosages": [
+          {
+            "amount": 250,
+            "unit": "mcg",
+            "schedule": "Twice daily",
+            "side_effects": [ { "name": "Redness at site", "likelihood": "common" } ],
+            "benefits": [ { "name": "Faster recovery", "onset_time": "3 weeks" } ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Dependency Insertion Order
+To maintain referential integrity, inserts must follow this hierarchy (detailed in [Part 1](#part-1-insert-order)):
+1.  **Lookups**: `categories`, `administration_methods`, `benefits`, `side_effects`, `dosages`, `schedules`, `application_places`, `research_studies`.
+2.  **Core**: `peptides`.
+3.  **Peptide Bridges**: `peptide_benefits`, `peptide_side_effects`, `peptide_interactions`, `peptide_research_indications`, `peptide_references`.
+4.  **Protocols**: `peptide_protocols`.
+5.  **Protocol Details**: `peptide_protocol_reconstitution_steps`, `protocol_application_places`, `protocol_quality_indicators`, `protocol_dosages`.
+6.  **Dosage/Study Context**: `protocol_dosage_benefits`, `protocol_dosage_side_effects`, `peptide_research_indication_studies`.
+
+---
+
+### Scraped CSV to JSON payload mapping
+
+This document maps the columns found in the scraped CSV (e.g., `output_v6/pep_pedia_master.csv`) to the hierarchical JSON payload structure defined above. This payload matches the required dependencies and ordering for insertion into the database schema.
+
+#### 1. Top-Level Peptide Entity (`peptides`)
+
+*   `Peptide_Name` -> `peptide.name`
+*   `Full_Name` -> `peptide.synonyms`
+*   `overview_what_is_[peptide]` (dynamic match) -> `peptide.overview`
+*   `overview_mechanism_of_action` -> `peptide.mechanism_of_action`
+*   `cycle` -> `peptide.cycle_duration`
+*   `storage` -> `peptide.storage_temperature`
+*   `molecular_information_amino_acid_sequence` -> `peptide.sequence` (if present)
+
+#### 2. Benefits (`benefits` & `peptide_benefits`)
+*   `overview_key_benefits` -> Must be split by commas (or periods) into an array of individual strings/objects.
+    *   **Mapping:** `peptide.benefits` -> `[ { "name": "Enhanced NAD+ levels" }, ... ]`
+
+#### 3. Side Effects (`side_effects` & `peptide_side_effects`)
+*   `side_effects_and_safety_side_effects_X` (where X is 1 to 7+) -> Array of individual side effects.
+    *   **Mapping:** `peptide.side_effects` -> `[ { "name": "Nausea" }, ... ]`
+*   `side_effects_and_safety_when_to_stop_X` -> Merged into a text block or array for `peptide.stop_signs`.
+
+#### 4. Interactions (`peptide_interactions`)
+Based on dynamic fields like: `peptide_interactions_[secondary_peptide]_[interaction_type]` (e.g., `peptide_interactions_nad+_precursors_(nmn,_nr)_synergistic`)
+*   **Secondary Peptide Name**: Extracted from column name between `peptide_interactions_` and the last `_[type]`.
+*   **Interaction Type**: The last suffix in the column name (e.g., `synergistic`, `compatible`).
+*   **Description**: The cell's text value.
+    *   **Mapping:** `peptide.interactions` -> `[ { "peptide_name_2": "NAD+ Precursors", "interaction_type": "synergistic", "description": "..." } ]`
+
+#### 5. Protocols (`peptide_protocols` umbrella)
+
+Because a single row in the CSV usually represents a specific Peptide + Method combination, the base protocol attributes come directly from the row.
+*   `Method` -> `protocol.administration_method` (e.g., "Injectable", "Oral")
+*   `what_to_expect_X` -> Becomes a JSON array under `protocol.expectations` -> `[ "Week 1: Energy increase", ... ]`
+
+##### 5.1 Reconstitution Steps (`peptide_protocol_reconstitution_steps`)
+*   `how_to_reconstitute_others` -> Parsed line-by-line or by numbered steps.
+    *   **Mapping:** `protocol.reconstitution_steps` -> `[ { "step_number": 1, "description": "..." } ]`
+
+##### 5.2 Quality Indicators (`protocol_quality_indicators`)
+Based on columns starting with `quality_indicators_`:
+*   **Indicator Title**: The extracted end of the column name (e.g., `white_to_off-white_capsules` -> "White to off-white capsules").
+*   **Description**: The cell's text value.
+    *   **Mapping:** `protocol.quality_indicators` -> `[ { "indicator_title": "...", "indicator_description": "..." } ]`
+
+##### 5.3 Application Places (`application_places` & `protocol_application_places`)
+*   `route` -> Provides context for places (e.g., "Injectable (SubQ: abdomen, thigh, arm)"). Parses into places.
+    *   **Mapping:** `protocol.application_places` -> `[ "abdomen", "thigh", "arm" ]`
+
+##### 5.4 Dosages & Schedules (`dosages`, `schedules`, `protocol_dosages`)
+Extracted from both generic and enumerated columns.
+
+**Generic dosage:**
+*   `typical_dose` -> Amount and Unit mappings.
+
+**Enumerated research protocols (X = 1 to 5):**
+*   `research_protocols_goal_X` -> Maps to `dosage.name` (e.g., "Conservative starting") or protocol sub-name.
+*   `research_protocols_dose_X` -> Maps to `amount` and `unit`.
+*   `research_protocols_frequency_X` -> Maps to `schedule.name` or `frequency`.
+    *   **Mapping:**
+        ```json
+        "dosages": [
+          {
+            "name": "Conservative starting",
+            "amount": "150-250",
+            "unit": "mcg",
+            "schedule": "1x daily"
+          }
+        ]
+        ```
+
+#### 6. Research Indications (`peptide_research_indications`)
+Based on dynamic columns like: `research_indications_[category]_[tag]_([specific_indication])`
+*   **Category/Indication**: Embedded in the column name (e.g., *Longevity (NAD+ Enhancement)*).
+*   **Tag**: Extracted enum value (e.g., `most_effective`, `moderate`).
+*   **Description**: The cell value.
+    *   **Mapping:** `peptide.research_indications` -> `[ { "indication_title": "NAD+ Enhancement", "effectiveness_tag": "most_effective", "description": "..." } ]`
+
+#### 7. Research Studies & Citations (`references`)
+Based on columns like: `references_research_studies_([title])`
+*   **Title**: Extracted from column name between parentheses.
+*   **Value (URL/Abstract)**: The cell's text value.
+    *   **Mapping:** `peptide.references` -> `[ { "reference_type": "study", "title": "Muscle Function...", "abstract": "..." } ]`
+
+#### 8. Pharmacokinetics/Graph Data
+*   `graph_data_json` -> Direct pass-through to a JSONB column (e.g., `pharmacokinetics_json` inside the peptide record).
+
+---
+
+---
+
+## Part 3: CSV column to table column
 
 > **Generated:** 2026-07-01
 > **Purpose:** Comprehensive reference for how scraped CSV columns map to database tables during the sync pipeline.
@@ -6,7 +261,7 @@
 
 ---
 
-## Table of Contents
+### Table of Contents
 
 1. [Lookup Tables (Group A)](#1-lookup-tables-group-a)
 2. [Peptides Core Table (Group B)](#2-peptides-core-table-group-b)
@@ -18,9 +273,9 @@
 
 ---
 
-## 1. Lookup Tables (Group A)
+### 1. Lookup Tables (Group A)
 
-### `administration_methods`
+#### `administration_methods`
 
 Stores administration/route methods (e.g. Injectable, Capsule, Nasal Spray).
 
@@ -36,7 +291,7 @@ Stores administration/route methods (e.g. Injectable, Capsule, Nasal Spray).
 
 ---
 
-### `benefits`
+#### `benefits`
 
 Stores general benefit descriptions.
 
@@ -51,7 +306,7 @@ Stores general benefit descriptions.
 
 ---
 
-### `side_effects`
+#### `side_effects`
 
 Stores potential side effects.
 
@@ -66,7 +321,7 @@ Stores potential side effects.
 
 ---
 
-### `schedules`
+#### `schedules`
 
 Stores frequency and timing schedules.
 
@@ -81,7 +336,7 @@ Stores frequency and timing schedules.
 
 ---
 
-### `dosages`
+#### `dosages`
 
 Stores dosage amounts and units.
 
@@ -100,7 +355,7 @@ Stores dosage amounts and units.
 
 ---
 
-### `application_places`
+#### `application_places`
 
 Stores injection/application sites.
 
@@ -114,7 +369,7 @@ Stores injection/application sites.
 
 ---
 
-### `research_studies`
+#### `research_studies`
 
 Stores external research studies.
 
@@ -129,7 +384,7 @@ Stores external research studies.
 
 ---
 
-### `citations`
+#### `citations`
 
 Stores academic citations with DOIs.
 
@@ -147,9 +402,9 @@ Stores academic citations with DOIs.
 
 ---
 
-## 2. Peptides Core Table (Group B)
+### 2. Peptides Core Table (Group B)
 
-### `peptides`
+#### `peptides`
 
 The central peptide record — one row per peptide.
 
@@ -175,9 +430,9 @@ The central peptide record — one row per peptide.
 
 ---
 
-## 3. Relation / Junction Tables (Group C)
+### 3. Relation / Junction Tables (Group C)
 
-### `peptide_benefits`
+#### `peptide_benefits`
 
 Links peptides to their benefits.
 
@@ -192,7 +447,7 @@ Links peptides to their benefits.
 
 ---
 
-### `peptide_side_effects`
+#### `peptide_side_effects`
 
 Links peptides to their side effects.
 
@@ -207,7 +462,7 @@ Links peptides to their side effects.
 
 ---
 
-### `peptide_interactions`
+#### `peptide_interactions`
 
 Captures interactions between peptides.
 
@@ -227,7 +482,7 @@ Captures interactions between peptides.
 
 ---
 
-### `peptide_research_indications`
+#### `peptide_research_indications`
 
 Maps research indications/tags to peptides.
 
@@ -250,7 +505,7 @@ Maps research indications/tags to peptides.
 
 ---
 
-### `peptide_references`
+#### `peptide_references`
 
 Links peptides to research studies and citations.
 
@@ -269,9 +524,9 @@ Links peptides to research studies and citations.
 
 ---
 
-## 4. Protocol Tables (Group D + E)
+### 4. Protocol Tables (Group D + E)
 
-### `peptide_protocols`
+#### `peptide_protocols`
 
 Each protocol represents a specific administration protocol for a peptide.
 
@@ -294,7 +549,7 @@ Each protocol represents a specific administration protocol for a peptide.
 
 ---
 
-### `peptide_protocol_reconstitution_steps`
+#### `peptide_protocol_reconstitution_steps`
 
 Numbered steps for reconstituting the peptide.
 
@@ -310,7 +565,7 @@ Numbered steps for reconstituting the peptide.
 
 ---
 
-### `protocol_quality_indicators`
+#### `protocol_quality_indicators`
 
 Quality indicators for the protocol.
 
@@ -327,7 +582,7 @@ Quality indicators for the protocol.
 
 ---
 
-### `protocol_application_places`
+#### `protocol_application_places`
 
 Links protocols to application places.
 
@@ -342,7 +597,7 @@ Links protocols to application places.
 
 ---
 
-### `protocol_dosages`
+#### `protocol_dosages`
 
 Links protocols to dosages and schedules.
 
@@ -360,9 +615,9 @@ Links protocols to dosages and schedules.
 
 ---
 
-## 5. Graph Table (Group D)
+### 5. Graph Table (Group D)
 
-### `peptide_graph`
+#### `peptide_graph`
 
 Pharmacokinetics graph data (concentration curves over time).
 
@@ -392,7 +647,7 @@ Pharmacokinetics graph data (concentration curves over time).
 
 ---
 
-## 6. Method Keyword Mapping
+### 6. Method Keyword Mapping
 
 The `Method` CSV field contains raw scraped values that are mapped to canonical DB names before insertion:
 
@@ -408,9 +663,9 @@ The `Method` CSV field contains raw scraped values that are mapped to canonical 
 
 ---
 
-## 7. Sync Pipeline Overview
+### 7. Sync Pipeline Overview
 
-### Core Sync (`POST /sync/core`)
+#### Core Sync (`POST /sync/core`)
 
 ```
 URLs → Scrape (CORE_ONLY mode) → pep_pedia_enhanced.csv → DbImportOrchestrator
@@ -439,7 +694,7 @@ URLs → Scrape (CORE_ONLY mode) → pep_pedia_enhanced.csv → DbImportOrchestr
                   protocol_dosages
 ```
 
-### Graph Sync (`POST /sync/graph`)
+#### Graph Sync (`POST /sync/graph`)
 
 ```
 URLs → Scrape (GRAPH_ONLY mode) → pep_pedia_graph.csv → GraphImportOrchestrator
@@ -450,15 +705,15 @@ URLs → Scrape (GRAPH_ONLY mode) → pep_pedia_graph.csv → GraphImportOrchest
                                                     peptide_graph
 ```
 
-### Graph-Missing Sync (`POST /sync/graph-missing`)
+#### Graph-Missing Sync (`POST /sync/graph-missing`)
 
 Same as Graph Sync, but only injects graph data for `administration_method_id` combinations that do **not** already exist for that peptide.
 
 ---
 
-## Appendix: CSV File Reference
+### Appendix: CSV File Reference
 
-### `output_dir/pep_pedia_enhanced.csv`
+#### `output_dir/pep_pedia_enhanced.csv`
 
 Used by **Core Sync**. Contains all peptide data fields.
 
@@ -477,8 +732,9 @@ Used by **Core Sync**. Contains all peptide data fields.
 - References: `references_research_studies_{key}`, `references_citations_{key}`
 - FDA/WADA: `fda_approval_status`, `wada_status`
 
-### `output_dir/pep_pedia_graph.csv`
+#### `output_dir/pep_pedia_graph.csv`
 
 Used by **Graph Sync**. Contains identity fields + graph JSON data.
 
 **Columns:** `Peptide_Name`, `Full_Name`, `Method`, `URL`, `typical_dose`, `route`, `cycle`, `storage`, `graph_data_json`
+

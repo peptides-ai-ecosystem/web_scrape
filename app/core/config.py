@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     # ── URL-only competitor discovery (AAD-1) ─────────────────────────────
     # A target saved with only a store URL (no CSS selectors) is read through
     # the WooCommerce Store API, Shopify products.json, sitemaps + schema.org
-    # JSON-LD, in that order. See docs/features/url-only-discovery.md.
+    # JSON-LD, in that order. See docs/product/url-only-discovery.md.
     # Hard cap on HTTP requests one discovery may make against one store.
     VENDOR_DISCOVERY_MAX_REQUESTS: int = 60
     # Cap on products (not variants) read per store per run when the target

@@ -45,6 +45,7 @@ DOC_GLOBS = [
     "docs/agents/**/*.md",
     "docs/adr/*.md",
     "docs/ops/*.md",
+    "docs/product/*.md",
     ".claude/skills/*/SKILL.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
     "tests/README.md",

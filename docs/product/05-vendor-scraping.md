@@ -1,16 +1,16 @@
 # Feature: Competitor Vendor Price Scraping
 
-> **Issue**: peptides-platform#288 (depends on #263 / #10)
->
+> **Status**: shipped for scraping, scoring, review and the API. Publishing accepted readings into the platform is not implemented (ADR 0006, `docs/adr/0006-vendor-publisher-is-a-seam.md`).
+
 > **Modules**: `app/core/vendor_models.py`, `app/infrastructure/{robots,rate_limiter,playwright_fetcher,vendor_targets}.py`,
 > `app/scrapers/vendors/extractors/vendor_listing.py`, `app/services/{vendor_scraper,vendor_confidence,vendor_scrape_runner,vendor_products_publisher}.py`,
 > `app/repositories/vendor_observation.py`, `app/api/v1/endpoints/vendors.py`
 >
 > **Entry points**: `POST /api/v1/vendors/scrape` (on demand) and the nightly APScheduler cron
 >
-> **Migration**: `migrations/migration_vendor_price_observations.sql`
+> **Migration**: Alembic baseline `alembic/versions/4b1d0c2e9f10_baseline_vendor_tables.py` (`alembic_version_web_scrape`)
 >
-> **Selector-free targets (AAD-1)**: [`url-only-discovery.md`](url-only-discovery.md)
+> **Selector-free targets**: [`url-only-discovery.md`](url-only-discovery.md)
 
 ---
 
@@ -18,7 +18,7 @@
 
 ### 1.1 Purpose
 
-Own-vendor prices come from the WooCommerce sync (peptides-platform#263). **Competitor** prices have no API,
+Own-vendor prices come from the WooCommerce sync (the platform WooCommerce sync). **Competitor** prices have no API,
 so they have to be read off the vendors' own web pages. This feature navigates a configured list of
 competitor product pages with Playwright and extracts **price**, **stock status** and **COA link**, scores how
 much it trusts each reading, and puts anything doubtful in a review queue instead of publishing it.
@@ -48,10 +48,10 @@ much it trusts each reading, and puts anything doubtful in a review queue instea
 
 ## 2. Configuration
 
-### 2.0 Targets are managed from the admin (CEO feedback round 2, P2)
+### 2.0 Targets are managed from the admin
 
 Targets now live primarily in the `vendor_scrape_targets` table
-(`migrations/migration_vendor_scrape_targets.sql`, created on startup while `VENDOR_SCHEMA_AUTO_CREATE=true`) and are
+(created by the Alembic baseline; no DDL runs at startup) and are
 edited from the admin **Pepti.AI -> Scrape** tab through `POST/PUT/DELETE /api/v1/vendors/targets`. Each
 target carries: slug, name, enabled, product URL list and/or a `listing_url` + `listing_link_selector`
 (product links are discovered from the listing page, same host only, through the same robots.txt and
@@ -198,9 +198,9 @@ cannot become the current price. Resolve one with
 | `GET /api/v1/vendors/targets` | Targets (DB + file fallback, `source` on each), plus the exact User-Agent we send. Optional `?limit=&offset=&q=&review_state=&discovery_mode=`; returns `total`, `count` (this page), `draft_count`. Without `limit`, every target (the original behaviour) |
 | `GET /api/v1/vendors/targets/{slug}` | One target |
 | `POST /api/v1/vendors/targets` | Create (201; 409 on a duplicate slug; 422 without any URL, or for one of our own stores). Without a price selector it is a selector-free **draft** — see [url-only-discovery.md](url-only-discovery.md) |
-| `POST /api/v1/vendors/targets/from-url` | AAD-1: draft competitor target from a bare store/shop/product URL (201; 409 duplicate; 422 own store or non-public URL) |
-| `POST /api/v1/vendors/targets/{slug}/approve` | AAD-1: approve a draft so runs read it (404 unknown; 409 file target) |
-| `POST /api/v1/vendors/discover` | AAD-1: dry-run discovery for one URL — readings per variant, nothing stored |
+| `POST /api/v1/vendors/targets/from-url` | draft competitor target from a bare store/shop/product URL (201; 409 duplicate; 422 own store or non-public URL) |
+| `POST /api/v1/vendors/targets/{slug}/approve` | approve a draft so runs read it (404 unknown; 409 file target) |
+| `POST /api/v1/vendors/discover` | dry-run discovery for one URL — readings per variant, nothing stored |
 | `PUT /api/v1/vendors/targets/{slug}` | Replace (slug immutable); takes a file-only target over into the DB |
 | `DELETE /api/v1/vendors/targets/{slug}` | Remove a DB target (204; 409 for a file-only target). Observations are kept |
 | `POST /api/v1/vendors/scrape` | On-demand run (all enabled, or `vendors: [...]`); **202** + `job_id`; **409** while another run is in flight |
@@ -220,7 +220,7 @@ guards. A guard only the cron honours is not a guard.
 
 ## 5. Why this does **not** write to `vendor_products`
 
-peptides-platform#288 asks for rows in `vendor_products` with `source = 'scraper'`. That write is **not
+The platform asks for rows in `vendor_products` with `source = 'scraper'`. That write is **not
 implemented**, and the full reasoning lives in the module docstring of
 `app/scrapers/vendors/vendor_products_publisher.py`. In short, four independent blockers:
 
@@ -233,7 +233,7 @@ implemented**, and the full reasoning lives in the module docstring of
 3. **The key is Woo-shaped.** `wc_product_id` is `NOT NULL` and the unique index is
    `(vendor, wc_product_id, wc_variation_id)`. A competitor page has no Woo product id, and synthesising one
    is exactly how a scraped guess becomes indistinguishable from a vendor's published price.
-4. **#263 declared the table single-writer** ("written only by the sync"). Adding a second writer is that
+4. **The platform declared the table single-writer** ("written only by the sync"). Adding a second writer is that
    issue's owners' call, in their repo. This change loosens nothing: no column, no grant, no connection, no
    outbound write.
 

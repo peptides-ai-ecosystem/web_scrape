@@ -14,16 +14,17 @@ The registry of scrapers is `app/scrapers/registry.py`. Adding one: `docs/adding
 ## The pep-pedia pipeline
 1. Discover URLs (`app/scrapers/pep_pedia/crawl_peptide_urls.py`) or take them from the request.
 2. Scrape each page into `PeptideData` (`page_scraper.py`, `extractors/`) and write the CSV (`app/infrastructure/csv_storage.py`).
-3. Map CSV rows to platform tables in insert order, groups A–F (`app/services/sync/`; order in `docs/structured.md`, mapping in `docs/mapper.md` and `docs/sync_field_mapping.md`).
+3. Map CSV rows to platform tables in insert order, groups A–F (`app/services/sync/`; insert order, relations and field mapping in `docs/product/sync-schema.md`).
 4. Write through `app/repositories/` (all SQL). `PepPediaSyncController` runs steps 1–4 as a background job.
 5. Optionally evaluate the result against the CSV (`app/evaluation/`, `/api/v1/evaluation/*`).
 
 ## Reference
 | Doc | What it covers |
 |---|---|
-| `features/01-scrape.md` … `04-fastapi-schedule-operations.md` | the pep-pedia scrape, sync, evaluation, API and scheduler in depth |
-| `features/05-vendor-scraping.md`, `features/url-only-discovery.md` | the vendor scraper and selector-free discovery |
-| `structured.md`, `mapper.md`, `sync_field_mapping.md` | mapper insert order, entity relations and CSV payload, CSV column → table column |
+| `product/01-scrape.md` … `04-fastapi-schedule-operations.md` | the pep-pedia scrape, sync, evaluation, API and scheduler in depth |
+| `product/05-vendor-scraping.md`, `product/url-only-discovery.md` | the vendor scraper and selector-free discovery |
+| `product/sync-schema.md` | mapper insert order, entity relations and CSV column → table column (one document) |
+| `adr/` | the decisions, with the file that enforces each |
 | `agents/commands.md` | every command (run, test, gate, migrate) |
 | `adding-a-scraper.md` | the checklist for a new scraper |
 | `archive/graph_analysis.md` | a one-off analysis of the BPC-157 PK graph (archive) |

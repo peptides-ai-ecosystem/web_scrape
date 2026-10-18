@@ -1,6 +1,7 @@
 # Test gate for pull requests into `staging` (the deploy pointer; `master` is
 # production). Runs the same local gate as developers: scripts/check.sh.
-# Needs no secrets: the suite is offline, Chromium-only tests skip themselves,
+# Needs no secrets: the suite is offline, Chromium-only tests skip themselves there (job `check`),
+# and run for real in job `chromium-tests` (the runner's Google Chrome via CHROME_BIN),
 # and the platform-schema contract test runs against the vendored snapshot (contracts/platform-schema/).
 name: CI
 
@@ -33,3 +34,30 @@ jobs:
 
       - name: scripts/check.sh
         run: bash scripts/check.sh
+
+  # The Playwright fetcher test against the local fixture shop skips when no Chromium launches.
+  # Here a browser exists, so a skip means the setup broke: fail instead of hiding it.
+  chromium-tests:
+    name: chromium-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Fixture-site test with a real browser
+        run: |
+          export CHROME_BIN="$(command -v google-chrome || command -v chromium-browser || command -v chromium)"
+          echo "using $CHROME_BIN"
+          uv run pytest tests/vendors/test_vendor_targets_api.py -k TestLocalFixtureSite -q -rs | tee chromium.log
+          if grep -q SKIPPED chromium.log; then echo "Chromium test was skipped" >&2; exit 1; fi
