@@ -1,4 +1,6 @@
-"""The seam where scraped observations would reach `vendor_products` (#288).
+"""The seam where scraped observations would reach `vendor_products` (#288, XR-14).
+
+Tracked in https://github.com/peptides-apps/peptides-platform/issues/523 ([XR-14], ADR 0009).
 
 peptides-platform#288 asks for scraped competitor listings to be written into
 "the same ``vendor_products`` table (source = 'scraper')". **This service does
