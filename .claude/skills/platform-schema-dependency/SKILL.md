@@ -5,7 +5,7 @@ description: Use when changing SQL in web_scrape that touches a platform table (
 
 # web_scrape depends on the platform's database schema (XR-8)
 
-web_scrape writes and deletes rows in the **peptides-platform** database with raw SQL. The platform owns those tables in its Drizzle schema (`apps/api/src/db/schema/`, migrations in `apps/api/drizzle/`). Contract: [XR-8](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/dependencies.md#xr-8) in the orchestrator repo.
+web_scrape writes and deletes rows in the **peptides-platform** database with raw SQL. The platform owns those tables in its Drizzle schema ([apps/api/src/db/schema/](https://github.com/peptides-apps/peptides-platform/tree/staging/apps/api/src/db/schema/), migrations in [apps/api/drizzle/](https://github.com/peptides-apps/peptides-platform/tree/staging/apps/api/drizzle/)). Contract: [XR-8](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/dependencies.md#xr-8) in the orchestrator repo.
 
 ## Where web_scrape touches platform tables
 - `app/repositories/*.py` — inserts and updates (`_insert_guarded`, literal `UPDATE ... SET`).
@@ -19,7 +19,7 @@ web_scrape writes and deletes rows in the **peptides-platform** database with ra
 PLATFORM_SCHEMA_REPO=<path to a peptides-platform checkout on staging> \
   uv run pytest tests/sync/test_platform_schema_contract.py -v
 ```
-- Default path: `G:/aultra/microservice/peptides-platform`. Without a checkout (as in CI) the test runs against the vendored snapshot `contracts/platform-schema/*.json`; with one it also fails when the snapshot is stale. After a platform change lands on staging, regenerate the snapshot with `scripts/export_platform_schema.py` and commit it.
+- `PLATFORM_SCHEMA_REPO` is optional: unset (or pointing at a missing folder, as in CI and on a repo opened alone) the test runs against the vendored snapshot; the platform checkout is the one you cloned from the GitHub repo above. Without a checkout the test runs against the vendored snapshot `contracts/platform-schema/*.json`; with one it also fails when the snapshot is stale. After a platform change lands on staging, regenerate the snapshot with `scripts/export_platform_schema.py` and commit it.
 - Use a checkout of the platform branch you will deploy with (normally `staging`); an old checkout proves nothing.
 - It checks: every table in `delete_peptide_cascading` exists; every platform table named in web_scrape SQL exists; every column web_scrape inserts or updates is declared.
 
@@ -33,5 +33,10 @@ PLATFORM_SCHEMA_REPO=<path to a peptides-platform checkout on staging> \
 `KNOWN_UNDECLARED_COLUMNS` lists columns that exist in the database only because `migrations/` adds them by hand (see `migrations/README.md`). Each is an open cross-repo item, not a permanent exception.
 
 ## Changing the schema
+1. Run the contract test (above) before and after your change.
+2. A column or table the platform does not declare: stop and ask for the Drizzle migration in the platform first.
+3. Then adapt the SQL here in the same release; `docs/agents/workflows/schema-change.md` has the checklist.
+
+Rules:
 - Never add a platform column with a web_scrape SQL file. Ask for a Drizzle migration in peptides-platform; web_scrape follows in the same release.
 - Hand-run SQL in `migrations/` is for databases you are allowed to change; production only after "release to production".

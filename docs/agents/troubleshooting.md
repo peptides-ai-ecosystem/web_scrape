@@ -10,6 +10,6 @@
 | Vendor target 500 or a missing table | `alembic upgrade head` has not run on that database (`docs/agents/commands.md`), or `VENDOR_SCHEMA_AUTO_CREATE` is off. |
 | Jobs run twice or never | One scheduler per database; staging pins `START_SCHEDULER=false`. |
 | A Chromium test skips locally | Expected without Chromium; the suite stays green. |
-| Staging deploy of one service broke another | XR-11: the `.deploy` copies differ; check with `orchestrator/scripts/ecosystem/check-shared-deploy.sh`. |
+| Staging deploy of one service broke another | XR-11: the `.deploy` copies differ; check with [orchestrator/scripts/ecosystem/check-shared-deploy.sh](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/scripts/ecosystem/check-shared-deploy.sh). |
 
 Skill `debugging-a-scrape` walks the first five in order.

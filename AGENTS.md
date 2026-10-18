@@ -1,7 +1,7 @@
 # web_scrape — agent guide
 Scrapes pep-pedia.org and competitor vendor sites, syncs peptide and PK-graph data into the platform database, and serves the sync, graph, evaluation, operations and vendor-pricing API (FastAPI + APScheduler, `main.py` -> `app/factory.py`). An upstream behind the orchestrator gateway at `/web_scrape/*`; the platform admin and the peptide service call it. Work on `staging`; `master` is production.
 
-Ecosystem map and contracts (GitHub): [AGENTS.md](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/AGENTS.md) · [dependencies.md](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/dependencies.md). Canonical checkout: `G:\aultra\microservice\web_scrape`.
+Ecosystem map and contracts (GitHub): [AGENTS.md](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/AGENTS.md) · [dependencies.md](https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/dependencies.md).
 
 ## Navigation
 - `docs/agents/architecture.md` — the three paths (scrape, sync, vendor), the API and the scheduler, one line per hop.
@@ -24,6 +24,15 @@ Ecosystem map and contracts (GitHub): [AGENTS.md](https://github.com/peptides-ai
 
 ## Issues
 GitHub issues on peptides-ai-ecosystem/web_scrape (`docs/agents/issue-tracker.md`); labels in `docs/agents/triage-labels.md`.
+
+## Skills (`.claude/skills/`; how to use them: `docs/agents/skills.md`)
+| Skill | Use when |
+|---|---|
+| `adding-a-scraper` | a new kind of site (a source, not a competitor target) needs a package |
+| `add-a-vendor-target` | adding or changing a competitor target or how it is read |
+| `change-a-mapper` | a sync mapper, lookup or relation (groups A-F) changes |
+| `platform-schema-dependency` | SQL touches a platform table or the platform schema changes (XR-8) |
+| `debugging-a-scrape` | a call or job fails: 401/502, unknown column, blocked readings, stuck job |
 
 ## Safety rules
 - Never push or merge `master` without the words "release to production"; a push to it deploys production.
