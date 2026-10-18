@@ -2,7 +2,7 @@
 
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.clock import utc_now_naive
@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_utc_now_naive_is_naive_utc():
-    before = datetime.now(timezone.utc).replace(tzinfo=None)
+    before = datetime.now(UTC).replace(tzinfo=None)
     value = utc_now_naive()
-    after = datetime.now(timezone.utc).replace(tzinfo=None)
+    after = datetime.now(UTC).replace(tzinfo=None)
     assert value.tzinfo is None
     assert before <= value <= after
     assert "+" not in value.isoformat()
