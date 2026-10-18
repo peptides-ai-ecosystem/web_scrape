@@ -38,8 +38,21 @@ SIBLINGS = {
 } - {OWN_NAME}
 
 KNOWN_DIRS = {
-    "app", "docs", "scripts", "tests", "alembic", "migrations", "config", "contracts",
-    "deploy", "src", "store", ".claude", ".github", ".maestro", ".eas",
+    "app",
+    "docs",
+    "scripts",
+    "tests",
+    "alembic",
+    "migrations",
+    "config",
+    "contracts",
+    "deploy",
+    "src",
+    "store",
+    ".claude",
+    ".github",
+    ".maestro",
+    ".eas",
 }
 FILE_EXT = (".py", ".md", ".sh", ".yml", ".yaml", ".json", ".ts", ".tsx", ".js", ".sql", ".toml", ".ini")
 MARKERS = ("mcp:", "sdk:", "external:")
@@ -58,7 +71,15 @@ def _skill_dirs() -> list[Path]:
 
 def _docs() -> list[Path]:
     found: set[Path] = set()
-    for pattern in ("AGENTS.md", "CLAUDE.md", "CODING_STANDARDS.md", "GLOSSARY.md", "docs/agents/**/*.md", ".claude/skills/**/*.md"):
+    patterns = (
+        "AGENTS.md",
+        "CLAUDE.md",
+        "CODING_STANDARDS.md",
+        "GLOSSARY.md",
+        "docs/agents/**/*.md",
+        ".claude/skills/**/*.md",
+    )
+    for pattern in patterns:
         found.update(p for p in ROOT.glob(pattern) if p.is_file())
     return sorted(found)
 
@@ -108,7 +129,8 @@ def test_agents_md_is_short_and_lists_every_skill():
     lines = (ROOT / "AGENTS.md").read_text(encoding="utf-8").splitlines()
     assert len(lines) <= 45, f"AGENTS.md has {len(lines)} lines (max 45)"
     rows = [ln for ln in lines if ln.startswith("|")]
-    assert any("Skill" in ln and "Use when" in ln for ln in rows), "AGENTS.md needs a Skills table (| Skill | Use when |)"
+    has_header = any("Skill" in ln and "Use when" in ln for ln in rows)
+    assert has_header, "AGENTS.md needs a Skills table (| Skill | Use when |)"
     for skill in _skill_dirs():
         assert any(f"`{skill.name}`" in ln for ln in rows), f"{skill.name} is not in the AGENTS.md Skills table"
 
@@ -145,7 +167,8 @@ def test_no_pointer_leaves_the_repo_and_every_path_exists(doc: Path):
         for raw in span.split():
             token = re.split(r"#|::", raw.rstrip(".,;:)"))[0]
             token = re.sub(r":\d+(-\d+)?$", "", token).lstrip("(")
-            if not token or any(ch in token for ch in "<>$={}|*") or "..." in token or token.startswith(("-", "/", "~", "./")):
+            placeholder = any(ch in token for ch in "<>$={}|*") or "..." in token
+            if not token or placeholder or token.startswith(("-", "/", "~", "./")):
                 continue
             first = token.split("/")[0]
             if "/" in token and first in SIBLINGS:
