@@ -8,6 +8,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from app.core.clock import utc_now_naive
+
 
 class JobStatus(str, Enum):
     PENDING = "pending"
@@ -25,7 +27,7 @@ class Job:
         self.endpoint = endpoint
         self.parameters = parameters
         self.status = JobStatus.PENDING
-        self.created_at = datetime.utcnow()
+        self.created_at = utc_now_naive()
         self.start_time: datetime | None = None
         self.end_time: datetime | None = None
         self.result: Any | None = None
@@ -34,21 +36,21 @@ class Job:
 
     def start(self):
         self.status = JobStatus.RUNNING
-        self.start_time = datetime.utcnow()
+        self.start_time = utc_now_naive()
 
     def complete(self, result: Any = None):
         self.status = JobStatus.COMPLETED
-        self.end_time = datetime.utcnow()
+        self.end_time = utc_now_naive()
         self.result = result
 
     def fail(self, error: str):
         self.status = JobStatus.FAILED
-        self.end_time = datetime.utcnow()
+        self.end_time = utc_now_naive()
         self.error = error
 
     def cancel(self):
         self.status = JobStatus.CANCELLED
-        self.end_time = datetime.utcnow()
+        self.end_time = utc_now_naive()
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary for API responses."""
@@ -74,7 +76,7 @@ class JobQueue:
 
     def create_job(self, endpoint: str, parameters: dict[str, Any]) -> Job:
         """Create and register a new job."""
-        job_id = f"{endpoint.replace('/', '_')}_{int(datetime.utcnow().timestamp())}_{str(uuid.uuid4())[:8]}"
+        job_id = f"{endpoint.replace('/', '_')}_{int(utc_now_naive().timestamp())}_{str(uuid.uuid4())[:8]}"
         job = Job(job_id, endpoint, parameters)
         self.jobs[job_id] = job
         return job
@@ -99,7 +101,7 @@ class JobQueue:
 
     def cleanup_old_jobs(self, hours: int = 24):
         """Remove completed jobs older than specified hours."""
-        cutoff = datetime.utcnow().timestamp() - (hours * 3600)
+        cutoff = utc_now_naive().timestamp() - (hours * 3600)
         to_remove = [
             jid
             for jid, job in self.jobs.items()
