@@ -38,3 +38,15 @@ never a single competitor page that fails to parse. Events are tagged
 - A push to `staging` deploys `web-scrape-staging` in orchestrator's `deploy/ms-staging/` (shared compose, `.deploy/` scripts shared byte-for-byte, XR-11). The staging compose pins `START_SCHEDULER=false`, `VENDOR_SCRAPE_CRON_ENABLED` off and `VENDOR_PRODUCTS_PUBLISH_ENABLED=false`: the container boots idle.
 - The deploy runs `alembic upgrade head` in the container before recreating it (this service's two tables only, version table `alembic_version_web_scrape`).
 - Production is `master` and deploys only on the words "release to production": the production deploy must run the same `alembic upgrade head` once (`docs/agents/commands.md`).
+
+## Recorded hashes of the shared deploy scripts
+
+sha256 of each `.deploy/*.sh` as committed (LF line endings). `tests/ops/test_deploy_script_hashes.py` fails when a
+script changes without this table; the orchestrator repo's check-shared-deploy.sh (scripts/ecosystem) compares the
+repos. Update the table, and the same script in every repo, in one go.
+
+| Script | sha256 |
+|---|---|
+| `staging-deploy.sh` | `3d34c0c3afa237e038ef09acffe8bb5d80480b0be4daced6e39d09c46684b6cb` |
+| `staging-gate.sh` | `172730f52835a65858e2d306e7b5128599e7b165cf465c9ad8f0f38a3d391bac` |
+| `staging-remote.sh` | `dd7c968d6d58ab501d73298378f89ead794d21e65ef786c8dd1e55dd37049c32` |
