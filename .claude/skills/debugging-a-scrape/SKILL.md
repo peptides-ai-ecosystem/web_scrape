@@ -26,3 +26,10 @@ Start from the symptom; confirm the cause with the check before changing code. N
 
 ## Reproduce locally
 Point `DATABASE_URL` at a throwaway database, run `uv run uvicorn main:app --port 8005` with `START_SCHEDULER=false`, and write the failing case as a test first: the fixture site under `tests/vendors/fixtures/` covers vendor pages offline.
+
+## Steps
+
+1. Take the symptom to the table above; run its check (never print a secret).
+2. Read the job and the log line by `trace_id` (see "Where to look").
+3. Write the failing case as a test first (see "Reproduce locally").
+4. Fix the cause, run `uv run pytest -m <theme> -q`, then `scripts/check.sh`.

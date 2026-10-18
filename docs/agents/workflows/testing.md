@@ -8,7 +8,7 @@ scripts/check.sh                                   # ruff, format, mypy ratchet,
 uv run pytest -m vendors -q                        # one theme: pep_pedia, vendors, sync, evaluation, ops
 uv run pytest tests/ops/test_image_contents.py -q  # one file
 ```
-Full runs and Docker tests are heavy: if another agent holds the shared lock `C:/tmp/heavy-py.lock`, wait for it.
+Full runs and Docker tests are heavy: run one at a time on a small machine.
 
 Add:
 1. Put the test in the folder of its theme (`tests/README.md`); the folder's marker is applied by `tests/conftest.py`.
