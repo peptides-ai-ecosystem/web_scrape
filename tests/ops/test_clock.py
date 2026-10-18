@@ -1,4 +1,4 @@
-"""utc_now_naive replaces datetime.utcnow (ADR 0010): same naive-UTC value, no deprecated call left."""
+"""utc_now_naive replaces the deprecated utcnow call (ADR 0010): same naive-UTC value, no deprecated call left."""
 
 import subprocess
 import time
@@ -20,12 +20,12 @@ def test_utc_now_naive_is_naive_utc():
 
 
 def test_timestamp_matches_what_utcnow_gave():
-    # utcnow().timestamp() reads the naive UTC value as local time; the helper keeps that.
+    # The old call's .timestamp() read the naive UTC value as local time; the helper keeps that.
     assert abs(utc_now_naive().timestamp() - time.mktime(time.gmtime())) < 5
 
 
 def test_no_deprecated_utcnow_call_remains():
-    needle = "datetime." + "utcnow"  # fragments, so this file does not match itself
+    needle = "utcnow" + "("  # fragments, so this file does not match itself
     result = subprocess.run(
         ["git", "grep", "-n", "-e", needle, "--", "app", "scripts", "tests"],
         cwd=ROOT,
