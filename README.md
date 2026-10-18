@@ -36,7 +36,7 @@ Docker: `docker build -t web_scrape .` then `docker run -p 8005:8000 --env-file 
 
 ## Gate
 
-`scripts/check.sh` (uv sync + the offline test suite; this is what CI runs). All commands: `docs/agents/commands.md`.
+`scripts/check.sh`: ruff lint, ruff format, the mypy ratchet and the offline test suite (this is what CI job `check` runs; job `chromium-tests` runs the browser test with a real Chromium). All commands: `docs/agents/commands.md`.
 
 ## Docs
 

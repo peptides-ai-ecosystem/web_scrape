@@ -10,7 +10,7 @@ Ecosystem map and contracts (GitHub): [AGENTS.md](https://github.com/peptides-ai
 - `CODING_STANDARDS.md` — the rules a change is reviewed against. `docs/agents/definition-of-done.md` — what done means.
 - `GLOSSARY.md` and `docs/adr/` — terms and decisions (`docs/agents/domain.md`).
 - `app/api/v1/routers.py` — every route; `app/repositories/peptide.py` `delete_peptide_cascading` names every platform table that references a peptide.
-- `docs/structured.md` — insert order for mapper groups A–F; `migrations/README.md` — hand-run platform SQL waiting on the platform.
+- `docs/product/sync-schema.md` — insert order, relations and field mapping for mapper groups A–F; `migrations/README.md` — hand-run platform SQL waiting on the platform.
 
 ## Workflows (read the one that matches)
 - New feature or route change → `docs/agents/workflows/new-feature.md`
@@ -19,6 +19,8 @@ Ecosystem map and contracts (GitHub): [AGENTS.md](https://github.com/peptides-ai
 - SQL on a platform table, or a platform schema change → skill `platform-schema-dependency` + `docs/agents/workflows/schema-change.md`
 - Deploy to staging → `docs/agents/workflows/deploy.md`
 - A new site to scrape → skill `adding-a-scraper`
+- A mapper (group A-F) change → `docs/agents/workflows/mapper-change.md`
+- A competitor vendor target → `docs/agents/workflows/vendor-target.md`
 
 ## Issues
 GitHub issues on peptides-ai-ecosystem/web_scrape (`docs/agents/issue-tracker.md`); labels in `docs/agents/triage-labels.md`.

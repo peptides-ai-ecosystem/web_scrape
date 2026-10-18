@@ -4,7 +4,7 @@
 >
 > **Entry Points**: `main.py --sync` (v1 sync), API endpoints (`/api/v1/sync/*`), Scheduler (automated)
 >
-> **Supporting Scripts**: `sync_supabase.sh`, `migrations/migration_peptide_graph.sql`
+> **Supporting Scripts**: `scripts/ops/sync_supabase.sh` (never run by an agent), the platform owns the `peptide_graph` table (XR-8)
 
 ---
 
@@ -404,7 +404,7 @@ uv run main.py --scrape --sync
 
 `POST /api/v1/sync/core` and `POST /api/v1/sync/graph` accept `"fill_empty_only": true`
 (default `false`, which keeps the behaviour above). The peptide-microservice sends it after a
-curator approves a new peptide (AAD-9a), so pep-pedia data can complete the record without
+curator approves a new peptide, so pep-pedia data can complete the record without
 replacing anything the curator approved:
 
 - `/core`: the matched peptide row is never inserted or overwritten; only columns that are

@@ -6,7 +6,7 @@
 | pep-pedia | The peptide reference site we scrape for peptide pages and PK graphs. |
 | Peptide row / CSV row | One scraped peptide, written to a CSV and then mapped into platform tables. |
 | Mapper group A-F | The stages that turn a CSV row into table payloads: A lookups, B the peptide, C relations, D protocols and graph, E and F the remaining relations. |
-| Insert order | The order groups must be written so foreign keys resolve (`docs/structured.md`). |
+| Insert order | The order groups must be written so foreign keys resolve (`docs/product/sync-schema.md`). |
 | Guarded insert | An insert that checks for an existing row first, so a re-run does not duplicate. |
 | Fill-empty-only | The sync mode that writes a column only when the platform value is empty, never overwriting. |
 | PK graph | The pharmacokinetics curve of a peptide (path, points, markers) stored in `peptide_graph`. |

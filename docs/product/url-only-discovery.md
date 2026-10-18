@@ -1,10 +1,9 @@
-# Feature: Scrape a competitor from a URL only (AAD-1)
+# Feature: Scrape a competitor from a URL only
 
-> **Feedback**: CEO final feedback AAD-1 (with AAD-2, PPA-5): "Scrape competitors from a URL only, no
-> selectors; competitor vendors kept separate; pagination."
->
+> **Status**: shipped.
+
 > **Modules**: `app/scrapers/vendors/url_discovery.py`, `app/scrapers/vendors/extractors/{store_api,structured_data}.py`,
-> `app/infrastructure/polite_http.py`, `app/core/owned_stores.py`, and the AAD-1 parts of
+> `app/infrastructure/polite_http.py`, `app/core/owned_stores.py`, and the URL-only parts of
 > `app/services/{vendor_scraper,vendor_scrape_runner}.py` and `app/api/v1/endpoints/vendors.py`
 >
 > **Tests**: `tests/vendors/test_url_discovery.py` (offline; recorded responses in
