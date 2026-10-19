@@ -10,7 +10,7 @@ export const meta = {
   ],
 }
 
-// intake-feedback workflow (template v1). Source of truth: https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/workflow-template/
+// intake-feedback workflow (template v2). Source of truth: https://github.com/peptides-ai-ecosystem/orchestrator/blob/staging/docs/ecosystem/workflow-template/
 // What it does: splits feedback text into items, skips ones already open as issues, files the rest in THIS repo.
 // How to run:   Workflow({name:'intake-feedback', args:{text:'...', source:'<url or label>'}})
 //               add run:true to also call run-ticket for each new issue (sequential, one nesting level).
@@ -110,7 +110,7 @@ phase('Create')
 const created = []
 for (const it of fresh) {
   const res = await agent(
-    `${GUARDRAILS}\n\nCreate ONE GitHub issue in ${REPO} for this item. First read ${P}docs/agents/issue-tracker.md and ${P}docs/agents/triage-labels.md and follow them (labels come from that file; if a file is missing use no label). ` +
+    `${GUARDRAILS}\n\nCreate ONE GitHub issue in ${REPO} for this item. First run \`git fetch origin\`, then read ${P}docs/agents/issue-tracker.md and ${P}docs/agents/triage-labels.md from origin/${BASE} (git show origin/${BASE}:<path>), not from the working tree, which may be behind, and follow them (labels come from that file; if a file is missing use no label). ` +
       'Body sections in this exact order: Summary, Why, What to do, Acceptance (checkbox list), Out of scope, References. ' +
       `References must include "Source: ${source}" and the item id ${it.id}. Use gh issue create --repo ${REPO} with a body file or heredoc. Return the issue number and URL.\n` +
       `Item: ${JSON.stringify(it)}`,
