@@ -196,7 +196,8 @@ def _workflow_files() -> list[Path]:
 def test_both_workflows_and_their_pages_exist():
     for name in WORKFLOW_NAMES:
         assert (WORKFLOWS / f"{name}.js").is_file(), f".claude/workflows/{name}.js is missing"
-        assert (ROOT / "docs" / "agents" / "workflows" / f"{name}.md").is_file(), f"docs/agents/workflows/{name}.md is missing"
+        page = ROOT / "docs" / "agents" / "workflows" / f"{name}.md"
+        assert page.is_file(), f"docs/agents/workflows/{name}.md is missing"
 
 
 @pytest.mark.parametrize("wf", _workflow_files(), ids=lambda p: p.name)
