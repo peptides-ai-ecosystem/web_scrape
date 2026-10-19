@@ -9,7 +9,7 @@ The script `.claude/workflows/intake-feedback.js` takes the text you add in the 
 ## The flow
 1. Split: one item per deliverable (something one PR can deliver), each with id, title, why, acceptance lines and area. Items that belong to another repo are skipped and listed so you can file them there.
 2. Dedupe: `gh issue list --repo peptides-ai-ecosystem/web_scrape --state open --limit 200`; an item already covered by an open issue is not filed again (the script reports the existing number).
-3. Create: one issue per new item following `docs/agents/issue-tracker.md` and the labels in `docs/agents/triage-labels.md`. Body sections in this order: Summary, Why, What to do, Acceptance, Out of scope, References (with the source link and the item id).
+3. Create: one issue per new item following `docs/agents/issue-tracker.md` and the labels in `docs/agents/triage-labels.md`, read from `origin/staging` after `git fetch origin` (not from a checkout that may be behind). Body sections in this order: Summary, Why, What to do, Acceptance, Out of scope, References (with the source link and the item id).
 4. Run (only with `run:true`): `run-ticket` for each new issue, sequentially.
 
 ## Check afterwards
