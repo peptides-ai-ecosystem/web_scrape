@@ -1,6 +1,6 @@
 # Turn feedback into tickets (workflow `intake-feedback`)
 
-The script `.claude/workflows/intake-feedback.js` takes the text you add in the Google doc (or any review text) and files one GitHub issue per deliverable in `peptides-ai-ecosystem/web_scrape`. It only creates issues; it does not change code.
+The script `.claude/workflows/intake-feedback.js` takes the text you add in the Google doc (or any review text) and files one GitHub issue per deliverable in peptides-ai-ecosystem/web_scrape. It only creates issues; it does not change code.
 
 ## Start it
 - Claude Code: `Workflow({name:'intake-feedback', args:{text:'<pasted feedback>', source:'<doc link or label>'}})`. Add `run:true` to also run `run-ticket` for every new issue, one after the other (see `docs/agents/workflows/run-ticket.md`).
