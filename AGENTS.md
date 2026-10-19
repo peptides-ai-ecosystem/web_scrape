@@ -14,13 +14,13 @@ Ecosystem map and contracts (GitHub): [AGENTS.md](https://github.com/peptides-ai
 
 ## Workflows (read the one that matches)
 - New feature or route change → `docs/agents/workflows/new-feature.md`
-- Bug fix → `docs/agents/workflows/fix-bug.md`
-- Tests → `docs/agents/workflows/testing.md`
+- Bug fix → `docs/agents/workflows/fix-bug.md` · tests → `docs/agents/workflows/testing.md`
 - SQL on a platform table, or a platform schema change → skill `platform-schema-dependency` + `docs/agents/workflows/schema-change.md`
 - Deploy to staging → `docs/agents/workflows/deploy.md`
 - A new site to scrape → skill `adding-a-scraper`
 - A mapper (group A-F) change → `docs/agents/workflows/mapper-change.md`
 - A competitor vendor target → `docs/agents/workflows/vendor-target.md`
+- Automatic (Claude Code Workflow tool): `.claude/workflows/run-ticket.js` (one issue to a staging PR) and `.claude/workflows/intake-feedback.js` (feedback text to issues); steps: `docs/agents/workflows/run-ticket.md`, `docs/agents/workflows/intake-feedback.md`
 
 ## Issues
 GitHub issues on peptides-ai-ecosystem/web_scrape (`docs/agents/issue-tracker.md`); labels in `docs/agents/triage-labels.md`.
