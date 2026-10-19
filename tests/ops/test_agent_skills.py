@@ -12,6 +12,9 @@ Standard library only.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -177,3 +180,66 @@ def test_no_pointer_leaves_the_repo_and_every_path_exists(doc: Path):
                 if not _exists(token.rstrip("/"), doc):
                     problems.append(f"`{token}` does not exist")
     assert not problems, f"{_rel(doc)}: " + "; ".join(sorted(set(problems)))
+
+
+# --- Claude workflows (.claude/workflows) ----------------------------------------------------
+WORKFLOWS = ROOT / ".claude" / "workflows"
+WORKFLOW_NAMES = ("run-ticket", "intake-feedback")
+WORKFLOW_FORBIDDEN = ("gh pr merge", "git push origin main", "--force", "Date.now", "Math.random", "new Date()")
+CONST_RE = {key: re.compile(rf"^const {key} = '([^']*)'", re.M) for key in ("REPO", "CHECK", "BASE", "AREA")}
+
+
+def _workflow_files() -> list[Path]:
+    return sorted(WORKFLOWS.glob("*.js")) if WORKFLOWS.is_dir() else []
+
+
+def test_both_workflows_and_their_pages_exist():
+    for name in WORKFLOW_NAMES:
+        assert (WORKFLOWS / f"{name}.js").is_file(), f".claude/workflows/{name}.js is missing"
+        assert (ROOT / "docs" / "agents" / "workflows" / f"{name}.md").is_file(), f"docs/agents/workflows/{name}.md is missing"
+
+
+@pytest.mark.parametrize("wf", _workflow_files(), ids=lambda p: p.name)
+def test_workflow_meta_constants_and_guardrails(wf: Path):
+    text = wf.read_text(encoding="utf-8")
+    assert text.lstrip().startswith("export const meta = {"), "must start with `export const meta` (a literal)"
+    name = re.search(r"^\s+name: '([^']+)'", text, re.M)
+    assert name and name.group(1) == wf.stem, "meta.name must equal the file name"
+    assert "// ---- CONSTANTS" in text and "// ---- END CONSTANTS ----" in text
+    consts = {key: pat.search(text) for key, pat in CONST_RE.items()}
+    assert all(consts.values()), f"constants block incomplete: {[k for k, v in consts.items() if not v]}"
+    assert consts["REPO"].group(1) != "OWNER/REPO", "REPO constant not filled in"
+    assert consts["BASE"].group(1) == "staging"
+    assert "../" not in text, "a workflow may only point inside its unit"
+    for bad in WORKFLOW_FORBIDDEN:
+        assert bad not in text, f"workflow must not contain {bad!r}"
+
+
+def test_workflows_share_their_constants():
+    found = {
+        key: {CONST_RE[key].search(p.read_text(encoding="utf-8")).group(1) for p in _workflow_files()}
+        for key in ("REPO", "CHECK", "AREA")
+    }
+    assert all(len(v) == 1 for v in found.values()), f"run-ticket and intake-feedback disagree: {found}"
+
+
+@pytest.mark.parametrize("wf", _workflow_files(), ids=lambda p: p.name)
+def test_workflow_syntax(wf: Path):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed; the syntax check needs `node --check`")
+    body = wf.read_text(encoding="utf-8").replace("export const meta", "const meta", 1)
+    wrapped = f"(async function (agent, pipeline, parallel, phase, log, workflow, args, budget) {{\n{body}\n}})\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / f"{wf.stem}.mjs"
+        target.write_text(wrapped, encoding="utf-8")
+        result = subprocess.run([node, "--check", str(target)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+
+def test_agents_md_names_existing_workflows():
+    text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    for name in WORKFLOW_NAMES:
+        assert f".claude/workflows/{name}.js" in text, f"AGENTS.md does not name the {name} workflow"
+    for listed in re.findall(r"\.claude/workflows/([\w-]+\.js)", text):
+        assert (WORKFLOWS / listed).is_file(), f"AGENTS.md names {listed}, which does not exist"
