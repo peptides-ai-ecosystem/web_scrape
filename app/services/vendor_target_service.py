@@ -9,6 +9,7 @@ codes.
 
 import os
 import re
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -145,11 +146,21 @@ def get_target(slug: str) -> dict[str, Any]:
     raise NotFoundError(f"No vendor target '{slug}'.")
 
 
-def discover(url: str, max_products: int, currency: str | None) -> dict[str, Any]:
-    """Dry-run selector-free discovery for one URL; nothing is stored. Blocking (network)."""
+def check_discover_url(url: str) -> str:
+    """The stripped URL, or 422 when it is not a public http(s) URL or is one of our own stores."""
     url = url.strip()
     _check_public_url(url)
-    return preview_discovery(url, max_products, currency)
+    return url
+
+
+def discover(
+    url: str, max_products: int, currency: str | None, should_stop: Callable[[], bool] | None = None
+) -> dict[str, Any]:
+    """Dry-run selector-free discovery for one URL; nothing is stored. Blocking (network)."""
+    url = check_discover_url(url)
+    if should_stop is None:  # the synchronous route: no deadline hook
+        return preview_discovery(url, max_products, currency)
+    return preview_discovery(url, max_products, currency, should_stop=should_stop)
 
 
 # ---------------------------------------------------------------------------

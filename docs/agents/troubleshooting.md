@@ -2,8 +2,9 @@
 
 | Symptom | Look at |
 |---|---|
+| Add competitor preview says "Upstream service 'web_scrape' timed out" | The synchronous `POST /vendors/discover` paces itself (5 s per store request) and outlasts the gateway timeout. Use `POST /vendors/discover/jobs` and poll `GET /vendors/discover/jobs/{id}`; the gateway's `PROXY_TIMEOUT_WEB_SCRAPE` only matters for the old route. |
 | Gateway 502 for `/web_scrape/*` | Port: the container listens on 8000, the host publishes 8005. `WEBSCRAPE_SERVICE_URL` in the gateway must match. |
-| 401 on every call | `X-Gateway-Token` must equal the gateway's `API_TOKEN`; an empty `API_TOKEN` here disables the check (never deploy that). |
+| 401 on every call | `X-Gateway-Token` must equal the gateway's `API_TOKEN`; an empty `API_TOKEN` here is a **503 "Authentication is not configured"** on every `/api/v1` call (fail closed; `/health` stays open). Locally without a gateway: `ALLOW_UNAUTHENTICATED=true` and `ENVIRONMENT=local`. |
 | `column ... does not exist` or a sync failing after a platform release | XR-8 drift: run the contract test against a fresh platform checkout, regenerate `contracts/platform-schema/`, fix the SQL in `app/repositories/`. Never add the column from here. |
 | Contract test says the snapshot is stale | Run `scripts/export_platform_schema.py` from a platform checkout on `staging` and commit the JSON. |
 | Vendor scrape returns `blocked`, `robots_disallowed` or `skipped` | Intended: the host refused us. Do not rotate user agents or proxies (`CODING_STANDARDS.md`). |

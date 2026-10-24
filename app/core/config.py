@@ -56,8 +56,14 @@ class Settings(BaseSettings):
 
     # ── Gateway integration settings ──────────────────────────────────────
     # Shared secret the orchestrator gateway presents in UPSTREAM_AUTH_HEADER.
-    # When empty, API routes run open (local dev only).
+    # When empty, every API route answers 503 (fail closed), unless
+    # ALLOW_UNAUTHENTICATED is true AND ENVIRONMENT is local/dev/development.
     API_TOKEN: str = ""
+    # Explicit local-only opt-out of the gateway check. Never set it deployed.
+    ALLOW_UNAUTHENTICATED: Flag = False
+    # Deployment name ("local", "staging", "production"); also the Sentry
+    # environment when SENTRY_ENVIRONMENT is blank.
+    ENVIRONMENT: Stripped = ""
     # Header that carries the gateway token.
     GATEWAY_AUTH_HEADER: str = "X-Gateway-Token"
     # Start the APScheduler background sync on boot. Disable when the
@@ -121,6 +127,13 @@ class Settings(BaseSettings):
     # at a time and the per-host rate limit still spaces request starts.
     VENDOR_DISCOVERY_CONCURRENCY: int = 2
     VENDOR_DISCOVERY_TIMEOUT_SECONDS: float = 15
+    # The async discover preview (POST /vendors/discover/jobs) stops after this
+    # many seconds and returns what it has read, so a slow store cannot hold a
+    # job slot for hours. 0 disables the deadline.
+    VENDOR_DISCOVERY_DEADLINE_SECONDS: float = 300
+    # A preview honours a robots.txt Crawl-delay only up to this many seconds
+    # (a run keeps the full delay). 0 means no cap.
+    VENDOR_DISCOVERY_MAX_CRAWL_DELAY_SECONDS: float = 15
     # Our own stores. A competitor target on one of these domains, or with one
     # of these slugs, is refused (422) and never scraped: competitor and own
     # vendors stay separate. Comma-separated; subdomains match too.

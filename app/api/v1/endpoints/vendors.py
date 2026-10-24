@@ -14,7 +14,8 @@ API and the orchestrator gateway (``/web_scrape/api/v1/vendors/...``):
   seed / fallback), paginated with ``limit``/``offset``,
 * URL-only targets (AAD-1): ``POST /targets/from-url`` creates a draft
   competitor target from a bare store URL, ``POST /targets/{slug}/approve``
-  lets runs read it, ``POST /discover`` previews what a URL yields,
+  lets runs read it, ``POST /discover`` previews what a URL yields (and
+  ``POST /discover/jobs`` + ``GET /discover/jobs/{id}`` does it as a job),
 * run a scrape now (all targets or named ones) and poll its job,
 * list observations with filters and resolve flagged ones,
 * ``observations/accepted-latest`` — the one read PeptiPrices imports from.
@@ -26,6 +27,7 @@ from fastapi import APIRouter, BackgroundTasks, Query, Response
 from fastapi.concurrency import run_in_threadpool
 
 from app.api.errors import http_error
+from app.controllers.vendor_discover_controller import VendorDiscoverController
 from app.controllers.vendor_scrape_controller import VendorScrapeController
 from app.core.errors import ServiceError
 from app.models.vendors import (
@@ -191,6 +193,43 @@ async def discover_from_url(payload: DiscoverRequest) -> dict[str, Any]:
         return await run_in_threadpool(
             vendor_target_service.discover, payload.url, payload.max_products, payload.currency
         )
+    except ServiceError as exc:
+        raise http_error(exc)
+
+
+@router.post(
+    "/discover/jobs",
+    responses={
+        202: {"description": "Preview started; poll /vendors/discover/jobs/{job_id}."},
+        409: {"description": "Too many previews are already running."},
+        422: {"description": "Not a public http(s) URL, or one of our own stores."},
+    },
+    status_code=202,
+)
+async def start_discover_job(payload: DiscoverRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """🔎 AID-2: the same preview as `POST /discover`, as a job.
+
+    Returns **202** with a `job_id` at once; poll `/api/v1/vendors/discover/jobs/{job_id}`
+    for `status` (pending | running | completed | failed) and, when completed,
+    `result` (the body `POST /discover` returns). Use this from anything behind
+    a gateway timeout: a preview paces itself and can take minutes. It stops
+    after `VENDOR_DISCOVERY_DEADLINE_SECONDS` with what it has read
+    (`result.stopped_early`). Jobs are in memory: after a restart the poll is
+    404 and the client must start the preview again.
+    """
+    try:
+        return VendorDiscoverController(background_tasks.add_task).start(
+            payload.url, payload.max_products, payload.currency
+        )
+    except ServiceError as exc:
+        raise http_error(exc)
+
+
+@router.get("/discover/jobs/{job_id}", responses={404: {"description": "Unknown job."}})
+async def get_discover_job(job_id: str) -> dict[str, Any]:
+    """Status and, once completed, the result of one discovery preview."""
+    try:
+        return VendorDiscoverController.get_job(job_id)
     except ServiceError as exc:
         raise http_error(exc)
 

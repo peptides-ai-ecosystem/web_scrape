@@ -40,6 +40,6 @@ GitHub issues on peptides-ai-ecosystem/web_scrape (`docs/agents/issue-tracker.md
 - `DATABASE_URL` is a platform database: sync and delete endpoints change real rows. Point local runs at a throwaway database.
 - Never add a platform column from this repo; the platform's Drizzle migration lands first (XR-8). Alembic here covers only `vendor_scrape_targets` and `vendor_price_observations`.
 - Never run `scripts/ops/sync_supabase.sh`: it restores a database dump over its target.
-- One scheduler per database: staging pins `START_SCHEDULER=false`. An empty `API_TOKEN` disables the gateway check; never deploy without it.
+- One scheduler per database: staging pins `START_SCHEDULER=false`. An empty `API_TOKEN` makes every `/api/v1` route answer 503 (fail closed); only `ALLOW_UNAUTHENTICATED=true` with `ENVIRONMENT=local` opens it, for local runs.
 
 Something broken? `docs/agents/troubleshooting.md` · skill `debugging-a-scrape` · gate `scripts/check.sh`
