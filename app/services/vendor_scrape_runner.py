@@ -14,7 +14,6 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from app.core.config import (
-    settings,
     VENDOR_DISCOVERY_CONCURRENCY,
     VENDOR_DISCOVERY_MAX_PRODUCTS,
     VENDOR_DISCOVERY_MAX_REQUESTS,
@@ -27,6 +26,7 @@ from app.core.config import (
     VENDOR_SCRAPE_MIN_INTERVAL_SECONDS,
     VENDOR_SCRAPE_TIMEOUT_MS,
     VENDOR_SCRAPER_USER_AGENT,
+    settings,
 )
 from app.core.vendor_models import VendorTarget
 from app.infrastructure.db.connection import DbConnection
