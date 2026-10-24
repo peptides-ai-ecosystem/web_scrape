@@ -157,7 +157,13 @@ class PoliteHttpClient:
         max_requests: int = 60,
         min_interval_seconds: float = 0.0,
         concurrency: int = 2,
+        should_stop: Callable[[], bool] | None = None,
+        max_crawl_delay: float | None = None,
     ):
+        #: Polled before every request: True ends the discovery (deadline, cancel).
+        self._should_stop = should_stop
+        #: Cap on the robots.txt Crawl-delay this client waits out (None = no cap).
+        self._max_crawl_delay = max_crawl_delay if max_crawl_delay and max_crawl_delay > 0 else None
         self._robots = robots
         self._limiter = limiter
         self._user_agent = user_agent or robots.user_agent
@@ -193,6 +199,8 @@ class PoliteHttpClient:
         same budget and obeys the same rules.
         """
         host = urlsplit(url).netloc.lower()
+        if self._should_stop is not None and self._should_stop():
+            return HttpResult(url=url, status=None, budget_exhausted=True, error="stopped: time limit or cancelled")
         if self._limiter.should_abandon(host):
             return HttpResult(url=url, status=None, error=self._limiter.abandon_reason(host) or "host abandoned")
         if not self._robots.is_allowed(url):
@@ -218,6 +226,8 @@ class PoliteHttpClient:
             self._limiter.set_interval(host, self._min_interval)
             delay = self._robots.crawl_delay(url)
             if delay:
+                if self._max_crawl_delay is not None:
+                    delay = min(delay, self._max_crawl_delay)
                 self._limiter.set_interval(host, delay)
             # Spaced request *starts*; the semaphore bounds what is in flight.
             self._limiter.wait(host)

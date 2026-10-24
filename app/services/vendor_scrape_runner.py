@@ -14,6 +14,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from app.core.config import (
+    settings,
     VENDOR_DISCOVERY_CONCURRENCY,
     VENDOR_DISCOVERY_MAX_PRODUCTS,
     VENDOR_DISCOVERY_MAX_REQUESTS,
@@ -109,6 +110,8 @@ def discovery_factory(
     limiter: HostRateLimiter,
     renderer=None,
     transport: Transport | None = None,
+    should_stop: Callable[[], bool] | None = None,
+    max_crawl_delay: float | None = None,
 ) -> Callable[[VendorTarget, int | None], UrlOnlyDiscovery]:
     """``(target, max_products) -> UrlOnlyDiscovery`` sharing the run's robots
     cache and per-host rate limiter, with a fresh request budget per target."""
@@ -122,6 +125,8 @@ def discovery_factory(
             max_requests=VENDOR_DISCOVERY_MAX_REQUESTS,
             min_interval_seconds=target.min_request_interval_seconds,
             concurrency=VENDOR_DISCOVERY_CONCURRENCY,
+            should_stop=should_stop,
+            max_crawl_delay=max_crawl_delay,
         )
         return UrlOnlyDiscovery(
             client,
@@ -166,7 +171,12 @@ def build_service(repository=None, fetcher=None) -> VendorScrapeService:
     )
 
 
-def preview_discovery(url: str, max_products: int = 5, currency: str | None = None) -> dict[str, Any]:
+def preview_discovery(
+    url: str,
+    max_products: int = 5,
+    currency: str | None = None,
+    should_stop: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     """Dry run of selector-free discovery for one URL: nothing is stored.
 
     Backs ``POST /api/v1/vendors/discover`` so an admin can see what a URL
@@ -177,7 +187,12 @@ def preview_discovery(url: str, max_products: int = 5, currency: str | None = No
     """
     robots, limiter = build_robots_and_limiter()
     target = VendorTarget(slug="preview", name="preview", store_url=url, currency=currency)
-    discovery = discovery_factory(robots, limiter)(target, max_products)
+    discovery = discovery_factory(
+        robots,
+        limiter,
+        should_stop=should_stop,
+        max_crawl_delay=settings.VENDOR_DISCOVERY_MAX_CRAWL_DELAY_SECONDS,
+    )(target, max_products)
     result = discovery.discover(url)
     return result.to_dict()
 

@@ -212,7 +212,10 @@ async def start_discover_job(payload: DiscoverRequest, background_tasks: Backgro
     Returns **202** with a `job_id` at once; poll `/api/v1/vendors/discover/jobs/{job_id}`
     for `status` (pending | running | completed | failed) and, when completed,
     `result` (the body `POST /discover` returns). Use this from anything behind
-    a gateway timeout: a preview paces itself and can take minutes.
+    a gateway timeout: a preview paces itself and can take minutes. It stops
+    after `VENDOR_DISCOVERY_DEADLINE_SECONDS` with what it has read
+    (`result.stopped_early`). Jobs are in memory: after a restart the poll is
+    404 and the client must start the preview again.
     """
     try:
         return VendorDiscoverController(background_tasks.add_task).start(
