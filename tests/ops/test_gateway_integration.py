@@ -55,8 +55,14 @@ def test_api_router_has_auth_dependency():
     assert api_router.dependencies, "api_router must enforce gateway auth"
 
 
-def test_auth_skipped_when_token_unset(no_gateway_token):
-    # Local dev without API_TOKEN: the dependency is a no-op.
+def test_auth_skipped_when_token_unset_only_with_the_local_opt_out(no_gateway_token, monkeypatch):
+    # MS:webscrape-3: an empty API_TOKEN used to skip the check everywhere. It
+    # now fails closed (see test_gateway_auth_fail_closed.py); the skip survives
+    # only as the explicit local opt-out.
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ALLOW_UNAUTHENTICATED", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "local")
     assert require_gateway_token(x_gateway_token=None) is None
     assert require_gateway_token(x_gateway_token="anything") is None
 
