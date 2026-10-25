@@ -10,6 +10,9 @@ still writes the peptide columns and every child that needs no method.
 from collections.abc import Collection
 from typing import NamedTuple
 
+# XR-8: the platform keeps the same table, same order, in ROUTE_KEYWORD_METHODS
+# (peptides-platform apps/api/src/apps/admin-app/services/ai/research-sections.service.ts).
+# Change both together so a route lands on one method whichever side writes it.
 # Order matters: the first keyword found in a part wins.
 METHOD_KEYWORD_MAP: dict[str, str] = {
     "nasal": "Nasal Spray",
