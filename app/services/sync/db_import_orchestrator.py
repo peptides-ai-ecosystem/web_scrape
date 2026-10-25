@@ -14,6 +14,7 @@ from app.services.sync.group_b.peptide_mapper import PeptideMapper
 from app.services.sync.group_c.relation_mappers import RelationMapper
 from app.services.sync.group_d.protocol_mapper import ProtocolMapper
 from app.services.sync.group_sync import GroupSyncMixin
+from app.services.sync.method_resolution import resolve_method
 from app.utils.error_tracker import ErrorTracker
 from app.utils.peptide_utils import extract_essence, get_peptide_candidates
 
@@ -109,19 +110,11 @@ class DbImportOrchestrator(GroupSyncMixin):
                 "db_import_orchestrator",
             )
 
-            # Keyword-to-DB-name mapping rules
-            METHOD_KEYWORD_MAP = {
-                "nasal": "Nasal Spray",
-                "intranasal": "Nasal Spray",
-                "topical": "Topical Cream",
-                "oral": "Capsule",
-                "injectable": "Injectable",
-            }
-
             skipped_count = 0
             synced_count = 0
             skipped_peptides = []
             synced_peptides = []
+            partial_peptides = []
 
             for idx, row in enumerate(rows, start=1):
                 row_id = row.get("name") or row.get("peptide_name") or str(list(row.values())[:1])
@@ -169,38 +162,19 @@ class DbImportOrchestrator(GroupSyncMixin):
                 # Use the matched identifier for slug-based lookups
                 row_slug = matched_identifier
 
-                # Stage 0.5: Map Administrative Method and filter
-                raw_method = str(row.get("Method") or "").strip()
-                # If multiple methods, only take the first one
-                first_method_part = raw_method.split(",")[0].strip().lower()
-
-                # Resolve CSV keyword to a DB method name
-                mapped_method = None
-                for keyword, method_name in METHOD_KEYWORD_MAP.items():
-                    if keyword in first_method_part:
-                        mapped_method = method_name
-                        break
-
-                # Skip if keyword didn't match or mapped method doesn't exist in DB
-                if not mapped_method or mapped_method not in existing_method_names:
-                    skipped_count += 1
-                    if mapped_method and mapped_method not in existing_method_names:
-                        reason = f"mapped method '{mapped_method}' not in DB"
-                        log_debug(
-                            f"  ✗ SKIPPED: '{raw_name}' - mapped method '{mapped_method}' does not exist in administrative method table",
-                            "db_import_orchestrator",
-                        )
-                    else:
-                        reason = f"admin method '{raw_method}' has no mapping"
-                        log_debug(
-                            f"  ✗ SKIPPED: '{raw_name}' - administrative method '{raw_method}' has no mapping",
-                            "db_import_orchestrator",
-                        )
-                    skipped_peptides.append(f"{raw_name} ({reason})")
-                    continue
-
-                # Overwrite the row's method so downstream mappers use the DB method name
-                row["Method"] = mapped_method
+                # Stage 0.5: Map Administrative Method. An unresolved method no longer drops the
+                # peptide: its columns and every child that needs no method are still written; only
+                # the protocols (they need an administration_methods id) are left out and reported.
+                resolution = resolve_method(row.get("Method"), existing_method_names)
+                mapped_method = resolution.method
+                if mapped_method:
+                    # Overwrite the row's method so downstream mappers use the DB method name
+                    row["Method"] = mapped_method
+                else:
+                    row["Method"] = ""
+                    log_debug(
+                        f"  ! '{raw_name}': {resolution.reason}; protocols are not written", "db_import_orchestrator"
+                    )
 
                 print(f"\n{raw_name} : {mapped_method}")
                 log_debug(
@@ -224,6 +198,8 @@ class DbImportOrchestrator(GroupSyncMixin):
                 print("  Stage 1: Mapping raw row to structured payload")
                 try:
                     payload = self.map_row(row)
+                    if not mapped_method:
+                        payload["protocols"] = []
                     ga = payload["group_a"]
                     s1_summary = (
                         f"{len(ga['dosages'])} dosages, "
@@ -307,7 +283,18 @@ class DbImportOrchestrator(GroupSyncMixin):
                         tracker.record_db_error(row_id, "relations", e)
 
                 synced_count += 1
-                synced_peptides.append({"name": raw_name, "slug": row_slug, "method": mapped_method})
+                synced_peptides.append(
+                    {
+                        "name": raw_name,
+                        "slug": row_slug,
+                        "method": mapped_method,
+                        "research_stage": self.peptide_mapper.extras(row)["research_stage"],
+                    }
+                )
+                if not mapped_method:
+                    partial_peptides.append(
+                        {"name": raw_name, "slug": row_slug, "reason": resolution.reason, "not_written": ["protocols"]}
+                    )
                 # Mark as endpoint-triggered if activity_type is provided
                 if activity_type and peptide_id:
                     if not fill_empty_only or not existing_row.get("activity_type"):
@@ -354,6 +341,7 @@ class DbImportOrchestrator(GroupSyncMixin):
                 "skipped_count": skipped_count,
                 "synced_peptides": synced_peptides,
                 "skipped_peptides": skipped_peptides,
+                "partial_peptides": partial_peptides,
             }
 
         finally:

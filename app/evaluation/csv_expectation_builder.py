@@ -10,15 +10,7 @@ from typing import Any
 
 from app.services.sync.db_import_orchestrator import DbImportOrchestrator
 from app.services.sync.group_d.graph_mapper import GraphMapper
-
-# Mirror of the METHOD_KEYWORD_MAP defined in DbImportOrchestrator.sync_to_db
-METHOD_KEYWORD_MAP = {
-    "nasal": "Nasal Spray",
-    "intranasal": "Nasal Spray",
-    "topical": "Topical Cream",
-    "oral": "Capsule",
-    "injectable": "Injectable",
-}
+from app.services.sync.method_resolution import METHOD_KEYWORD_MAP
 
 
 class CsvExpectationBuilder:
@@ -38,10 +30,10 @@ class CsvExpectationBuilder:
     def resolve_method(self, row: dict[str, Any]) -> str | None:
         """Return the canonical DB method name or None if unmappable."""
         raw_method = str(row.get("Method") or "").strip()
-        first_part = raw_method.split(",")[0].strip().lower()
-        for keyword, method_name in METHOD_KEYWORD_MAP.items():
-            if keyword in first_part:
-                return method_name
+        for part in (p.strip().lower() for p in raw_method.split(",")):
+            for keyword, method_name in METHOD_KEYWORD_MAP.items():
+                if keyword in part:
+                    return method_name
         return None
 
     def build(self, row: dict[str, Any]) -> dict[str, Any] | None:

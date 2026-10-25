@@ -658,8 +658,10 @@ The `Method` CSV field contains raw scraped values that are mapped to canonical 
 | `oral` | `Capsule` |
 | `injectable` | `Injectable` |
 
-**Defined in:** `DbImportOrchestrator.METHOD_KEYWORD_MAP` and `GraphImportOrchestrator.METHOD_KEYWORD_MAP`
-**Purpose:** The mapper only processes rows where the `Method` maps to an existing `administration_methods.name`. Rows with unmapped methods are **skipped**.
+**Defined in:** `app/services/sync/method_resolution.py` (`METHOD_KEYWORD_MAP`, `resolve_method`; shared by the core sync and the evaluation builder; `GraphImportOrchestrator` keeps its own exact-match map). The first comma-separated part that maps to a method the DB has wins; extra keywords (`subcutaneous`, `capsule`, `cream`, ...) are in the module.
+**Purpose:** An unresolved `Method` (empty, no keyword, or the canonical name missing from `administration_methods`) no longer skips the peptide (AID-4). The peptide columns and every child that needs no method (benefits, side effects, interactions, indications, references) are written; only the **protocols** are left out, because they need an `administration_methods` id. The job result lists each such peptide in `partial_peptides` (`name`, `slug`, `reason`, `not_written`). A peptide with no matching `peptides` row is still skipped.
+
+**Columns the peptide mapper fills from pep-pedia:** besides the original ones, `half_life_value`/`half_life_unit` (parsed from text such as "4 hrs"), `effect_onset`, `break_period`, `required_materials`, `safety_guidelines`, `quality_checks`. pep-pedia's research maturity label (`research_level` in the CSV) is returned in each `synced_peptides` entry as `research_stage` and is **not** written: `peptides.research_level` is the development-phase enum. A `research_stage` column is AWD-16.
 
 ---
 
