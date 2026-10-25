@@ -27,6 +27,7 @@ DB_METHODS = {"Injectable", "Nasal Spray", "Topical Cream", "Capsule"}
         ("Oral", "Capsule"),
         ("Topical", "Topical Cream"),
         ("Subcutaneous", "Injectable"),
+        ("Nasal spray", "Nasal Spray"),
         ("Sublingual drops, Oral", "Capsule"),  # the first part is unknown, a later one maps
     ],
 )
@@ -190,3 +191,19 @@ def test_a_peptide_with_no_db_match_is_still_skipped(monkeypatch):
     result = _run(monkeypatch, db, "Injectable")
     assert result["synced_count"] == 0 and result["skipped_count"] == 1
     db.upsert_peptide_fill_nulls.assert_not_called()
+
+
+@pytest.mark.parametrize("raw", ["Topical spray", "Oral spray", "Transdermal spray"])
+def test_a_bare_spray_is_not_a_nasal_spray(raw):
+    assert resolve_method(raw, DB_METHODS).method != "Nasal Spray"
+
+
+def test_long_onset_and_break_are_cut_to_the_varchar_100_columns():
+    long_text = "Most users notice improved sleep in the first week, full effects build over 8 to 12 weeks. " * 2
+    assert len(long_text) > 150
+    row = {**ROW, "quick_guide_onset": long_text, "Break Period": long_text}
+    row |= {"cycle": long_text, "storage": long_text}
+    out = PeptideMapper().map(row)
+    for column in ("effect_onset", "break_period", "cycle_duration", "storage_temperature"):
+        assert len(out[column]) == 100
+        assert long_text.startswith(out[column])

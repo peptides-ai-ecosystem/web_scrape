@@ -14,7 +14,6 @@ from typing import NamedTuple
 METHOD_KEYWORD_MAP: dict[str, str] = {
     "nasal": "Nasal Spray",
     "intranasal": "Nasal Spray",
-    "spray": "Nasal Spray",
     "topical": "Topical Cream",
     "cream": "Topical Cream",
     "transdermal": "Topical Cream",

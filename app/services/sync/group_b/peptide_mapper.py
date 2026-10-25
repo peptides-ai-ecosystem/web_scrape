@@ -23,6 +23,7 @@ _SINGLE = {
     "break_period": ("break_period", "break", "off_period", "rest_period", "quick_guide_break"),
     "required_materials": ("required_materials", "materials", "materials_needed", "supplies", "what_you_need"),
 }
+_VARCHAR_100 = {"effect_onset", "break_period"}  # varchar(100) in the platform schema
 _HALF_LIFE = ("half_life", "quick_guide_half_life", "pharmacokinetics_half_life")
 _MULTI = {  # numbered columns joined one per line
     "safety_guidelines": ("safety_guidelines", "side_effects_and_safety_safety_guidelines"),
@@ -72,8 +73,8 @@ class PeptideMapper(BaseMapper):
             "molecular_type": (row.get("molecular_information_type") or "").strip(),
             "molecular_length": (row.get("molecular_information_length") or "").strip(),
             "molecular_weight": (row.get("molecular_information_weight") or "").strip(),
-            "cycle_duration": (row.get("cycle") or "").strip(),
-            "storage_temperature": (row.get("storage") or "").strip(),
+            "cycle_duration": (row.get("cycle") or "").strip()[:100],
+            "storage_temperature": (row.get("storage") or "").strip()[:100],
             "fda_approval_status": fda_status if fda_status else None,
             "wada_status": wada_status if wada_status else None,
             "contraindications": self._extract_contraindications(row),
@@ -93,7 +94,8 @@ class PeptideMapper(BaseMapper):
         by_key = {_norm(k): v for k, v in row.items() if isinstance(k, str)}
         out: dict[str, Any] = {}
         for column, aliases in _SINGLE.items():
-            out[column] = next((_clean(by_key[a]) for a in aliases if _clean(by_key.get(a))), "")
+            value = next((_clean(by_key[a]) for a in aliases if _clean(by_key.get(a))), "")
+            out[column] = value[:100] if column in _VARCHAR_100 else value
         half = next((_clean(by_key[a]) for a in _HALF_LIFE if _clean(by_key.get(a))), "")
         match = _HALF_LIFE_RE.search(half)
         out["half_life_value"] = float(match.group(1)) if match else None
