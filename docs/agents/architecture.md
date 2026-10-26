@@ -14,7 +14,7 @@ One FastAPI service (`main.py` -> `app/factory.py`) with three paths and a sched
 1. `app/services/sync/db_import_orchestrator.py` maps each CSV row by group A-F (`group_a/` lookups, `group_b/` peptide, `group_c/` relations, `group_d/` protocols and graph, `group_e/`, `group_f/`); insert order is in `docs/product/sync-schema.md`.
 2. `group_sync.py` writes group A and the relations; `graph_import_orchestrator.py` writes `peptide_graph`.
 3. Writes go through `app/repositories/` (one file per platform table). Sync is fill-empty-only unless the request says otherwise. `delete_peptide_cascading` in `app/repositories/peptide.py` names every platform table that references a peptide.
-4. `app/evaluation/` compares CSV and database after a sync (`/api/v1/evaluation/*`).
+4. `app/evaluation/` compares CSV and database after a sync (`/api/v1/evaluation/*`); its reads are `app/repositories/evaluation_repository.py` and `GraphRepository.graph_rows_for_peptide`, so it holds comparison logic only.
 
 ## 3. Vendor price scrape (Playwright or plain HTTP)
 1. Targets live in `vendor_scrape_targets` (this service's table; `app/repositories/vendor_target.py`), with `config/vendor_targets.example.json` as the shape of an optional file seed.

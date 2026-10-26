@@ -25,6 +25,7 @@ from typing import Any
 
 from app.evaluation.graph_report import print_graph_console, save_graph_json
 from app.infrastructure.db.service import DbManager
+from app.repositories.graph import GraphRepository
 from app.services.sync.group_d.graph_mapper import GraphMapper
 from app.utils.peptide_utils import extract_essence, find_best_match
 
@@ -75,28 +76,8 @@ class GraphPeptideEvalResult:
 
 
 # ---------------------------------------------------------------------------
-# Fetcher helpers
+# Helpers
 # ---------------------------------------------------------------------------
-
-
-def _fetch_graph_rows(db: DbManager, peptide_id: int) -> list[dict[str, Any]]:
-    """Return all peptide_graph rows for the given peptide_id."""
-    conn = db.conn
-    if conn is None or conn.closed:
-        db.connect()
-        conn = db.conn
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT time_range, path_data, points, markers FROM peptide_graph WHERE peptide_id = %s",
-            (peptide_id,),
-        )
-        rows = cur.fetchall()
-        if not rows:
-            return []
-        if hasattr(rows[0], "keys"):
-            return [dict(r) for r in rows]
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, row, strict=False)) for row in rows]
 
 
 def _is_nonempty_json(value: Any) -> bool:
@@ -313,6 +294,7 @@ def run_graph_evaluation(
     graph_mapper = GraphMapper()
     evaluator = GraphEvaluator()
     db = DbManager(db_url)
+    graph_repo = GraphRepository(db)
 
     evaluated_peptides = []
     skipped_peptides = []
@@ -354,7 +336,7 @@ def run_graph_evaluation(
             peptide_id = peptide_record["id"]
 
             # Fetch actual graph rows
-            actual_rows = _fetch_graph_rows(db, peptide_id)
+            actual_rows = graph_repo.graph_rows_for_peptide(peptide_id)
 
             # Run checks
             result = evaluator._evaluate_peptide(
