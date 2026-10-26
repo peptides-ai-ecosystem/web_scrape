@@ -209,3 +209,18 @@ class GraphRepository(BaseRepository):
         return self.execute_all(
             "SELECT * FROM peptide_graph WHERE peptide_id = %s AND administration_method_id = %s", (peptide_id, am_id)
         )
+
+    def graph_rows_for_peptide(self, peptide_id: int) -> list[dict[str, Any]]:
+        """All peptide_graph rows of a peptide (the evaluation compares these to the CSV)."""
+        with self.get_cursor() as cur:
+            cur.execute(
+                "SELECT time_range, path_data, points, markers FROM peptide_graph WHERE peptide_id = %s",
+                (peptide_id,),
+            )
+            rows = cur.fetchall()
+            if not rows:
+                return []
+            if hasattr(rows[0], "keys"):
+                return [dict(r) for r in rows]
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row, strict=False)) for row in rows]

@@ -12,7 +12,7 @@ Shared Python rules (layering, settings, migrations on a shared database, loggin
 - A route function is a status mapping plus one call downward. Request and response models live in `app/models/<feature>.py`, not in the endpoint file.
 - A controller exists only when the use case coordinates more than one thing (a scrape plus a write: `PepPediaSyncController`, `VendorScrapeController`). A controller method that only does `return some_service.foo()` is deleted; the endpoint calls the service.
 - Services, controllers, scrapers and repositories never import FastAPI. They raise the typed errors in `app/core/errors.py`; the endpoint maps them with `app/api/errors.py` (same status, same `detail`).
-- All SQL lives in `app/repositories/`, one file per table (or per read model such as `peptide_inspector.py`). No SQL in endpoints, services, controllers or scrapers.
+- All SQL lives in `app/repositories/`, one file per table (or per read model such as `peptide_inspector.py`). No SQL in endpoints, services, controllers, scrapers or `app/evaluation/` (its reads are `evaluation_repository.py`).
 - Background work receives a `schedule` callable (`BackgroundTasks.add_task` from the endpoint); it does not take FastAPI objects.
 
 ## Scrapers

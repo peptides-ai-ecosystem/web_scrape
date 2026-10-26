@@ -2,6 +2,7 @@
 
 from app.repositories.citation import CitationRepository
 from app.repositories.dosage import DosageRepository
+from app.repositories.evaluation_repository import EvaluationRepository
 from app.repositories.graph import GraphRepository
 from app.repositories.indication import IndicationRepository
 from app.repositories.interaction import InteractionRepository
@@ -23,6 +24,7 @@ __all__ = [
     "IndicationRepository",
     "GraphRepository",
     "DosageRepository",
+    "EvaluationRepository",
     "ReferenceRepository",
     "LookupRepository",
     "VendorObservationRepository",
