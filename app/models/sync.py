@@ -72,3 +72,15 @@ class SyncRequest(BaseModel):
             ]
         }
     }
+
+
+class PeekRequest(BaseModel):
+    """``POST /sync/peek``: one reference-site page to read (nothing is written)."""
+
+    url: str = Field(
+        ...,
+        min_length=8,
+        max_length=2048,
+        description="https URL on a configured reference host (PEEK_ALLOWED_HOSTS), e.g. https://pep-pedia.org/peptides/bpc-157.",
+        examples=["https://pep-pedia.org/peptides/bpc-157"],
+    )
