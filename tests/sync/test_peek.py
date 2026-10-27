@@ -157,7 +157,7 @@ def client():
 
 
 def _scraper(monkeypatch, results, errors=None):
-    monkeypatch.setattr(peek_service, "scrape_reference_page", lambda url: (results, errors or []))
+    monkeypatch.setattr(peek_service, "scrape_reference_page", lambda url, *a: (results, errors or []))
 
 
 def test_start_returns_a_job_id_then_the_payload_when_polled(client, monkeypatch):
@@ -195,7 +195,7 @@ def test_a_page_with_nothing_on_it_fails_with_the_reason(client, monkeypatch):
 
 
 def test_a_browser_crash_fails_the_job(client, monkeypatch):
-    def boom(url):
+    def boom(url, *a):
         raise RuntimeError("chrome crashed")
 
     monkeypatch.setattr(peek_service, "scrape_reference_page", boom)
@@ -208,12 +208,38 @@ def test_a_page_that_never_loads_is_given_up_after_the_timeout(client, monkeypat
     import threading
 
     gate = threading.Event()
-    monkeypatch.setattr(peek_service, "scrape_reference_page", lambda url: gate.wait(5) or ([], []))
+    monkeypatch.setattr(peek_service, "scrape_reference_page", lambda url, *a: gate.wait(5) or ([], []))
     monkeypatch.setattr(settings, "PEEK_TIMEOUT_SECONDS", 0.05)
     job_id = client.post("/api/v1/sync/peek", json={"url": URL}).json()["job_id"]
     gate.set()
     body = client.get(f"/api/v1/sync/peek/jobs/{job_id}").json()
     assert body["status"] == "failed" and "did not finish" in body["error"]
+
+
+def test_a_timed_out_peek_holds_its_slot_until_the_browser_thread_exits(monkeypatch):
+    import threading
+
+    gate = threading.Event()
+    seen = {}
+
+    def hang(url, timeout=None):
+        seen["timeout"] = timeout
+        gate.wait(5)
+        return [], []
+
+    monkeypatch.setattr(peek_service, "scrape_reference_page", hang)
+    monkeypatch.setattr(settings, "PEEK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(settings, "PEEK_MAX_RUNNING", 1)
+    controller = PeekController(lambda fn, *a: fn(*a))
+    job_id = controller.start(URL)["job_id"]
+    assert controller.get_job(job_id)["status"] == "failed"
+    assert seen["timeout"] == 0.05  # the driver page load is capped to the same value
+    with pytest.raises(ConflictError):  # still counted: its Chrome has not exited
+        controller.start("https://pep-pedia.org/peptides/tb-500")
+    gate.set()
+    peek_controller._live_threads[job_id].join(2)
+    monkeypatch.setattr(peek_service, "scrape_reference_page", lambda url, *a: ([_page()], []))
+    controller.start("https://pep-pedia.org/peptides/tb-500")
 
 
 def test_the_same_url_while_running_returns_the_running_job(monkeypatch):

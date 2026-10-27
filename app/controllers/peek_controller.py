@@ -1,3 +1,4 @@
+# XR-14 owner (sync/peek) — see orchestrator/docs/ecosystem/dependencies.md#xr-14
 """Reference-page peek as a job (``/api/v1/sync/peek``, AWD-17).
 
 A peek drives a headless browser through one page, which takes longer than a
@@ -11,7 +12,9 @@ Guard rails:
   (``app/infrastructure/reference_url.py``); the URL the browser ends on must be
   on the list too, otherwise the result is discarded.
 * **Timeout.** The scrape runs on a worker thread and is given up after
-  ``PEEK_TIMEOUT_SECONDS``.
+  ``PEEK_TIMEOUT_SECONDS``; the driver's page load is capped to the same value. A
+  timed-out job still counts against ``PEEK_MAX_RUNNING`` until its thread exits
+  (and so its browser is quit), so retries cannot pile up Chrome processes.
 * **Few browsers.** At most ``PEEK_MAX_RUNNING`` peeks at once (409 beyond);
   a start for a URL that is already being read returns that job.
 * **Memory.** Jobs live in memory; finished ones are dropped after 24 h.
@@ -38,25 +41,41 @@ JOB_RETENTION_HOURS = 24
 Schedule = Callable[..., Any]
 
 
+# Scrape threads that have not exited yet (each owns a browser), keyed by job id.
+_live_threads: dict[str, threading.Thread] = {}
+
+
+def _live_job_ids() -> set[str]:
+    for job_id, thread in list(_live_threads.items()):
+        if not thread.is_alive():
+            _live_threads.pop(job_id, None)
+    return set(_live_threads)
+
+
 def _active_peeks() -> list:
+    """Jobs queued or running, plus timed-out jobs whose browser thread is still alive."""
+    live = _live_job_ids()
     return [
         job
         for job in get_job_queue().list_jobs()
-        if job.endpoint == PEEK_JOB_ENDPOINT and job.status in (JobStatus.PENDING, JobStatus.RUNNING)
+        if job.endpoint == PEEK_JOB_ENDPOINT
+        and (job.status in (JobStatus.PENDING, JobStatus.RUNNING) or job.job_id in live)
     ]
 
 
-def _scrape_with_timeout(url: str, seconds: float):
+def _scrape_with_timeout(url: str, seconds: float, job_id: str | None = None):
     """Run the blocking scrape on a daemon thread; ``TimeoutError`` after ``seconds``."""
     box: dict[str, Any] = {}
 
     def work() -> None:
         try:
-            box["value"] = peek_service.scrape_reference_page(url)
+            box["value"] = peek_service.scrape_reference_page(url, seconds if seconds > 0 else None)
         except Exception as exc:  # noqa: BLE001 - reported through the job
             box["error"] = exc
 
     thread = threading.Thread(target=work, name="peek-scrape", daemon=True)
+    if job_id:
+        _live_threads[job_id] = thread
     thread.start()
     thread.join(seconds if seconds > 0 else None)
     if thread.is_alive():
@@ -73,7 +92,7 @@ def _run_peek_task(job_id: str, url: str) -> None:
     job.start()
     log_info(f"PEEK STARTED — job={job_id}", "peek")
     try:
-        results, errors = _scrape_with_timeout(url, float(settings.PEEK_TIMEOUT_SECONDS))
+        results, errors = _scrape_with_timeout(url, float(settings.PEEK_TIMEOUT_SECONDS), job_id)
         if job.status is JobStatus.CANCELLED:
             return
         if any(not final_url_allowed(data.url) for data in results):

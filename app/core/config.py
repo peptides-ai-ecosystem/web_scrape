@@ -119,7 +119,8 @@ class Settings(BaseSettings):
     # map, writing nothing. Only these hosts (comma separated, exact match, https)
     # may be fetched: the admin cannot make this service read any other site.
     PEEK_ALLOWED_HOSTS: Stripped = "pep-pedia.org,www.pep-pedia.org"
-    # A peek is given up after this many seconds (the browser is quit).
+    # A peek job fails after this many seconds and the driver's page load is capped to it;
+    # the browser is quit when its thread ends, and the job counts as running until then.
     PEEK_TIMEOUT_SECONDS: float = 120
     # Browsers are heavy: at most this many peeks run at once.
     PEEK_MAX_RUNNING: int = 2

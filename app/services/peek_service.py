@@ -25,11 +25,15 @@ from app.services.sync.method_resolution import METHOD_KEYWORD_MAP, resolve_meth
 KNOWN_METHODS = frozenset(METHOD_KEYWORD_MAP.values())
 
 
-def scrape_reference_page(url: str) -> tuple[list[PeptideData], list[dict]]:
-    """One blocking browser read (core fields only). Returns ``(results, errors)``."""
+def scrape_reference_page(url: str, page_load_timeout: float | None = None) -> tuple[list[PeptideData], list[dict]]:
+    """One blocking browser read (core fields only). Returns ``(results, errors)``.
+
+    ``page_load_timeout`` caps the driver's page load so a hung page cannot keep Chrome for
+    Selenium's 300 s default.
+    """
     from app.scrapers.pep_pedia.page_scraper import PageScraper
 
-    return PageScraper(scrape_mode=ScrapeMode.CORE_ONLY).scrape(url)
+    return PageScraper(scrape_mode=ScrapeMode.CORE_ONLY, page_load_timeout=page_load_timeout).scrape(url)
 
 
 def _names(items: list[dict[str, Any]], key: str) -> list[str]:
