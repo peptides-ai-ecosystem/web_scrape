@@ -15,8 +15,9 @@ from app.scrapers.pep_pedia.extractors.section import SectionExtractor
 
 
 class PageScraper(IScraper):
-    def __init__(self, scrape_mode: ScrapeMode = ScrapeMode.FULL):
+    def __init__(self, scrape_mode: ScrapeMode = ScrapeMode.FULL, page_load_timeout: float | None = None):
         self.scrape_mode = scrape_mode
+        self.page_load_timeout = page_load_timeout
         self.hero_extractor = HeroExtractor()
         self.quick_guide_extractor = QuickGuideExtractor()
         self.community_extractor = CommunityExtractor()
@@ -28,6 +29,8 @@ class PageScraper(IScraper):
         driver, wait = WebDriverFactory.create_driver()
         errors: list[dict] = []
         try:
+            if self.page_load_timeout:
+                driver.set_page_load_timeout(self.page_load_timeout)
             print(f"[INFO] Processing: {url}")
             log_debug(f"Starting scrape for URL: {url} (mode={self.scrape_mode.value})", "page_scraper.py")
             driver.get(url)

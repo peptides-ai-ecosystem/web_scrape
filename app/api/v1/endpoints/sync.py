@@ -3,9 +3,10 @@
 from fastapi import APIRouter, BackgroundTasks
 
 from app.api.errors import http_error
+from app.controllers.peek_controller import PeekController
 from app.controllers.pep_pedia_sync_controller import PepPediaSyncController
 from app.core.errors import ServiceError
-from app.models.sync import SyncRequest
+from app.models.sync import PeekRequest, SyncRequest
 
 router = APIRouter()
 
@@ -105,5 +106,42 @@ async def start_graph_sync_missing(request: SyncRequest, background_tasks: Backg
     """
     try:
         return PepPediaSyncController(background_tasks.add_task).start_graph_missing(request)
+    except ServiceError as exc:
+        raise http_error(exc)
+
+
+@router.post(
+    "/peek",
+    status_code=202,
+    responses={
+        202: {"description": "Peek started; poll /sync/peek/jobs/{job_id}."},
+        409: {"description": "Other pages are being read right now."},
+        422: {"description": "URL is not https on a configured reference host."},
+    },
+)
+async def start_peek(request: PeekRequest, background_tasks: BackgroundTasks):
+    """
+    🔎 Read ONE reference page and show what a core sync would write. **Nothing is stored.**
+
+    Scrapes the page in memory (its own browser, no shared CSV, no database) and runs the
+    sync mappers over it. The job `result` holds the mapped peptide columns, benefits, side
+    effects, child-row counts, the page's research stage (a maturity label, not a legal
+    status) and warnings. The caller compares it with its own data and applies only what an
+    admin picks.
+
+    Only `https` URLs on `PEEK_ALLOWED_HOSTS` (default pep-pedia.org) are read; anything else
+    is a **422**. Returns **202** with a `job_id`; poll `GET /sync/peek/jobs/{job_id}`.
+    """
+    try:
+        return PeekController(background_tasks.add_task).start(request.url)
+    except ServiceError as exc:
+        raise http_error(exc)
+
+
+@router.get("/peek/jobs/{job_id}", responses={404: {"description": "Unknown peek job."}})
+async def get_peek_job(job_id: str):
+    """Status and, once completed, the mapped payload of one peek (`result`)."""
+    try:
+        return PeekController.get_job(job_id)
     except ServiceError as exc:
         raise http_error(exc)

@@ -114,6 +114,17 @@ class Settings(BaseSettings):
     # app/scrapers/vendors/vendor_products_publisher.py for why.
     VENDOR_PRODUCTS_PUBLISH_ENABLED: Flag = False
 
+    # ── pep-pedia peek (AWD-17) ───────────────────────────────────────────
+    # POST /sync/peek scrapes ONE reference page and returns what the sync would
+    # map, writing nothing. Only these hosts (comma separated, exact match, https)
+    # may be fetched: the admin cannot make this service read any other site.
+    PEEK_ALLOWED_HOSTS: Stripped = "pep-pedia.org,www.pep-pedia.org"
+    # A peek job fails after this many seconds and the driver's page load is capped to it;
+    # the browser is quit when its thread ends, and the job counts as running until then.
+    PEEK_TIMEOUT_SECONDS: float = 120
+    # Browsers are heavy: at most this many peeks run at once.
+    PEEK_MAX_RUNNING: int = 2
+
     # ── URL-only competitor discovery (AAD-1) ─────────────────────────────
     # A target saved with only a store URL (no CSS selectors) is read through
     # the WooCommerce Store API, Shopify products.json, sitemaps + schema.org

@@ -14,6 +14,51 @@ from app.core.logging import log_debug, log_error
 from app.core.models import PeptideData
 
 
+def peptide_to_row(p_data: PeptideData) -> dict[str, Any]:
+    """One scraped page/method as the flat row the mappers read (the CSV row shape).
+
+    Shared by the CSV store and the in-memory peek (AWD-17), so both feed the
+    mappers the same columns.
+    """
+    row: dict[str, Any] = {
+        "Peptide_Name": p_data.name,
+        "Full_Name": p_data.full_name,
+        "Method": p_data.method,
+        "URL": p_data.url,
+        "research_level": p_data.hero.research_level,
+    }
+
+    # Hero facts
+    for fact in p_data.hero.facts:
+        col_name = fact.label.replace(" ", "_").lower()
+        row[col_name] = f"{fact.value} ({fact.extra})"
+
+    # Quick guide (may be empty if skipped in GRAPH_ONLY mode)
+    for k, v in p_data.quick_guide.items():
+        col_name = f"quick_guide_{k.replace(' ', '_').lower()}"
+        row[col_name] = v
+
+    # Community insights (may be empty if skipped in GRAPH_ONLY mode)
+    for k, v in p_data.community_insights.items():
+        row[k.replace(" ", "_").lower()] = v
+
+    # Poll results (may be empty if skipped in GRAPH_ONLY mode)
+    for k, v in p_data.poll_results.items():
+        row[k.replace(" ", "_").lower()] = v
+
+    # Sections (may be empty if skipped in GRAPH_ONLY mode)
+    for section in p_data.sections:
+        for k, v in section.items():
+            if v:
+                row[k] = v.strip()
+
+    # Graph Data (may be empty if skipped in CORE_ONLY mode)
+    if p_data.graph_data:
+        row["graph_data_json"] = json.dumps({k: asdict(v) for k, v in p_data.graph_data.items()})
+
+    return row
+
+
 class CSVStorage(IStorage):
     def __init__(self, csv_path: Path | None = None):
         self.csv_path = csv_path or MASTER_CSV
@@ -21,45 +66,10 @@ class CSVStorage(IStorage):
     def save(self, data: list[PeptideData]) -> None:
         try:
             log_debug(f"Starting CSV save operation for {len(data)} records to {self.csv_path}", "csv_storage.py")
-            rows = []
-            for p_data in tqdm(data, desc="Processing records for CSV", unit="record", leave=False):
-                row = {
-                    "Peptide_Name": p_data.name,
-                    "Full_Name": p_data.full_name,
-                    "Method": p_data.method,
-                    "URL": p_data.url,
-                    "research_level": p_data.hero.research_level,
-                }
-
-                # Hero facts
-                for fact in p_data.hero.facts:
-                    col_name = fact.label.replace(" ", "_").lower()
-                    row[col_name] = f"{fact.value} ({fact.extra})"
-
-                # Quick guide (may be empty if skipped in GRAPH_ONLY mode)
-                for k, v in p_data.quick_guide.items():
-                    col_name = f"quick_guide_{k.replace(' ', '_').lower()}"
-                    row[col_name] = v
-
-                # Community insights (may be empty if skipped in GRAPH_ONLY mode)
-                for k, v in p_data.community_insights.items():
-                    row[k.replace(" ", "_").lower()] = v
-
-                # Poll results (may be empty if skipped in GRAPH_ONLY mode)
-                for k, v in p_data.poll_results.items():
-                    row[k.replace(" ", "_").lower()] = v
-
-                # Sections (may be empty if skipped in GRAPH_ONLY mode)
-                for section in p_data.sections:
-                    for k, v in section.items():
-                        if v:
-                            row[k] = v.strip()
-
-                # Graph Data (may be empty if skipped in CORE_ONLY mode)
-                if p_data.graph_data:
-                    row["graph_data_json"] = json.dumps({k: asdict(v) for k, v in p_data.graph_data.items()})
-
-                rows.append(row)
+            rows = [
+                peptide_to_row(p_data)
+                for p_data in tqdm(data, desc="Processing records for CSV", unit="record", leave=False)
+            ]
 
             if rows:
                 df = pd.DataFrame(rows)
