@@ -79,7 +79,9 @@ def _scrape_with_timeout(url: str, seconds: float, job_id: str | None = None):
     thread.start()
     thread.join(seconds if seconds > 0 else None)
     if thread.is_alive():
-        raise TimeoutError(f"The reference page did not finish loading within {int(seconds)} s.")
+        raise TimeoutError(
+            f"The reference page was not fully read within {int(seconds)} s (browser start, load and extraction)."
+        )
     if "error" in box:
         raise box["error"]
     return box["value"]

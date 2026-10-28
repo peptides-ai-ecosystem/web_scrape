@@ -213,7 +213,7 @@ def test_a_page_that_never_loads_is_given_up_after_the_timeout(client, monkeypat
     job_id = client.post("/api/v1/sync/peek", json={"url": URL}).json()["job_id"]
     gate.set()
     body = client.get(f"/api/v1/sync/peek/jobs/{job_id}").json()
-    assert body["status"] == "failed" and "did not finish" in body["error"]
+    assert body["status"] == "failed" and "not fully read" in body["error"]
 
 
 def test_a_timed_out_peek_holds_its_slot_until_the_browser_thread_exits(monkeypatch):

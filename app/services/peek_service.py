@@ -33,7 +33,11 @@ def scrape_reference_page(url: str, page_load_timeout: float | None = None) -> t
     """
     from app.scrapers.pep_pedia.page_scraper import PageScraper
 
-    return PageScraper(scrape_mode=ScrapeMode.CORE_ONLY, page_load_timeout=page_load_timeout).scrape(url)
+    # "eager": the extractors wait for their own elements, so do not also block on the load
+    # event (third-party scripts/fonts can hold it past the whole peek budget on a small box).
+    return PageScraper(
+        scrape_mode=ScrapeMode.CORE_ONLY, page_load_timeout=page_load_timeout, page_load_strategy="eager"
+    ).scrape(url)
 
 
 def _names(items: list[dict[str, Any]], key: str) -> list[str]:
