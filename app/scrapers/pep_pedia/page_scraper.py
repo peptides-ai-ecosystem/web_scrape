@@ -15,9 +15,15 @@ from app.scrapers.pep_pedia.extractors.section import SectionExtractor
 
 
 class PageScraper(IScraper):
-    def __init__(self, scrape_mode: ScrapeMode = ScrapeMode.FULL, page_load_timeout: float | None = None):
+    def __init__(
+        self,
+        scrape_mode: ScrapeMode = ScrapeMode.FULL,
+        page_load_timeout: float | None = None,
+        page_load_strategy: str | None = None,
+    ):
         self.scrape_mode = scrape_mode
         self.page_load_timeout = page_load_timeout
+        self.page_load_strategy = page_load_strategy
         self.hero_extractor = HeroExtractor()
         self.quick_guide_extractor = QuickGuideExtractor()
         self.community_extractor = CommunityExtractor()
@@ -26,7 +32,7 @@ class PageScraper(IScraper):
 
     def scrape(self, url: str) -> tuple[list[PeptideData], list[dict]]:
         """Returns (results, errors) where errors is a list of error dicts."""
-        driver, wait = WebDriverFactory.create_driver()
+        driver, wait = WebDriverFactory.create_driver(self.page_load_strategy)
         errors: list[dict] = []
         try:
             if self.page_load_timeout:

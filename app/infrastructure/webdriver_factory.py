@@ -31,8 +31,11 @@ def _locate_chromium_binary() -> str | None:
 
 class WebDriverFactory:
     @staticmethod
-    def create_driver():
+    def create_driver(page_load_strategy: str | None = None):
+        """``page_load_strategy='eager'`` returns at DOMContentLoaded, not the load event."""
         options = Options()
+        if page_load_strategy:
+            options.page_load_strategy = page_load_strategy
         options.add_argument("--headless=new")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-gpu")
