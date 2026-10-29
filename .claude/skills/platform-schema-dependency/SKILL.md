@@ -12,7 +12,7 @@ web_scrape writes and deletes rows in the **peptides-platform** database with ra
 - `app/infrastructure/db/service.py` — `link_relation(...)` and `insert_lookup(...)` (called from `app/services/sync/group_sync.py`) name the junction and lookup tables.
 - `app/services/sync/group_b/peptide_mapper.py` — the keys of the dict it returns are the `peptides` columns written.
 - `app/repositories/peptide.py` `delete_peptide_cascading` — hard-codes every platform table that references a peptide. A new platform table with a `peptide_id` foreign key must be added there, or the delete fails on the FK.
-- Own tables (not platform): `vendor_price_observations`, `vendor_scrape_targets` (`migrations/`).
+- Own tables (not platform): `vendor_price_observations`, `vendor_scrape_targets` (Alembic, `alembic/versions/`).
 
 ## Run the contract test
 ```bash

@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORM_REPO = Path(os.getenv("PLATFORM_SCHEMA_REPO", "G:/aultra/microservice/peptides-platform"))
 
-# web_scrape's own tables (migrations/, created by vendor_schema.py); not platform tables.
+# web_scrape's own tables (Alembic, alembic/versions/); not platform tables.
 OWN_TABLES = {"vendor_price_observations", "vendor_scrape_targets"}
 
 TABLE_RE = re.compile(r"""(?:pgTable|\.table)\(\s*["']([a-z_0-9]+)["']""")
