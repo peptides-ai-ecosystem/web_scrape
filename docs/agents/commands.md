@@ -44,3 +44,7 @@ DATABASE_URL=... uv run alembic current        # shows 4b1d0c2e9f10 (head) when 
 The first revision is a baseline: it only creates what is missing, so it succeeds on a database where both tables already exist (staging, production) and records itself in `alembic_version_web_scrape`. The staging deploy runs `alembic upgrade head` in the container; production runs it once on "release to production". `VENDOR_SCHEMA_AUTO_CREATE=true` runs it at app startup instead (off by default). Test on a throwaway container: `docker run -d --rm -p 55432:5432 -e POSTGRES_PASSWORD=pw postgres:17`.
 
 Platform SQL in `migrations/` is hand-run and waiting on peptides-platform's Drizzle migrations (`migrations/README.md`).
+
+## Staging CI and deploy
+
+No GitHub Actions workflow runs on a push or PR to `staging` (owner, 30 Oct 2026: Actions overcharge); only `main`/`master` keeps automatic CI/CD. `scripts/check.sh` locally is the gate. Staging deploys are manual: `gh workflow run deploy.yml -R peptides-ai-ecosystem/web_scrape --ref staging -f environment=staging`.

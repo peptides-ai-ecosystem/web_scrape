@@ -4,7 +4,7 @@ Only staging. `master` is production: never push or merge it without the words "
 
 1. `scripts/check.sh` passes locally. CI is billed: push once, after the local gate.
 2. Confirm the branch is based on current `origin/staging`.
-3. Push to `staging` (or merge the PR into `staging`). The push runs `.github/workflows/deploy.yml`, which builds the image, runs `alembic upgrade head` for this service's two tables and rolls `web-scrape-staging` in the shared staging stack (`docs/ops/deploy.md`).
+3. Push to `staging` (or merge the PR into `staging`). That deploys nothing: no workflow runs on `staging` automatically (owner, 30 Oct 2026), `scripts/check.sh` is the only gate. Deploy by hand: `gh workflow run deploy.yml -R peptides-ai-ecosystem/web_scrape --ref staging -f environment=staging`. That runs `.github/workflows/deploy.yml`, which builds the image, runs `alembic upgrade head` for this service's two tables and rolls `web-scrape-staging` in the shared staging stack (`docs/ops/deploy.md`).
 4. Watch the run, then `GET /health` on the staging gateway: its `commit` must be your sha.
 5. Smoke `GET /web_scrape/api/v1/vendors/targets` through the gateway; expect 200 and the target list.
 6. Staging boots idle: `START_SCHEDULER=false`, vendor cron and publisher off. Do not turn them on.
