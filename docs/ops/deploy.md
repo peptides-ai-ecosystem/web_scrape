@@ -1,6 +1,7 @@
 # Deploy and error reporting
 
-The EC2 host does **not** hold this repository. A push to `staging` deploys
+The EC2 host does **not** hold this repository. A manual dispatch
+(`gh workflow run deploy.yml -R peptides-ai-ecosystem/web_scrape --ref staging -f environment=staging`; a push to `staging` deploys nothing since 30 Oct 2026) deploys
 `web-scrape-staging` in the shared staging stack (orchestrator's
 `deploy/ms-staging/`). A push to `master` is a **production** deploy: it runs
 `.github/workflows/deploy.yml`, which:
@@ -35,7 +36,7 @@ never a single competitor page that fails to parse. Events are tagged
 ---
 
 ## Staging
-- A push to `staging` deploys `web-scrape-staging` in orchestrator's `deploy/ms-staging/` (shared compose, `.deploy/` scripts shared byte-for-byte, XR-11). The staging compose pins `START_SCHEDULER=false`, `VENDOR_SCRAPE_CRON_ENABLED` off and `VENDOR_PRODUCTS_PUBLISH_ENABLED=false`: the container boots idle.
+- A manual dispatch (`gh workflow run deploy.yml -R peptides-ai-ecosystem/web_scrape --ref staging -f environment=staging`) deploys `web-scrape-staging` in orchestrator's `deploy/ms-staging/` (shared compose, `.deploy/` scripts shared byte-for-byte, XR-11). The staging compose pins `START_SCHEDULER=false`, `VENDOR_SCRAPE_CRON_ENABLED` off and `VENDOR_PRODUCTS_PUBLISH_ENABLED=false`: the container boots idle.
 - The deploy runs `alembic upgrade head` in the container before recreating it (this service's two tables only, version table `alembic_version_web_scrape`).
 - Production is `master` and deploys only on the words "release to production": the production deploy must run the same `alembic upgrade head` once (`docs/agents/commands.md`).
 

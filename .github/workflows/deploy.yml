@@ -5,7 +5,8 @@ name: Build and Deploy
 # mirrors chat-microservice's deploy, which is the proven pattern on this host.
 #
 # Two routes, one workflow (same shape as chat/peptide):
-#   staging    - push to `staging`, or dispatch with environment=staging.
+#   staging    - dispatch with environment=staging (manual only since 30 Oct 2026;
+#                a push to `staging` no longer deploys).
 #                Tags :staging and :staging-<sha7> (never :latest) and rolls ONLY
 #                web-scrape-staging in ~/ms-staging (orchestrator's
 #                deploy/ms-staging) to the new digest via .deploy/staging-remote.sh,
@@ -17,10 +18,11 @@ name: Build and Deploy
 #                on ~/web_scrape (production) and refuse any other target.
 
 on:
+  # No push trigger for `staging` (owner, 30 Oct 2026: Actions overcharge).
+  # Staging deploys are manual: gh workflow run deploy.yml --ref staging.
   push:
     branches:
       - master
-      - staging
   workflow_dispatch:
     inputs:
       environment:
