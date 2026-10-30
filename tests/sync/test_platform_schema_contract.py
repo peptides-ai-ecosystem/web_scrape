@@ -17,11 +17,14 @@ Where the platform columns come from:
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from tests.sync.platform_schema import (
     OWN_TABLES,
     PLATFORM_REPO,
+    ROOT,
     cascade_tables,
     latest_snapshot_path,
     load_snapshot,
@@ -105,3 +108,18 @@ def test_snapshot_matches_the_platform_checkout_when_one_is_present():
         f"snapshot (generated {meta.get('generated_at')}) differs from the platform checkout for {stale}; "
         "run scripts/export_platform_schema.py and commit"
     )
+
+
+def test_migrations_folder_holds_only_the_known_undeclared_columns():
+    """webscrape-1: migrations/ is platform-owned stop-gap SQL. It may only add the
+    columns in KNOWN_UNDECLARED_COLUMNS, additively. When the platform declares them
+    (proposed Drizzle 0137) the files go too."""
+    added: set[tuple[str, str]] = set()
+    for sql_file in sorted((ROOT / "migrations").glob("*.sql")):
+        lines = sql_file.read_text(encoding="utf-8").splitlines()
+        body = "\n".join(line for line in lines if not line.lstrip().startswith("--"))
+        assert not re.search(r"\b(ALTER\s+COLUMN|DROP|RENAME|CREATE\s+TABLE)\b", body, re.I), (
+            f"{sql_file.name}: only additive ADD COLUMN IF NOT EXISTS belongs here"
+        )
+        added |= {("peptides", col) for col in re.findall(r"ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)", body, re.I)}
+    assert added == KNOWN_UNDECLARED_COLUMNS
