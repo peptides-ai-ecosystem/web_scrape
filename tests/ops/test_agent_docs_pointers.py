@@ -24,7 +24,6 @@ TOP_DIRS = (
     "scripts/",
     "tests/",
     "alembic/",
-    "migrations/",
     "config/",
     "contracts/",
     ".claude/",
@@ -50,7 +49,6 @@ DOC_GLOBS = [
     ".github/PULL_REQUEST_TEMPLATE.md",
     "tests/README.md",
     "tests/*/README.md",
-    "migrations/README.md",
 ]
 
 SIBLING_POINTER = re.compile(

@@ -36,9 +36,7 @@ peptides_temp/
 graph_html/
 
 # --- Local-only assets ---
-# Hand-run platform SQL (migrations/) is never shipped.
 *.sql
-migrations/*
 *.csv
 scripts/ops/
 viz_server.py

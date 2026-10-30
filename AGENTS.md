@@ -10,7 +10,7 @@ Ecosystem map and contracts (GitHub): [AGENTS.md](https://github.com/peptides-ai
 - `CODING_STANDARDS.md` — the rules a change is reviewed against. `docs/agents/definition-of-done.md` — what done means.
 - `GLOSSARY.md` and `docs/adr/` — terms and decisions (`docs/agents/domain.md`).
 - `app/api/v1/routers.py` — every route; `app/repositories/peptide.py` `delete_peptide_cascading` names every platform table that references a peptide.
-- `docs/product/sync-schema.md` — insert order, relations and field mapping for mapper groups A–F; `migrations/README.md` — hand-run platform SQL waiting on the platform.
+- `docs/product/sync-schema.md` — insert order, relations and field mapping for mapper groups A–F.
 
 ## Workflows (read the one that matches)
 - New feature or route change → `docs/agents/workflows/new-feature.md`
