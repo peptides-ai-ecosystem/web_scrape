@@ -12,4 +12,4 @@ Two vendor tables were created by SQL executed on every boot; the rest of the da
 - Platform tables are never touched by Alembic here.
 
 ## Consequences
-The boot-time SQL runner is gone. Hand-run SQL in `migrations/` for platform tables is a stop-gap that disappears when the platform declares those columns (ADR 0003).
+The boot-time SQL runner is gone. The hand-run platform SQL that used to sit in a `migrations/` folder is gone too: the platform declares those columns (Drizzle 0138, webscrape-1; ADR 0003).

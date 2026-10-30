@@ -35,16 +35,12 @@ from tests.sync.platform_schema import (
 )
 
 # Columns web_scrape writes that the platform's Drizzle schema does not declare.
-# They exist in the database only because migrations/ adds them by hand. Each
-# entry is a cross-repo bug to fix in the platform schema (XR-8); remove the
-# entry when it is fixed and the test will hold the line. Tracked in
-# https://github.com/peptides-apps/peptides-platform/issues/522 ([XR-8], ADR 0009).
-KNOWN_UNDECLARED_COLUMNS = {
-    ("peptides", "molecular_type"),
-    ("peptides", "molecular_length"),
-    ("peptides", "molecular_weight"),
-    ("peptides", "activity_type"),
-}
+# Empty since platform Drizzle 0138 (webscrape-1) declared the last four
+# (peptides.activity_type, molecular_type, molecular_length, molecular_weight),
+# which hand-run SQL in this repo's old migrations/ folder used to add. Keep it
+# empty: an entry is a cross-repo bug to fix in the platform schema first (XR-8,
+# https://github.com/peptides-apps/peptides-platform/issues/522, ADR 0009).
+KNOWN_UNDECLARED_COLUMNS: set[tuple[str, str]] = set()
 
 
 @pytest.fixture(scope="module")
@@ -110,16 +106,22 @@ def test_snapshot_matches_the_platform_checkout_when_one_is_present():
     )
 
 
-def test_migrations_folder_holds_only_the_known_undeclared_columns():
-    """webscrape-1: migrations/ is platform-owned stop-gap SQL. It may only add the
-    columns in KNOWN_UNDECLARED_COLUMNS, additively. When the platform declares them
-    (proposed Drizzle 0137) the files go too."""
-    added: set[tuple[str, str]] = set()
-    for sql_file in sorted((ROOT / "migrations").glob("*.sql")):
-        lines = sql_file.read_text(encoding="utf-8").splitlines()
-        body = "\n".join(line for line in lines if not line.lstrip().startswith("--"))
-        assert not re.search(r"\b(ALTER\s+COLUMN|DROP|RENAME|CREATE\s+TABLE)\b", body, re.I), (
-            f"{sql_file.name}: only additive ADD COLUMN IF NOT EXISTS belongs here"
-        )
-        added |= {("peptides", col) for col in re.findall(r"ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)", body, re.I)}
-    assert added == KNOWN_UNDECLARED_COLUMNS
+def test_the_peptides_columns_web_scrape_writes_are_declared_by_the_platform(platform):
+    """webscrape-1: the four columns that hand-run SQL here used to add are platform
+    Drizzle columns now (migration 0138). web_scrape writes them; it never creates them."""
+    assert {"activity_type", "molecular_type", "molecular_length", "molecular_weight"} <= platform["peptides"]
+
+
+def test_this_repo_holds_no_sql_that_changes_a_platform_table():
+    """webscrape-1: the platform owns its schema. No migrations/ folder, and no SQL file
+    here alters or creates a platform table; only Alembic's own two tables change here."""
+    assert not (ROOT / "migrations").exists(), "platform SQL belongs in a peptides-platform Drizzle migration"
+    ddl = re.compile(r"\b(?:ALTER|CREATE|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?\"?(\w+)", re.I)
+    tops = [p for p in ROOT.iterdir() if not p.name.startswith(".") and p.name not in {"node_modules", "venv"}]
+    sql_files = [p for top in tops for p in ([top] if top.is_file() else top.rglob("*.sql")) if p.suffix == ".sql"]
+    offenders = []
+    for sql_file in sql_files:
+        tables = set(ddl.findall(sql_file.read_text(encoding="utf-8", errors="ignore"))) - OWN_TABLES
+        if tables:
+            offenders.append(f"{sql_file.relative_to(ROOT).as_posix()}: {sorted(tables)}")
+    assert not offenders, f"SQL changing platform tables: {offenders}"

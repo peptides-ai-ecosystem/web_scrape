@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-17",
+  "generated_at": "2026-10-30",
   "generator": "scripts/export_platform_schema.py",
   "source": {
-    "branch": "staging",
-    "commit": "b8bcec72f2dcd5b4044be46e22746fc48c8ef756",
+    "branch": "b30-webscrape1",
+    "commit": "3bb656cd0741b6820cdf91e167fe3a83c7ae9907",
     "repo": "peptides-ai-ecosystem/peptides-platform"
   },
   "tables": {
@@ -178,6 +178,7 @@
       "id",
       "in_stock",
       "is_hidden",
+      "last_seen_at",
       "original_price_per_mg",
       "original_total_price",
       "pepti_price_vendor_pricing",
@@ -358,6 +359,7 @@
       "updated_at"
     ],
     "peptides": [
+      "activity_type",
       "break_period",
       "category_id",
       "chain_length",
@@ -371,17 +373,24 @@
       "half_life_unit",
       "half_life_value",
       "id",
+      "idx_peptides_activity_type",
+      "idx_peptides_molecular_type",
+      "idx_peptides_molecular_weight",
       "is_popular",
       "iupac_name",
       "key_information",
       "mechanism_of_action",
       "modifications",
       "molecular_formula",
+      "molecular_length",
       "molecular_mass",
+      "molecular_type",
+      "molecular_weight",
       "name",
       "overview",
       "peptide_type",
       "peptides",
+      "peptides_activity_type_check",
       "peptides_category_created_idx",
       "peptides_category_fda_idx",
       "peptides_category_id_idx",
@@ -397,8 +406,12 @@
       "peptides_wada_status_idx",
       "potential_research_fields",
       "quality_checks",
+      "regulatory_visible",
       "required_materials",
       "research_level",
+      "research_stage",
+      "research_stage_checked_at",
+      "research_stage_source_url",
       "safety_guidelines",
       "sequence",
       "shelf_life_reconstituted",
@@ -534,6 +547,7 @@
       "updated_at"
     ],
     "sds_compounds": [
+      "admin_override",
       "appearance",
       "boiling_point",
       "cas_number",
@@ -690,6 +704,7 @@
       "peptide_id",
       "question_id",
       "user_id",
+      "wiki_user_peptide_answers_user_peptide_question_option_uq",
       "wiki_user_peptide_question_answers",
       "wiki_user_peptide_question_answers_answered_at_idx",
       "wiki_user_peptide_question_answers_option_idx",
@@ -698,8 +713,7 @@
       "wiki_user_peptide_question_answers_question_idx",
       "wiki_user_peptide_question_answers_question_option_idx",
       "wiki_user_peptide_question_answers_user_answered_idx",
-      "wiki_user_peptide_question_answers_user_idx",
-      "wiki_user_peptide_question_answers_user_peptide_question_unique"
+      "wiki_user_peptide_question_answers_user_idx"
     ]
   }
 }

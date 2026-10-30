@@ -30,7 +30,7 @@ PLATFORM_SCHEMA_REPO=<path to a peptides-platform checkout on staging> \
 | column web_scrape writes is undeclared | Either the platform must declare it (cross-repo change), or web_scrape must stop writing it. |
 | "now declared by the platform" | Remove that pair from `KNOWN_UNDECLARED_COLUMNS`. |
 
-`KNOWN_UNDECLARED_COLUMNS` lists columns that exist in the database only because `migrations/` adds them by hand (see `migrations/README.md`). Each is an open cross-repo item, not a permanent exception.
+`KNOWN_UNDECLARED_COLUMNS` is empty: every column web_scrape writes is declared by the platform (the last four came in with platform Drizzle 0138, webscrape-1). Keep it empty; an entry would be an open cross-repo bug, not an exception.
 
 ## Changing the schema
 1. Run the contract test (above) before and after your change.
@@ -39,4 +39,4 @@ PLATFORM_SCHEMA_REPO=<path to a peptides-platform checkout on staging> \
 
 Rules:
 - Never add a platform column with a web_scrape SQL file. Ask for a Drizzle migration in peptides-platform; web_scrape follows in the same release.
-- Hand-run SQL in `migrations/` is for databases you are allowed to change; production only after "release to production".
+- This repo holds no SQL that changes a platform table; the platform's Drizzle migration does it.
