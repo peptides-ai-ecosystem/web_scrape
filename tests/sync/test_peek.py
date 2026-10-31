@@ -139,6 +139,34 @@ def test_several_methods_merge_first_value_wins_and_an_unmapped_method_warns():
     assert len(out["warnings"]) == 1 and "Sublingual drops" in out["warnings"][0]
 
 
+def test_peek_evidence_carries_the_page_wording_for_research(monkeypatch):
+    """AID-4: protocols, quick guide, what to expect, reconstitution, quality, interactions and
+    indications come back as the page's own text (one entry per method), capped."""
+    page = _page()
+    page.quick_guide = {"Typical dose": "250-500 mcg", "Onset": "1-2 weeks"}
+    page.sections = page.sections + [
+        {"research_protocols_goal_1": "Tendon repair"},
+        {"research_protocols_dose_1": "250 mcg"},
+        {"research_protocols_frequency_1": "Twice daily"},
+        {"research_protocols_route_1": "Subcutaneous"},
+        {"what_to_expect_1": "Week 1-2: Less pain. " + "x" * 600},
+        {"peptide_interactions_tb_500_synergistic": "Often stacked for repair."},
+    ]
+    out = build_peek(URL, [page])
+    (ev,) = out["evidence"]
+    assert ev["method"] == "Injectable"
+    assert ev["protocols"] == [
+        {"goal": "Tendon repair", "route": "Subcutaneous", "dose": "250 mcg", "frequency": "Twice daily"}
+    ]
+    assert ev["quick_guide"]["typical_dose"] == "250-500 mcg"
+    assert len(ev["what_to_expect"]) == 1 and len(ev["what_to_expect"][0]) == 400
+    assert ev["interactions"] == [
+        {"peptide": "Tb 500", "type": "synergistic", "description": "Often stacked for repair."}
+    ]
+    for key in ("reconstitution_steps", "quality_indicators", "indications"):
+        assert isinstance(ev[key], list)
+
+
 def test_building_a_peek_touches_no_database(monkeypatch):
     import app.services.sync.db_import_orchestrator as orchestrator_module
 

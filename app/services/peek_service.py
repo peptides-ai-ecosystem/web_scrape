@@ -8,6 +8,13 @@ those tables).
 
 ``research_stage`` is pep-pedia's maturity label. It is returned next to the
 columns but is not one of them: it is never a legal or regulatory status.
+
+``evidence`` (AID-4, additive) is the page's own wording for the sections the
+columns do not carry: research protocols (goal, route, dose, frequency), the
+quick guide, what to expect, reconstitution steps, quality indicators,
+interactions and indications, one entry per method tab. Peptide research
+(peptide-microservice) cites it as a reference-site source; nothing is mapped
+or written from it here.
 """
 
 from __future__ import annotations
@@ -40,6 +47,74 @@ def scrape_reference_page(url: str, page_load_timeout: float | None = None) -> t
     ).scrape(url)
 
 
+#: Caps so one long page cannot crowd out the rest of a research prompt.
+_TEXT_CAP = 400
+_LIST_CAP = 6
+
+
+def _cap(value: Any) -> str:
+    return " ".join(str(value or "").split())[:_TEXT_CAP]
+
+
+def _numbered(row: dict[str, Any], prefix: str) -> list[str]:
+    values = [_cap(row.get(f"{prefix}{i}")) for i in range(1, 6)]
+    return [v for v in values if v][:_LIST_CAP]
+
+
+def page_evidence(row: dict[str, Any], payload: dict[str, Any], orchestrator: DbImportOrchestrator) -> dict[str, Any]:
+    """The page's own text for one method tab, for research to cite (AID-4). Pure."""
+    protocols = []
+    for i in range(1, 6):
+        goal = _cap(row.get(f"research_protocols_goal_{i}"))
+        if not goal:
+            continue
+        protocols.append(
+            {
+                "goal": goal,
+                "route": _cap(row.get(f"research_protocols_route_{i}") or row.get("route")),
+                "dose": _cap(row.get(f"research_protocols_dose_{i}")),
+                "frequency": _cap(row.get(f"research_protocols_frequency_{i}")),
+            }
+        )
+    quick_guide = {
+        key[len("quick_guide_") :]: _cap(value)
+        for key, value in row.items()
+        if isinstance(key, str) and key.startswith("quick_guide_") and _cap(value)
+    }
+    protocol_mapper = orchestrator.protocol_mapper
+    steps = [_cap(s.get("description")) for s in protocol_mapper.reconst_mapper.map(row)]
+    quality = [
+        {"title": _cap(q.get("indicator_title")), "description": _cap(q.get("indicator_description"))}
+        for q in protocol_mapper.quality_mapper.map(row)
+    ]
+    relations = payload["relations"]
+    return {
+        "method": _cap(row.get("Method")),
+        "typical_dose": _cap(row.get("typical_dose")),
+        "protocols": protocols[:_LIST_CAP],
+        "quick_guide": dict(list(quick_guide.items())[:12]),
+        "what_to_expect": _numbered(row, "what_to_expect_"),
+        "reconstitution_steps": [s for s in steps if s][:10],
+        "quality_indicators": [q for q in quality if q["title"] or q["description"]][:_LIST_CAP],
+        "interactions": [
+            {
+                "peptide": _cap(r.get("secondary_peptide_name")),
+                "type": _cap(r.get("interaction_type")),
+                "description": _cap(r.get("description")),
+            }
+            for r in relations["interactions"]
+        ][:_LIST_CAP],
+        "indications": [
+            {
+                "title": _cap(r.get("indication_title")),
+                "effectiveness": _cap(r.get("effectiveness_tag")),
+                "description": _cap(r.get("description")),
+            }
+            for r in relations["indications"]
+        ][:8],
+    }
+
+
 def _names(items: list[dict[str, Any]], key: str) -> list[str]:
     return [str(item.get(key) or "").strip() for item in items if str(item.get(key) or "").strip()]
 
@@ -54,6 +129,7 @@ def build_peek(url: str, results: list[PeptideData]) -> dict[str, Any]:
     methods: list[dict[str, Any]] = []
     stage: str | None = None
     warnings: list[str] = []
+    evidence: list[dict[str, Any]] = []
 
     for data in results:
         row = peptide_to_row(data)
@@ -77,6 +153,7 @@ def build_peek(url: str, results: list[PeptideData]) -> dict[str, Any]:
         resolution = resolve_method(data.method, KNOWN_METHODS)
         methods.append({"label": data.method, "resolved": resolution.method, "reason": resolution.reason})
         stage = stage or orchestrator.peptide_mapper.extras(row)["research_stage"]
+        evidence.append(page_evidence(row, payload, orchestrator))
 
     for entry in methods:
         if entry["resolved"] is None:
@@ -93,4 +170,5 @@ def build_peek(url: str, results: list[PeptideData]) -> dict[str, Any]:
         "children": counts,
         "methods": methods,
         "warnings": warnings,
+        "evidence": evidence,
     }
